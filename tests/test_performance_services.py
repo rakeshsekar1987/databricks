@@ -1,13 +1,13 @@
 from bronze_ingestion.config import RuntimeConfig
 from bronze_ingestion.logging_utils import StructuredLogger
 from bronze_ingestion.metadata.models import LoadMode
-from bronze_ingestion.services.performance import BenchmarkService, CostService
+from bronze_ingestion.services.performance import BenchmarkService
 
 
 class StubMetadataProvider:
     def __init__(self):
         self.benchmarks = []
-        self.costs = []
+        self.table_benchmarks = []
 
     # Unused abstract requirements
     def list_tables(self, *args, **kwargs):  # pragma: no cover - not needed in tests
@@ -31,8 +31,8 @@ class StubMetadataProvider:
     def record_benchmark(self, record):
         self.benchmarks.append(record)
 
-    def record_cost(self, record):
-        self.costs.append(record)
+    def record_table_benchmark(self, record):
+        self.table_benchmarks.append(record)
 
 
 def base_runtime_config():
@@ -41,11 +41,6 @@ def base_runtime_config():
         "BRONZE_PATH": "/mnt/bronze",
         "CLUSTER_PROFILE": "job-small",
         "SLA_MINUTES": "5",
-        "NUM_WORKERS": "4",
-        "DRIVER_DBU_PER_HOUR": "0.2",
-        "WORKER_DBU_PER_HOUR": "0.15",
-        "DBU_RATE": "0.5",
-        "ESTIMATED_BRONZE_TB": "0.25",
     }
     return RuntimeConfig.from_env(env)
 
@@ -61,12 +56,19 @@ def test_benchmark_service_records_entry():
     assert record.table_count == 200
 
 
-def test_cost_service_computes_totals():
+def test_benchmark_service_records_table_entry():
     provider = StubMetadataProvider()
-    service = CostService(provider, base_runtime_config(), StructuredLogger("cost"))
-    service.record("run-1", duration_seconds=600.0)
+    service = BenchmarkService(provider, base_runtime_config(), StructuredLogger("bench"))
+    service.record_table(
+        run_id="run-1",
+        table_name="dim_customer",
+        mode=LoadMode.INCREMENTAL,
+        duration_seconds=12.5,
+        rows_read=1000,
+        rows_written=1000,
+    )
 
-    assert len(provider.costs) == 1
-    record = provider.costs[0]
-    assert record.total_cost > 0
-    assert "workers" in record.notes
+    assert len(provider.table_benchmarks) == 1
+    record = provider.table_benchmarks[0]
+    assert record.table_name == "dim_customer"
+    assert record.duration_seconds == 12.5

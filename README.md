@@ -37,7 +37,7 @@ src/bronze_ingestion
 ├── services/
 │   ├── audit.py            # Audit logging
 │   ├── data_quality.py     # Row-count + schema validation
-│   ├── performance.py      # Benchmark + cost tracking
+│   ├── performance.py      # Benchmark tracking services
 │   ├── notifier.py         # Email/SendGrid/Logger notifications
 │   ├── retry.py            # Exponential backoff executor
 │   └── schema_evolution.py # Drift detection + logging
@@ -52,7 +52,7 @@ src/bronze_ingestion
 ## Metadata Expectations
 - **Table metadata**: schema, PKs, partition columns, CT flag, retry policy, include/exclude, append-only flag, concurrency weight, SLA priority, DQ tolerance, size bucket, max parallelism.
 - **Source metadata**: connection info, Key Vault secret IDs, source type (SQLSERVER/REST/ABFSS/WABS/CASSANDRA/etc.), CT enablement, include/exclude lists, throttling hints.
-- **Audit metadata**: CT/CDF checkpoints, run status, throughput, schema drift logs, benchmark/cost tables for SLA validation.
+- **Audit metadata**: CT/CDF checkpoints, run status, throughput, schema drift logs, benchmark tables for SLA validation.
 
 Metadata can live in Unity Catalog tables or an external control database; provide a concrete provider by subclassing `MetadataProvider`.
 
@@ -71,9 +71,9 @@ Metadata can live in Unity Catalog tables or an external control database; provi
 ## Testing & Quality
 - Unit tests can be added under `tests/` targeting pure Python services (metadata, adapters, strategies).
 - Use Databricks' `run submit --json` to orchestrate integration tests in lower environments.
-- Benchmark jobs automatically record SLA metrics and cost estimates via `BenchmarkService`/`CostService`.
+- Benchmark jobs automatically record SLA metrics via `BenchmarkService`.
 
 ## Next Steps
-- Populate metadata tables (table/source/audit/benchmark/cost).
+- Populate metadata tables (table/source/audit/benchmark).
 - Configure Azure Monitor/Log Analytics workspace credentials or SendGrid API key for notifications.
 - Roll out automated benchmarks to validate the 10-minute incremental SLA and feed the metadata benchmark table.

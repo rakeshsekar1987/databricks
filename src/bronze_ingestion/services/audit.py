@@ -48,9 +48,11 @@ class AuditService:
         rows_written: int,
         status: str,
         error_message: Optional[str] = None,
+        duration_seconds: Optional[float] = None,
     ):
         end_time = datetime.now(timezone.utc)
-        duration_seconds = (end_time - handle.record.start_time).total_seconds()
+        auto_duration = (end_time - handle.record.start_time).total_seconds()
+        duration_seconds = duration_seconds or auto_duration
         throughput = rows_written / duration_seconds if duration_seconds > 0 else None
         completed = AuditRecord(
             **{

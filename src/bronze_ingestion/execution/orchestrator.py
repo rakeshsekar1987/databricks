@@ -21,7 +21,7 @@ from ..services.audit import AuditService
 from ..services.data_quality import DataQualityService
 from ..services.notifier import Notifier
 from ..services.schema_evolution import SchemaEvolutionService
-from ..services.performance import BenchmarkService, CostService
+from ..services.performance import BenchmarkService
 from ..sources.base import SourceAdapter
 from ..sources.factory import SourceAdapterFactory
 from ..strategies.append_only import AppendOnlyStrategy
@@ -54,7 +54,6 @@ class IngestionOrchestrator:
         self._schema_service = SchemaEvolutionService(spark, metadata_provider, notifier, logger)
         self._dq_service = DataQualityService(logger)
         self._benchmark_service = BenchmarkService(metadata_provider, runtime_config, logger)
-        self._cost_service = CostService(metadata_provider, runtime_config, logger)
         self._notifier = notifier
         self._logger = logger
         self._strategies: Dict[LoadMode, LoadStrategy] = {
@@ -103,6 +102,15 @@ class IngestionOrchestrator:
                 try:
                     result = future.result()
                     successes.append(result)
+                    duration = result.duration_seconds or 0.0
+                    self._benchmark_service.record_table(
+                        run_id=run_id,
+                        table_name=result.table_name,
+                        mode=load_mode,
+                        duration_seconds=duration,
+                        rows_read=result.rows_read,
+                        rows_written=result.rows_written,
+                    )
                 except Exception as exc:  # pragma: no cover - runtime path
                     failures[table.table_name] = str(exc)
                     self._notifier.notify(
@@ -123,7 +131,6 @@ class IngestionOrchestrator:
             total_rows=total_rows,
             duration_seconds=duration_seconds,
         )
-        self._cost_service.record(run_id=run_id, duration_seconds=duration_seconds)
         self._send_summary(run_id, successes, failures)
         return IngestionSummary(successes=successes, failures=failures)
 

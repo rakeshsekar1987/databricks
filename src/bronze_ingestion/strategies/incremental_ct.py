@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Optional
+import time
 
 from pyspark.sql import functions as F
 
@@ -22,6 +23,7 @@ class IncrementalCTStrategy(LoadStrategy):
         audit_handle = context.audit_service.start_table(context.table_metadata, self.mode, context.run_id)
 
         def _action() -> LoadResult:
+            start_ts = time.perf_counter()
             predicate = self._build_ct_predicate(context.checkpoint)
             read_context = SourceReadContext(
                 spark=context.spark,
@@ -37,19 +39,23 @@ class IncrementalCTStrategy(LoadStrategy):
             )
 
             if rows_read == 0:
+                duration = time.perf_counter() - start_ts
                 context.audit_service.complete(
                     audit_handle,
                     rows_read=0,
                     rows_written=0,
                     status="NOOP",
+                    duration_seconds=duration,
                 )
-                return LoadResult(
+                result = LoadResult(
                     table_name=context.table_metadata.table_name,
                     rows_read=0,
                     rows_written=0,
                     status="NOOP",
                     checkpoint=context.checkpoint,
                 )
+                result.duration_seconds = duration
+                return result
 
             context.schema_service.detect_and_log(source_df, context.table_metadata, context.run_id)
             optimized_df = self._optimize_dataframe(source_df, context.table_metadata, rows_read)
@@ -58,20 +64,24 @@ class IncrementalCTStrategy(LoadStrategy):
             if checkpoint:
                 context.metadata_provider.upsert_cdf_checkpoint(checkpoint)
 
-            context.audit_service.complete(
-                audit_handle,
-                rows_read=rows_read,
-                rows_written=rows_read,
-                status="SUCCESS",
-            )
-
-            return LoadResult(
+            result = LoadResult(
                 table_name=context.table_metadata.table_name,
                 rows_read=rows_read,
                 rows_written=rows_read,
                 status="SUCCESS",
                 checkpoint=checkpoint,
             )
+            result.duration_seconds = time.perf_counter() - start_ts
+
+            context.audit_service.complete(
+                audit_handle,
+                rows_read=rows_read,
+                rows_written=rows_read,
+                status="SUCCESS",
+                duration_seconds=result.duration_seconds,
+            )
+
+            return result
 
         executor = RetryExecutor(context.table_metadata.retry_policy, context.logger, context.table_metadata.table_name)
         try:

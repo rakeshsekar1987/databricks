@@ -211,7 +211,7 @@ This guide consolidates the performance, resilience, and cost-optimization techn
    - Monitor Spark UI for skew/spills; adjust shuffle partitions or hints.
    - Inspect Log Analytics dashboards fed by `StructuredLogger`.
 3. **After runs**:
-   - Use benchmark/cost tables to confirm SLA compliance.
+    - Use benchmark tables to confirm SLA compliance.
    - Schedule OPTIMIZE + VACUUM notebooks per data domain.
    - Update metadata (e.g., `delta.targetFileSize`, `max_parallelism`) if patterns change.
 

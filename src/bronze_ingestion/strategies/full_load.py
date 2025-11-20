@@ -4,6 +4,8 @@ One-time full load strategy.
 
 from __future__ import annotations
 
+import time
+
 from pyspark.sql import DataFrame
 
 from ..metadata.models import LoadMode
@@ -19,6 +21,7 @@ class FullLoadStrategy(LoadStrategy):
         audit_handle = context.audit_service.start_table(context.table_metadata, self.mode, context.run_id)
 
         def _action() -> LoadResult:
+            start_ts = time.perf_counter()
             read_context = SourceReadContext(
                 spark=context.spark,
                 table_metadata=context.table_metadata,
@@ -44,19 +47,22 @@ class FullLoadStrategy(LoadStrategy):
             )
             context.dq_service.validate_schema_alignment(source_df, target_df)
 
-            context.audit_service.complete(
-                audit_handle,
-                rows_read=rows_read,
-                rows_written=dq_result.actual_count,
-                status="SUCCESS",
-            )
-
-            return LoadResult(
+            result = LoadResult(
                 table_name=context.table_metadata.table_name,
                 rows_read=rows_read,
                 rows_written=dq_result.actual_count,
                 status="SUCCESS",
             )
+            result.duration_seconds = time.perf_counter() - start_ts
+
+            context.audit_service.complete(
+                audit_handle,
+                rows_read=result.rows_read,
+                rows_written=result.rows_written,
+                status=result.status,
+                duration_seconds=result.duration_seconds,
+            )
+            return result
 
         executor = RetryExecutor(context.table_metadata.retry_policy, context.logger, context.table_metadata.table_name)
         try:

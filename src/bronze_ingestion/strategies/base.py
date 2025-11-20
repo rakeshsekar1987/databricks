@@ -43,6 +43,7 @@ class LoadResult:
     rows_written: int
     status: str
     checkpoint: Optional[CdfCheckpoint] = None
+    duration_seconds: Optional[float] = None
 
 
 class LoadStrategy(ABC):

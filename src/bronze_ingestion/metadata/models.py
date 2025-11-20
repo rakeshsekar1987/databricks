@@ -128,11 +128,12 @@ class BenchmarkRecord:
 
 
 @dataclass(frozen=True, slots=True)
-class CostRecord:
+class TableBenchmarkRecord:
     run_id: str
-    cluster_profile: str
+    table_name: str
+    mode: LoadMode
     duration_seconds: float
-    dbu_cost: float
-    storage_cost: float
-    total_cost: float
-    notes: Optional[str] = None
+    rows_read: int
+    rows_written: int
+
+

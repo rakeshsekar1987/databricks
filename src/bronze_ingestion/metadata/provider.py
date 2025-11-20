@@ -18,12 +18,12 @@ from .models import (
     AuditRecord,
     BenchmarkRecord,
     CdfCheckpoint,
-    CostRecord,
     LoadMode,
     PartitioningHints,
     RetryPolicy,
     SchemaDriftRecord,
     SourceConnectionMetadata,
+    TableBenchmarkRecord,
     TableMetadata,
 )
 
@@ -60,7 +60,7 @@ class MetadataProvider(ABC):
         ...
 
     @abstractmethod
-    def record_cost(self, record: CostRecord) -> None:
+    def record_table_benchmark(self, record: TableBenchmarkRecord) -> None:
         ...
 
 
@@ -248,24 +248,23 @@ class DeltaMetadataProvider(MetadataProvider):
             "duration_seconds double, cluster_profile string, met_sla boolean, created_at timestamp",
         ).write.mode("append").saveAsTable(f"{self._catalog}.{self._schema}.benchmark_log")
 
-    def record_cost(self, record: CostRecord) -> None:
+    def record_table_benchmark(self, record: TableBenchmarkRecord) -> None:
         data = [
             (
                 record.run_id,
-                record.cluster_profile,
+                record.table_name,
+                record.mode.value,
                 record.duration_seconds,
-                record.dbu_cost,
-                record.storage_cost,
-                record.total_cost,
-                record.notes,
+                record.rows_read,
+                record.rows_written,
                 datetime.utcnow(),
             )
         ]
         self._spark.createDataFrame(
             data,
-            schema="run_id string, cluster_profile string, duration_seconds double, dbu_cost double, storage_cost double, "
-            "total_cost double, notes string, created_at timestamp",
-        ).write.mode("append").saveAsTable(f"{self._catalog}.{self._schema}.cost_log")
+            schema="run_id string, table_name string, mode string, duration_seconds double, rows_read long, "
+            "rows_written long, created_at timestamp",
+        ).write.mode("append").saveAsTable(f"{self._catalog}.{self._schema}.table_benchmark_log")
 
 
 class InMemoryMetadataProvider(MetadataProvider):
@@ -283,7 +282,7 @@ class InMemoryMetadataProvider(MetadataProvider):
         self._audit_records: List[AuditRecord] = []
         self._drifts: List[SchemaDriftRecord] = []
         self._benchmarks: List[BenchmarkRecord] = []
-        self._costs: List[CostRecord] = []
+        self._table_benchmarks: List[TableBenchmarkRecord] = []
 
     def list_tables(self, source_id: str, mode: LoadMode) -> List[TableMetadata]:
         return [t for t in self._tables if t.source_id == source_id and t.is_active]
@@ -306,8 +305,8 @@ class InMemoryMetadataProvider(MetadataProvider):
     def record_benchmark(self, record: BenchmarkRecord) -> None:
         self._benchmarks.append(record)
 
-    def record_cost(self, record: CostRecord) -> None:
-        self._costs.append(record)
+    def record_table_benchmark(self, record: TableBenchmarkRecord) -> None:
+        self._table_benchmarks.append(record)
 
     @property
     def audit_records(self) -> List[AuditRecord]:
@@ -322,5 +321,5 @@ class InMemoryMetadataProvider(MetadataProvider):
         return self._benchmarks
 
     @property
-    def cost_records(self) -> List[CostRecord]:
-        return self._costs
+    def table_benchmark_records(self) -> List[TableBenchmarkRecord]:
+        return self._table_benchmarks

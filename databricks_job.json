@@ -1,0 +1,86 @@
+{
+  "name": "SQL Server to Delta Lake Ingestion",
+  "timeout_seconds": 1800,
+  "max_concurrent_runs": 1,
+  "email_notifications": {
+    "on_start": [],
+    "on_success": [],
+    "on_failure": ["admin@example.com"],
+    "no_alert_for_skipped_runs": false
+  },
+  "schedule": {
+    "quartz_cron_expression": "0 0 * * * ?",
+    "timezone_id": "America/Los_Angeles",
+    "pause_status": "UNPAUSED"
+  },
+  "tasks": [
+    {
+      "task_key": "ingest_sqlserver_to_delta",
+      "description": "Ingest data from SQL Server to Delta Lake",
+      "spark_python_task": {
+        "python_file": "/Workspace/ingest_master.py",
+        "parameters": [
+          "/Workspace/config.yaml",
+          "500"
+        ]
+      },
+      "existing_cluster_id": null,
+      "new_cluster": {
+        "cluster_name": "sqlserver-ingestion-cluster",
+        "spark_version": "13.3.x-scala2.12",
+        "node_type_id": "Standard_DS3_v2",
+        "driver_node_type_id": "Standard_DS3_v2",
+        "num_workers": 16,
+        "autoscale": {
+          "min_workers": 8,
+          "max_workers": 32
+        },
+        "spark_conf": {
+          "spark.sql.adaptive.enabled": "true",
+          "spark.sql.adaptive.coalescePartitions.enabled": "true",
+          "spark.sql.adaptive.skewJoin.enabled": "true",
+          "spark.sql.files.maxPartitionBytes": "134217728",
+          "spark.serializer": "org.apache.spark.serializer.KryoSerializer",
+          "spark.sql.execution.arrow.pyspark.enabled": "true",
+          "spark.databricks.delta.optimizeWrite.enabled": "true",
+          "spark.databricks.delta.autoCompact.enabled": "true"
+        },
+        "custom_tags": {
+          "Purpose": "SQLServerIngestion",
+          "Environment": "Production"
+        },
+        "spark_env_vars": {
+          "PYSPARK_PYTHON": "/databricks/python3/bin/python3"
+        },
+        "libraries": [
+          {
+            "maven": {
+              "coordinates": "com.microsoft.azure:azure-sql-spark-connector:1.0.0"
+            }
+          },
+          {
+            "maven": {
+              "coordinates": "com.microsoft.sqlserver:mssql-jdbc:12.4.2.jre8"
+            }
+          }
+        ],
+        "init_scripts": []
+      },
+      "timeout_seconds": 1500,
+      "retry_on_timeout": true,
+      "max_retries": 2,
+      "min_retry_interval_millis": 300000,
+      "retry_on_timeout": true
+    }
+  ],
+  "format": "MULTI_TASK",
+  "access_control_list": [
+    {
+      "user_name": "admin@example.com",
+      "permission_level": "CAN_MANAGE"
+    }
+  ],
+  "run_as": {
+    "user_name": "service-account@example.com"
+  }
+}

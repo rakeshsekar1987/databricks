@@ -1,0 +1,170 @@
+# SQL Server to Delta Lake Ingestion Configuration Template
+# This configuration supports ingestion of up to 500 tables with full and incremental load modes
+
+connection:
+  # SQL Server connection details
+  host: "your-sql-server.database.windows.net"  # or on-premises FQDN
+  port: 1433
+  database: "SourceDatabase"
+  username: "{{secrets/sqlserver/username}}"  # Use Databricks secrets scope
+  password: "{{secrets/sqlserver/password}}"  # Use Databricks secrets scope
+  
+  # Authentication type: "sql_auth", "kerberos", "managed_identity", "service_principal"
+  auth_type: "sql_auth"
+  
+  # JDBC connection options
+  jdbc_options:
+    # Connection pool settings
+    connectionTimeout: 30000  # milliseconds
+    loginTimeout: 30  # seconds
+    socketTimeout: 300000  # milliseconds (5 minutes)
+    
+    # SSL/TLS settings
+    encrypt: true
+    trustServerCertificate: false
+    trustStore: ""  # Path to truststore if using custom certificates
+    
+    # Additional JDBC properties
+    applicationName: "Databricks-SQLServer-Ingestion"
+    selectMethod: "cursor"  # Use cursor for large result sets
+    
+    # Gateway settings (if using self-hosted integration runtime)
+    gateway_host: ""  # Optional: self-hosted gateway hostname
+    gateway_port: 443  # Optional: gateway port
+
+# Table ingestion configuration
+tables:
+  # Example: Small table (< 128 MB) - will use normal fetch
+  - schema: "dbo"
+    table: "SmallTable"
+    mode: "full"  # "full" or "incremental"
+    size_MB: 50  # Optional: if not provided, will query SQL Server metadata
+    pk_columns: ["id"]  # Primary key columns for merge operations
+    partition_column_hint: "id"  # Optional: numeric column for partitioning
+    delta_table_path: "/mnt/delta/source/small_table"
+    incremental_type: null  # null for full load, "ChangeTracking" or "CDC" for incremental
+    
+  # Example: Large table (> 128 MB) - will use parallelized reads
+  - schema: "dbo"
+    table: "LargeTable"
+    mode: "full"
+    size_MB: 3072  # 3 GB - will use 24 partitions (3072 / 128)
+    pk_columns: ["customer_id", "order_id"]
+    partition_column_hint: "customer_id"  # Numeric column for range partitioning
+    delta_table_path: "/mnt/delta/source/large_table"
+    incremental_type: null
+    
+  # Example: Incremental load with Change Tracking
+  - schema: "sales"
+    table: "Orders"
+    mode: "incremental"
+    size_MB: 512
+    pk_columns: ["order_id"]
+    partition_column_hint: "order_id"
+    delta_table_path: "/mnt/delta/source/orders"
+    incremental_type: "ChangeTracking"  # or "CDC"
+    
+  # Example: Table without numeric PK - will use hash-based partitioning
+  - schema: "dbo"
+    table: "Products"
+    mode: "full"
+    size_MB: 256
+    pk_columns: ["product_code"]  # String PK
+    partition_column_hint: null  # No numeric column available
+    delta_table_path: "/mnt/delta/source/products"
+    incremental_type: null
+    
+  # Example: Medium table
+  - schema: "inventory"
+    table: "StockItems"
+    mode: "full"
+    size_MB: 180
+    pk_columns: ["item_id"]
+    partition_column_hint: "item_id"
+    delta_table_path: "/mnt/delta/source/stock_items"
+    incremental_type: null
+
+# Cluster configuration
+cluster:
+  # Baseline cluster specification
+  cores_per_node: 4
+  workers: 16  # 16 worker nodes * 4 cores = 64 total cores
+  driver_cores: 4
+  driver_memory: "14g"
+  worker_memory: "28g"
+  
+  # Instance type (Azure Databricks)
+  instance_type: "Standard_DS3_v2"  # 4 vCPU, 14 GB RAM
+  
+  # Autoscaling
+  autoscaling:
+    enabled: true
+    min_workers: 8
+    max_workers: 32  # Scale up to 32 workers (128 cores) if needed
+    
+  # Spark configuration
+  spark_config:
+    "spark.sql.adaptive.enabled": "true"
+    "spark.sql.adaptive.coalescePartitions.enabled": "true"
+    "spark.sql.adaptive.skewJoin.enabled": "true"
+    "spark.sql.files.maxPartitionBytes": "134217728"  # 128 MB
+    "spark.serializer": "org.apache.spark.serializer.KryoSerializer"
+    "spark.sql.execution.arrow.pyspark.enabled": "true"
+    "spark.databricks.delta.optimizeWrite.enabled": "true"
+    "spark.databricks.delta.autoCompact.enabled": "true"
+
+# Runtime options
+runtime:
+  # Fetch size per JDBC fetch cycle (records)
+  fetch_size: 15000  # Between 10,000 and 25,000
+  
+  # JDBC batch size for writes
+  jdbc_batch_size: 10000
+  
+  # Partitioning configuration
+  min_partition_size_mb: 128  # Minimum target size per partition
+  max_partitions_per_table: 512  # Maximum partitions per table to avoid overhead
+  
+  # Incremental load settings
+  incremental_type: "ChangeTracking"  # Default: "ChangeTracking" or "CDC"
+  checkpoint_location: "/mnt/delta/checkpoints/change_tracking"
+  
+  # Parallelism override (optional - if set, overrides calculated parallelism)
+  parallelism_override: null  # null = auto-calculate, or set specific value
+  
+  # Retry and backoff configuration
+  retry:
+    max_retries: 3
+    initial_backoff_seconds: 5
+    max_backoff_seconds: 60
+    backoff_multiplier: 2.0
+  
+  # Timeout settings
+  table_timeout_minutes: 30  # Maximum time per table
+  overall_timeout_minutes: 25  # Maximum time for entire pipeline (should be < 20 min target)
+  
+  # Monitoring
+  metrics_location: "/mnt/delta/metrics/ingestion_metrics"
+  enable_detailed_logging: true
+
+# Delta Lake write options
+delta:
+  merge_schema: true  # Enable schema evolution
+  overwrite_schema: false  # If true, overwrite schema on full load (destructive)
+  optimize_after_write: false  # Run OPTIMIZE after each write (can be expensive)
+  vacuum_after_write: false  # Run VACUUM after writes (can be expensive)
+  
+  # Write mode: "append", "overwrite", "merge" (for incremental)
+  default_write_mode: "append"  # For full loads
+  incremental_write_mode: "merge"  # For incremental loads using Delta MERGE
+
+# Monitoring and observability
+monitoring:
+  # Metrics collection
+  collect_metrics: true
+  metrics_table: "default.ingestion_metrics"
+  
+  # Alerting thresholds
+  alert_on_failure: true
+  alert_on_slow_table: true  # Alert if table takes > 10 minutes
+  slow_table_threshold_minutes: 10

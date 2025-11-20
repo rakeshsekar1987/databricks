@@ -1,0 +1,130 @@
+# Example Configuration File
+# This is a populated example with 5 sample tables demonstrating different scenarios
+
+connection:
+  host: "sql-server-prod.database.windows.net"
+  port: 1433
+  database: "AdventureWorks"
+  username: "{{secrets/sqlserver/username}}"
+  password: "{{secrets/sqlserver/password}}"
+  auth_type: "sql_auth"
+  
+  jdbc_options:
+    connectionTimeout: 30000
+    loginTimeout: 30
+    socketTimeout: 300000
+    encrypt: true
+    trustServerCertificate: false
+    applicationName: "Databricks-SQLServer-Ingestion"
+    selectMethod: "cursor"
+
+# Example tables: Mix of small, medium, and large tables
+tables:
+  # Example 1: Small table (< 128 MB) - will use 1 partition
+  - schema: "dbo"
+    table: "ProductCategories"
+    mode: "full"
+    size_MB: 5
+    pk_columns: ["ProductCategoryID"]
+    partition_column_hint: "ProductCategoryID"
+    delta_table_path: "/mnt/delta/adventureworks/product_categories"
+    incremental_type: null
+
+  # Example 2: Large table (3 GB) - will use 24 partitions (3072 / 128)
+  - schema: "Sales"
+    table: "SalesOrderDetail"
+    mode: "full"
+    size_MB: 3072
+    pk_columns: ["SalesOrderID", "SalesOrderDetailID"]
+    partition_column_hint: "SalesOrderID"
+    delta_table_path: "/mnt/delta/adventureworks/sales_order_detail"
+    incremental_type: null
+
+  # Example 3: Medium table with incremental load
+  - schema: "Sales"
+    table: "SalesOrderHeader"
+    mode: "incremental"
+    size_MB: 512
+    pk_columns: ["SalesOrderID"]
+    partition_column_hint: "SalesOrderID"
+    delta_table_path: "/mnt/delta/adventureworks/sales_order_header"
+    incremental_type: "ChangeTracking"
+
+  # Example 4: Table without numeric PK - will use hash-based partitioning
+  - schema: "Production"
+    table: "Product"
+    mode: "full"
+    size_MB: 180
+    pk_columns: ["ProductNumber"]  # String primary key
+    partition_column_hint: null  # No numeric column available
+    delta_table_path: "/mnt/delta/adventureworks/product"
+    incremental_type: null
+
+  # Example 5: Small incremental table
+  - schema: "Person"
+    table: "Person"
+    mode: "incremental"
+    size_MB: 256
+    pk_columns: ["BusinessEntityID"]
+    partition_column_hint: "BusinessEntityID"
+    delta_table_path: "/mnt/delta/adventureworks/person"
+    incremental_type: "ChangeTracking"
+
+cluster:
+  cores_per_node: 4
+  workers: 16
+  driver_cores: 4
+  driver_memory: "14g"
+  worker_memory: "28g"
+  instance_type: "Standard_DS3_v2"
+  
+  autoscaling:
+    enabled: true
+    min_workers: 8
+    max_workers: 32
+  
+  spark_config:
+    "spark.sql.adaptive.enabled": "true"
+    "spark.sql.adaptive.coalescePartitions.enabled": "true"
+    "spark.sql.adaptive.skewJoin.enabled": "true"
+    "spark.sql.files.maxPartitionBytes": "134217728"
+    "spark.serializer": "org.apache.spark.serializer.KryoSerializer"
+    "spark.sql.execution.arrow.pyspark.enabled": "true"
+    "spark.databricks.delta.optimizeWrite.enabled": "true"
+    "spark.databricks.delta.autoCompact.enabled": "true"
+
+runtime:
+  fetch_size: 15000
+  jdbc_batch_size: 10000
+  min_partition_size_mb: 128
+  max_partitions_per_table: 512
+  incremental_type: "ChangeTracking"
+  checkpoint_location: "/mnt/delta/checkpoints/change_tracking"
+  parallelism_override: null
+  
+  retry:
+    max_retries: 3
+    initial_backoff_seconds: 5
+    max_backoff_seconds: 60
+    backoff_multiplier: 2.0
+  
+  table_timeout_minutes: 30
+  overall_timeout_minutes: 25
+  
+  metrics_location: "/mnt/delta/metrics/ingestion_metrics"
+  enable_detailed_logging: true
+
+delta:
+  merge_schema: true
+  overwrite_schema: false
+  optimize_after_write: false
+  vacuum_after_write: false
+  default_write_mode: "append"
+  incremental_write_mode: "merge"
+
+monitoring:
+  collect_metrics: true
+  metrics_table: "default.ingestion_metrics"
+  alert_on_failure: true
+  alert_on_slow_table: true
+  slow_table_threshold_minutes: 10

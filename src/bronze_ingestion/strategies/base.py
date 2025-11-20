@@ -1,0 +1,66 @@
+"""
+Load strategy abstraction used by the orchestrator.
+"""
+
+from __future__ import annotations
+
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from typing import Any, Dict, Optional
+
+from pyspark.sql import DataFrame, SparkSession
+
+from ..config import RuntimeConfig
+from ..logging_utils import StructuredLogger
+from ..metadata.models import CdfCheckpoint, LoadMode, TableMetadata
+from ..metadata.provider import MetadataProvider
+from ..services.audit import AuditService
+from ..services.data_quality import DataQualityService
+from ..services.schema_evolution import SchemaEvolutionService
+from ..sources.base import SourceAdapter
+
+
+@dataclass
+class StrategyContext:
+    spark: SparkSession
+    runtime_config: RuntimeConfig
+    table_metadata: TableMetadata
+    metadata_provider: MetadataProvider
+    source_options: Dict[str, Any]
+    source_adapter: SourceAdapter
+    audit_service: AuditService
+    schema_service: SchemaEvolutionService
+    dq_service: DataQualityService
+    logger: StructuredLogger
+    run_id: str
+    checkpoint: Optional[CdfCheckpoint] = None
+
+
+@dataclass
+class LoadResult:
+    table_name: str
+    rows_read: int
+    rows_written: int
+    status: str
+    checkpoint: Optional[CdfCheckpoint] = None
+
+
+class LoadStrategy(ABC):
+    mode: LoadMode
+
+    def __init__(self, logger: StructuredLogger):
+        self._logger = logger
+
+    @abstractmethod
+    def execute(self, context: StrategyContext) -> LoadResult:
+        ...
+
+    def _write_delta(self, dataframe: DataFrame, target_table: TableMetadata, mode: str = "append") -> DataFrame:
+        (
+            dataframe.write
+            .format("delta")
+            .mode(mode)
+            .option("mergeSchema", "true")
+            .saveAsTable(f"{target_table.catalog_name}.{target_table.schema_name}.{target_table.table_name}")
+        )
+        return dataframe

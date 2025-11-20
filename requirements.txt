@@ -1,0 +1,19 @@
+# Python Dependencies for SQL Server to Delta Lake Ingestion Pipeline
+# Note: Most dependencies are included in Databricks Runtime
+
+# Core dependencies (included in Databricks Runtime)
+# PySpark - included in Databricks Runtime
+# Delta Lake - included in Databricks Runtime
+
+# External dependencies (install via cluster libraries in Databricks)
+# com.microsoft.sqlserver:mssql-jdbc:12.4.2.jre8
+# com.microsoft.azure:azure-sql-spark-connector:1.0.0 (optional)
+
+# Python packages (if running locally or in custom environment)
+PyYAML>=6.0
+pyspark>=3.3.0
+delta-spark>=2.0.0
+
+# For testing (optional)
+pytest>=7.0.0
+pytest-spark>=0.6.0

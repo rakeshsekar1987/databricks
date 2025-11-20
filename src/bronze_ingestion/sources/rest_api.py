@@ -4,13 +4,15 @@ REST API adapter placeholder to demonstrate extensibility.
 
 from __future__ import annotations
 
-from typing import Dict
+from typing import Dict, TYPE_CHECKING
 
 import requests
-from pyspark.sql import DataFrame
 
 from ..logging_utils import StructuredLogger
 from .base import SourceAdapter, SourceReadContext
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from pyspark.sql import DataFrame
 
 
 class RestApiAdapter(SourceAdapter):
@@ -27,7 +29,7 @@ class RestApiAdapter(SourceAdapter):
         response.raise_for_status()
         return response.json()
 
-    def read(self, context: SourceReadContext) -> DataFrame:
+    def read(self, context: SourceReadContext) -> "DataFrame":
         url = context.options["url"]
         headers = context.options.get("headers", {})
         payload = self._fetch_payload(url, headers)

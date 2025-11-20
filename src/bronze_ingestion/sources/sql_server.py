@@ -4,14 +4,14 @@ SQL Server JDBC adapter with CT-aware predicate pushdown.
 
 from __future__ import annotations
 
-from typing import Dict
-
-from pyspark.sql import DataFrame
+from typing import Dict, TYPE_CHECKING
 
 from ..logging_utils import StructuredLogger
-from ..metadata.models import TableMetadata
 from ..services.secrets import SecretManager
 from .base import SourceAdapter, SourceReadContext
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from pyspark.sql import DataFrame
 
 
 class SqlServerAdapter(SourceAdapter):
@@ -39,7 +39,7 @@ class SqlServerAdapter(SourceAdapter):
         }
         return options
 
-    def read(self, context: SourceReadContext) -> DataFrame:
+    def read(self, context: SourceReadContext) -> "DataFrame":
         options = self._jdbc_base_options(context.table_metadata, context.options)
         reader = context.spark.read.format("jdbc").options(**options)
 

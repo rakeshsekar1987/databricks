@@ -5,8 +5,10 @@ Data quality utilities (row counts, type checks).
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
-from pyspark.sql import DataFrame
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from pyspark.sql import DataFrame
 
 from ..exceptions import DataQualityError
 from ..logging_utils import StructuredLogger
@@ -26,8 +28,8 @@ class DataQualityService:
 
     def validate_row_counts(
         self,
-        source_df: DataFrame,
-        target_df: DataFrame,
+        source_df: "DataFrame",
+        target_df: "DataFrame",
         tolerance_percent: float = 1.0,
     ) -> DataQualityResult:
         expected = source_df.count()
@@ -59,8 +61,8 @@ class DataQualityService:
 
     def validate_schema_alignment(
         self,
-        source_df: DataFrame,
-        target_df: DataFrame,
+        source_df: "DataFrame",
+        target_df: "DataFrame",
         allow_additive_only: bool = True,
     ) -> None:
         source_schema = {field.name: field.dataType.simpleString() for field in source_df.schema.fields}

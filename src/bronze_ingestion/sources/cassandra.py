@@ -4,10 +4,13 @@ Cassandra adapter leveraging the Spark Cassandra connector.
 
 from __future__ import annotations
 
-from pyspark.sql import DataFrame
-
 from ..logging_utils import StructuredLogger
 from .base import SourceAdapter, SourceReadContext
+
+try:  # pragma: no cover - optional dependency
+    from pyspark.sql import DataFrame
+except ModuleNotFoundError:  # pragma: no cover - fallback for tests
+    DataFrame = object  # type: ignore
 
 
 class CassandraAdapter(SourceAdapter):

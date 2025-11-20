@@ -6,9 +6,13 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Iterable, List, Optional
+from typing import Any, Iterable, List, Optional
 
-from pyspark.sql import DataFrame, SparkSession
+try:  # pragma: no cover - optional dependency for local tests
+    from pyspark.sql import DataFrame, SparkSession
+except ModuleNotFoundError:  # pragma: no cover
+    DataFrame = Any  # type: ignore
+    SparkSession = Any  # type: ignore
 
 from .models import (
     AuditRecord,

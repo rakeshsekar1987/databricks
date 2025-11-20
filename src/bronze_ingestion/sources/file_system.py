@@ -4,19 +4,20 @@ Generic file-system adapter supporting ABFSS, WABS, Blob, and other Spark-compat
 
 from __future__ import annotations
 
-from typing import Any, Dict, Iterable
-
-from pyspark.sql import DataFrame
+from typing import Any, Dict, Iterable, TYPE_CHECKING
 
 from ..logging_utils import StructuredLogger
 from .base import SourceAdapter, SourceReadContext
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from pyspark.sql import DataFrame
 
 
 class FileSystemAdapter(SourceAdapter):
     def __init__(self, logger: StructuredLogger):
         self._logger = logger
 
-    def read(self, context: SourceReadContext) -> DataFrame:
+    def read(self, context: SourceReadContext) -> "DataFrame":
         read_format = context.options.get("format", "parquet")
         paths: Iterable[str] | str = context.options.get("paths")
         if not paths:

@@ -66,6 +66,7 @@ Metadata can live in Unity Catalog tables or an external control database; provi
 - Add new data sources by subclassing `SourceAdapter` or plugging into `SourceAdapterFactory`.
 - Add new load behaviors by subclassing `LoadStrategy`.
 - Register new metadata providers (e.g., Cassandra, Cosmos DB, control-plane APIs) without touching orchestration code.
+- Reference the full optimization playbook in `docs/optimization_guide.md` for Delta/Lakehouse tuning tips (file sizing, Z-order, AQE, caching, skew handling, cluster sizing, etc.).
 
 ## Testing & Quality
 - Unit tests can be added under `tests/` targeting pure Python services (metadata, adapters, strategies).

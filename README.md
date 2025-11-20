@@ -25,16 +25,20 @@ src/bronze_ingestion
 ├── sources/
 │   ├── base.py             # Source adapter contract
 │   ├── sql_server.py       # JDBC adapter w/ CT support
-│   └── rest_api.py         # Example REST adapter stub
+│   ├── rest_api.py         # REST + OData adapter
+│   ├── file_system.py      # ABFSS/WABS/Blob adapter
+│   ├── cassandra.py        # Cassandra adapter
+│   └── factory.py          # Metadata-driven adapter factory
 ├── strategies/
 │   ├── base.py             # Strategy interface
 │   ├── full_load.py        # Full-load logic
 │   ├── incremental_ct.py   # CT-based incremental logic
 │   └── append_only.py      # Append/LMD fallback logic
 ├── services/
-│   ├── audit.py            # Audit + benchmark persistence
+│   ├── audit.py            # Audit logging
 │   ├── data_quality.py     # Row-count + schema validation
-│   ├── notifier.py         # Email/webhook notifications
+│   ├── performance.py      # Benchmark + cost tracking
+│   ├── notifier.py         # Email/SendGrid/Logger notifications
 │   ├── retry.py            # Exponential backoff executor
 │   └── schema_evolution.py # Drift detection + logging
 ├── execution/
@@ -46,28 +50,29 @@ src/bronze_ingestion
 ```
 
 ## Metadata Expectations
-- **Table metadata**: schema, PKs, partition columns, CT flag, retry policy, include/exclude, append-only, concurrency weight, SLA priority.
-- **Source metadata**: connection info, Key Vault secret IDs, CT enablement, include/exclude lists, throttling hints.
-- **Audit metadata**: CT/CDF checkpoints, run status, throughput, cost, schema drift logs.
+- **Table metadata**: schema, PKs, partition columns, CT flag, retry policy, include/exclude, append-only flag, concurrency weight, SLA priority, DQ tolerance, size bucket, max parallelism.
+- **Source metadata**: connection info, Key Vault secret IDs, source type (SQLSERVER/REST/ABFSS/WABS/CASSANDRA/etc.), CT enablement, include/exclude lists, throttling hints.
+- **Audit metadata**: CT/CDF checkpoints, run status, throughput, schema drift logs, benchmark/cost tables for SLA validation.
 
 Metadata can live in Unity Catalog tables or an external control database; provide a concrete provider by subclassing `MetadataProvider`.
 
 ## Running the Framework
 1. Install the wheel on Databricks (`pip install .`).
-2. Configure secrets/environment variables (`KEY_VAULT_SCOPE`, `PARALLELISM`, etc.).
+2. Configure secrets/environment variables (`KEY_VAULT_SCOPE`, `PARALLELISM`, `LOG_ANALYTICS_*`, `SENDGRID_*`, `CLUSTER_PROFILE`, etc.).
 3. Create Delta metadata tables (samples in `metadata/models.py` docstrings).
 4. Submit `python -m bronze_ingestion.run_ingestion --mode incremental --source MYSGS-group-01`.
 
 ## Extensibility
-- Add new data sources by subclassing `SourceAdapter`.
+- Add new data sources by subclassing `SourceAdapter` or plugging into `SourceAdapterFactory`.
 - Add new load behaviors by subclassing `LoadStrategy`.
-- Register new metadata providers (e.g., Cassandra, Cosmos DB) without touching orchestration code.
+- Register new metadata providers (e.g., Cassandra, Cosmos DB, control-plane APIs) without touching orchestration code.
 
 ## Testing & Quality
-- Unit tests can be added under `tests/` targeting pure Python services.
+- Unit tests can be added under `tests/` targeting pure Python services (metadata, adapters, strategies).
 - Use Databricks' `run submit --json` to orchestrate integration tests in lower environments.
+- Benchmark jobs automatically record SLA metrics and cost estimates via `BenchmarkService`/`CostService`.
 
 ## Next Steps
-- Populate metadata tables.
-- Connect Azure Monitor/Log Analytics workspace for structured logs.
-- Roll out automated benchmarks to validate the 10-minute incremental SLA.
+- Populate metadata tables (table/source/audit/benchmark/cost).
+- Configure Azure Monitor/Log Analytics workspace credentials or SendGrid API key for notifications.
+- Roll out automated benchmarks to validate the 10-minute incremental SLA and feed the metadata benchmark table.

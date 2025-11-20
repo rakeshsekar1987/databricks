@@ -12,7 +12,9 @@ from pyspark.sql import DataFrame, SparkSession
 
 from .models import (
     AuditRecord,
+    BenchmarkRecord,
     CdfCheckpoint,
+    CostRecord,
     LoadMode,
     PartitioningHints,
     RetryPolicy,
@@ -49,6 +51,14 @@ class MetadataProvider(ABC):
     def record_schema_drift(self, record: SchemaDriftRecord) -> None:
         ...
 
+    @abstractmethod
+    def record_benchmark(self, record: BenchmarkRecord) -> None:
+        ...
+
+    @abstractmethod
+    def record_cost(self, record: CostRecord) -> None:
+        ...
+
 
 class DeltaMetadataProvider(MetadataProvider):
     """
@@ -64,6 +74,9 @@ class DeltaMetadataProvider(MetadataProvider):
 
     def _table(self, name: str) -> DataFrame:
         return self._spark.table(f"{self._catalog}.{self._schema}.{name}")
+
+    def _get(self, row, attr: str, default=None):
+        return getattr(row, attr, default)
 
     def list_tables(self, source_id: str, mode: LoadMode) -> List[TableMetadata]:
         df = self._table("table_metadata").where("is_active = true").where(f"source_id = '{source_id}'")
@@ -97,10 +110,15 @@ class DeltaMetadataProvider(MetadataProvider):
                     retry_policy=retry_policy,
                     is_append_only=row.is_append_only,
                     is_active=row.is_active,
-                    concurrency_weight=row.concurrency_weight,
-                    sla_priority=row.sla_priority,
-                    table_run_properties=row.table_run_properties,
-                    fallback_mode=LoadMode(row.fallback_mode) if row.fallback_mode else None,
+                    concurrency_weight=self._get(row, "concurrency_weight", 1),
+                    sla_priority=self._get(row, "sla_priority", 3),
+                    table_run_properties=self._get(row, "table_run_properties", {}),
+                    dq_tolerance_percent=self._get(row, "dq_tolerance_percent", 1.0),
+                    max_parallelism=self._get(row, "max_parallelism"),
+                    estimated_row_count=self._get(row, "estimated_row_count"),
+                    size_bucket=self._get(row, "size_bucket", "M"),
+                    cost_allocation_code=self._get(row, "cost_allocation_code"),
+                    fallback_mode=LoadMode(row.fallback_mode) if self._get(row, "fallback_mode") else None,
                 )
             )
         return tables
@@ -127,6 +145,7 @@ class DeltaMetadataProvider(MetadataProvider):
             include_list=entry.include_list,
             exclude_list=entry.exclude_list,
             is_ct_enabled=entry.db_details.get("is_ct_enabled", False),
+            metadata=getattr(entry, "metadata", {}),
         )
 
     def get_cdf_checkpoint(self, catalog: str, schema: str, table: str) -> Optional[CdfCheckpoint]:
@@ -204,6 +223,46 @@ class DeltaMetadataProvider(MetadataProvider):
             schema="run_id string, table_name string, drift_type string, details map<string,string>, detected_at timestamp",
         ).write.mode("append").saveAsTable(f"{self._catalog}.{self._schema}.schema_drift")
 
+    def record_benchmark(self, record: BenchmarkRecord) -> None:
+        data = [
+            (
+                record.benchmark_id,
+                record.catalog,
+                record.schema,
+                record.mode.value,
+                record.table_count,
+                record.total_rows,
+                record.duration_seconds,
+                record.cluster_profile,
+                record.met_sla,
+                datetime.utcnow(),
+            )
+        ]
+        self._spark.createDataFrame(
+            data,
+            schema="benchmark_id string, catalog string, schema string, mode string, table_count int, total_rows long, "
+            "duration_seconds double, cluster_profile string, met_sla boolean, created_at timestamp",
+        ).write.mode("append").saveAsTable(f"{self._catalog}.{self._schema}.benchmark_log")
+
+    def record_cost(self, record: CostRecord) -> None:
+        data = [
+            (
+                record.run_id,
+                record.cluster_profile,
+                record.duration_seconds,
+                record.dbu_cost,
+                record.storage_cost,
+                record.total_cost,
+                record.notes,
+                datetime.utcnow(),
+            )
+        ]
+        self._spark.createDataFrame(
+            data,
+            schema="run_id string, cluster_profile string, duration_seconds double, dbu_cost double, storage_cost double, "
+            "total_cost double, notes string, created_at timestamp",
+        ).write.mode("append").saveAsTable(f"{self._catalog}.{self._schema}.cost_log")
+
 
 class InMemoryMetadataProvider(MetadataProvider):
     """Simple in-memory provider primarily for unit tests or dry-runs."""
@@ -219,6 +278,8 @@ class InMemoryMetadataProvider(MetadataProvider):
         self._checkpoints = {(c.catalog, c.schema, c.table): c for c in checkpoints or []}
         self._audit_records: List[AuditRecord] = []
         self._drifts: List[SchemaDriftRecord] = []
+        self._benchmarks: List[BenchmarkRecord] = []
+        self._costs: List[CostRecord] = []
 
     def list_tables(self, source_id: str, mode: LoadMode) -> List[TableMetadata]:
         return [t for t in self._tables if t.source_id == source_id and t.is_active]
@@ -238,6 +299,12 @@ class InMemoryMetadataProvider(MetadataProvider):
     def record_schema_drift(self, record: SchemaDriftRecord) -> None:
         self._drifts.append(record)
 
+    def record_benchmark(self, record: BenchmarkRecord) -> None:
+        self._benchmarks.append(record)
+
+    def record_cost(self, record: CostRecord) -> None:
+        self._costs.append(record)
+
     @property
     def audit_records(self) -> List[AuditRecord]:
         return self._audit_records
@@ -245,3 +312,11 @@ class InMemoryMetadataProvider(MetadataProvider):
     @property
     def schema_drifts(self) -> List[SchemaDriftRecord]:
         return self._drifts
+
+    @property
+    def benchmark_records(self) -> List[BenchmarkRecord]:
+        return self._benchmarks
+
+    @property
+    def cost_records(self) -> List[CostRecord]:
+        return self._costs

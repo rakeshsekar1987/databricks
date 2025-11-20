@@ -37,6 +37,14 @@ class RuntimeConfig:
     parallelism: int = constants.DEFAULT_PARALLELISM
     run_id: Optional[str] = None
     log_workspace: str = constants.DEFAULT_LOG_ANALYTICS_WORKSPACE
+    cluster_profile: str = "standard"
+    sla_minutes: float = 10.0
+    driver_dbu_per_hour: float = 0.3
+    worker_dbu_per_hour: float = 0.2
+    num_workers: int = 10
+    dbu_rate: float = 0.55
+    storage_cost_per_tb_month: float = 23.0
+    estimated_bronze_tb: float = 0.5
     spark: SparkRuntimeConfig = field(default_factory=SparkRuntimeConfig)
 
     @staticmethod
@@ -74,5 +82,13 @@ class RuntimeConfig:
             parallelism=int(env.get("PARALLELISM", constants.DEFAULT_PARALLELISM)),
             run_id=env.get("RUN_ID"),
             log_workspace=env.get("LOG_ANALYTICS_WORKSPACE", constants.DEFAULT_LOG_ANALYTICS_WORKSPACE),
+            cluster_profile=env.get("CLUSTER_PROFILE", "standard"),
+            sla_minutes=float(env.get("SLA_MINUTES", 10)),
+            driver_dbu_per_hour=float(env.get("DRIVER_DBU_PER_HOUR", 0.3)),
+            worker_dbu_per_hour=float(env.get("WORKER_DBU_PER_HOUR", 0.2)),
+            num_workers=int(env.get("NUM_WORKERS", 10)),
+            dbu_rate=float(env.get("DBU_RATE", 0.55)),
+            storage_cost_per_tb_month=float(env.get("STORAGE_COST_PER_TB_MONTH", 23.0)),
+            estimated_bronze_tb=float(env.get("ESTIMATED_BRONZE_TB", 0.5)),
             spark=spark_conf,
         )

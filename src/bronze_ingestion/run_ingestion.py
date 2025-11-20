@@ -14,9 +14,9 @@ from .config import RuntimeConfig
 from .execution.orchestrator import IngestionOrchestrator
 from .logging_utils import StructuredLogger
 from .metadata.provider import DeltaMetadataProvider
-from .services.notifier import LoggerNotifier
+from .services.notifier import CompositeNotifier, LoggerNotifier, SendGridNotifier
 from .services.secrets import EnvironmentSecretManager, KeyVaultSecretManager, resolve_dbutils
-from .sources.sql_server import SqlServerAdapter
+from .sources.factory import SourceAdapterFactory
 from .spark.session import SparkSessionFactory
 
 
@@ -67,6 +67,17 @@ def build_secret_manager(logger: StructuredLogger):
     return EnvironmentSecretManager()
 
 
+def build_notifier(logger: StructuredLogger) -> CompositeNotifier:
+    recipients_raw = os.environ.get("NOTIFICATION_RECIPIENTS", "")
+    recipients = [email.strip() for email in recipients_raw.split(",") if email.strip()]
+    notifiers = [LoggerNotifier(logger)]
+    sendgrid_key = os.environ.get("SENDGRID_API_KEY")
+    sender = os.environ.get("SENDGRID_SENDER", "bronze@dataplatform")
+    if sendgrid_key and recipients:
+        notifiers.append(SendGridNotifier(sendgrid_key, sender, recipients, logger))
+    return CompositeNotifier(notifiers)
+
+
 def main():
     args = parse_args()
     logger = StructuredLogger()
@@ -81,14 +92,14 @@ def main():
     )
 
     secret_manager = build_secret_manager(logger)
-    source_adapter = SqlServerAdapter(secret_manager, logger)
-    notifier = LoggerNotifier(logger)
+    adapter_factory = SourceAdapterFactory(secret_manager, logger)
+    notifier = build_notifier(logger)
 
     orchestrator = IngestionOrchestrator(
         spark=spark,
         runtime_config=runtime_config,
         metadata_provider=metadata_provider,
-        source_adapter=source_adapter,
+        adapter_factory=adapter_factory,
         notifier=notifier,
         logger=logger,
     )

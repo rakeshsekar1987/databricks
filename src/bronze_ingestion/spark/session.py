@@ -23,6 +23,8 @@ class SparkSessionFactory:
     def build(self, existing: Optional[SparkSession] = None) -> SparkSession:
         spark = existing or SparkSession.builder.getOrCreate()
         spark.conf.set("spark.databricks.delta.properties.defaults.enableChangeDataFeed", "true")
+        spark.conf.set("spark.databricks.delta.properties.defaults.logRetentionDuration", "interval 7 days")
+        spark.conf.set("spark.databricks.delta.schema.autoMerge.enabled", "true")
         spark.conf.set("spark.sql.adaptive.enabled", str(self._config.spark.enable_aqe).lower())
         spark.conf.set(
             "spark.databricks.delta.optimizeWrite.enabled", str(self._config.spark.delta_auto_optimize).lower()

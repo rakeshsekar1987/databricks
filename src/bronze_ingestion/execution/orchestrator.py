@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import time
 from dataclasses import dataclass
 from typing import Dict, List
 
@@ -20,7 +21,9 @@ from ..services.audit import AuditService
 from ..services.data_quality import DataQualityService
 from ..services.notifier import Notifier
 from ..services.schema_evolution import SchemaEvolutionService
+from ..services.performance import BenchmarkService, CostService
 from ..sources.base import SourceAdapter
+from ..sources.factory import SourceAdapterFactory
 from ..strategies.append_only import AppendOnlyStrategy
 from ..strategies.base import LoadResult, LoadStrategy, StrategyContext
 from ..strategies.full_load import FullLoadStrategy
@@ -39,17 +42,19 @@ class IngestionOrchestrator:
         spark: SparkSession,
         runtime_config: RuntimeConfig,
         metadata_provider: MetadataProvider,
-        source_adapter: SourceAdapter,
+        adapter_factory: SourceAdapterFactory,
         notifier: Notifier,
         logger: StructuredLogger,
     ):
         self._spark = spark
         self._runtime_config = runtime_config
         self._metadata_provider = metadata_provider
-        self._source_adapter = source_adapter
+        self._adapter_factory = adapter_factory
         self._audit_service = AuditService(metadata_provider, logger)
         self._schema_service = SchemaEvolutionService(spark, metadata_provider, notifier, logger)
         self._dq_service = DataQualityService(logger)
+        self._benchmark_service = BenchmarkService(metadata_provider, runtime_config, logger)
+        self._cost_service = CostService(metadata_provider, runtime_config, logger)
         self._notifier = notifier
         self._logger = logger
         self._strategies: Dict[LoadMode, LoadStrategy] = {
@@ -62,6 +67,8 @@ class IngestionOrchestrator:
         run_id = self._runtime_config.run_id or str(uuid.uuid4())
         load_mode = LoadMode(self._runtime_config.mode)
         source_metadata = self._metadata_provider.get_source(self._runtime_config.source_id)
+        source_adapter = self._adapter_factory.get_adapter(source_metadata)
+        base_source_options = self._adapter_factory.build_source_options(source_metadata)
         tables = self._metadata_provider.list_tables(self._runtime_config.source_id, load_mode)
         tables = sorted(
             (table for table in tables if table.is_active),
@@ -76,6 +83,7 @@ class IngestionOrchestrator:
 
         successes: List[LoadResult] = []
         failures: Dict[str, str] = {}
+        start_ts = time.perf_counter()
 
         with ThreadPoolExecutor(max_workers=self._runtime_config.parallelism) as executor:
             future_map = {
@@ -84,7 +92,8 @@ class IngestionOrchestrator:
                     table,
                     load_mode,
                     run_id,
-                    source_metadata.db_details,
+                    base_source_options,
+                    source_adapter,
                 ): table
                 for table in tables
             }
@@ -105,6 +114,16 @@ class IngestionOrchestrator:
                         {"table": table.table_name, "error": str(exc), "mode": load_mode.value},
                     )
 
+        duration_seconds = time.perf_counter() - start_ts
+        total_rows = sum(result.rows_written for result in successes)
+        self._benchmark_service.record(
+            run_id=run_id,
+            mode=load_mode,
+            successes_count=len(successes),
+            total_rows=total_rows,
+            duration_seconds=duration_seconds,
+        )
+        self._cost_service.record(run_id=run_id, duration_seconds=duration_seconds)
         self._send_summary(run_id, successes, failures)
         return IngestionSummary(successes=successes, failures=failures)
 
@@ -113,7 +132,8 @@ class IngestionOrchestrator:
         table: TableMetadata,
         load_mode: LoadMode,
         run_id: str,
-        connection_details: Dict[str, str],
+        source_options: Dict[str, str],
+        source_adapter: SourceAdapter,
     ) -> LoadResult:
         strategy = self._select_strategy(table, load_mode)
         checkpoint = None
@@ -121,14 +141,14 @@ class IngestionOrchestrator:
             checkpoint = self._metadata_provider.get_cdf_checkpoint(
                 table.catalog_name, table.schema_name, table.table_name
             )
-        source_options = {**table.table_run_properties, "db_details": connection_details}
+        merged_options = {**source_options, **table.table_run_properties}
         context = StrategyContext(
             spark=self._spark,
             runtime_config=self._runtime_config,
             table_metadata=table,
             metadata_provider=self._metadata_provider,
-            source_options=source_options,
-            source_adapter=self._source_adapter,
+            source_options=merged_options,
+            source_adapter=source_adapter,
             audit_service=self._audit_service,
             schema_service=self._schema_service,
             dq_service=self._dq_service,

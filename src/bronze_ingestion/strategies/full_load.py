@@ -32,23 +32,29 @@ class FullLoadStrategy(LoadStrategy):
             )
 
             context.schema_service.detect_and_log(source_df, context.table_metadata, context.run_id)
-            written_df = self._write_delta(source_df, context.table_metadata, mode="overwrite")
+            optimized_df = self._optimize_dataframe(source_df, context.table_metadata, rows_read)
+            written_df = self._write_delta(optimized_df, context.table_metadata, mode="overwrite")
             target_df: DataFrame = context.spark.table(
                 f"{context.table_metadata.catalog_name}.{context.table_metadata.schema_name}.{context.table_metadata.table_name}"
             )
-            context.dq_service.validate_row_counts(written_df, target_df)
+            dq_result = context.dq_service.validate_row_counts(
+                source_df,
+                target_df,
+                tolerance_percent=context.table_metadata.dq_tolerance_percent,
+            )
+            context.dq_service.validate_schema_alignment(source_df, target_df)
 
             context.audit_service.complete(
                 audit_handle,
                 rows_read=rows_read,
-                rows_written=target_df.count(),
+                rows_written=dq_result.actual_count,
                 status="SUCCESS",
             )
 
             return LoadResult(
                 table_name=context.table_metadata.table_name,
                 rows_read=rows_read,
-                rows_written=target_df.count(),
+                rows_written=dq_result.actual_count,
                 status="SUCCESS",
             )
 

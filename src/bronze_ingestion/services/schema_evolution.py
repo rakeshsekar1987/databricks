@@ -5,6 +5,7 @@ Schema evolution and drift detection utilities.
 from __future__ import annotations
 
 from typing import Dict, List
+from datetime import datetime, timezone
 
 from pyspark.sql import DataFrame, SparkSession
 
@@ -58,7 +59,7 @@ class SchemaEvolutionService:
                 table_name=table.table_name,
                 drift_type=drift["type"],
                 details=drift,
-                detected_at=dataframe.sparkSession.sql("SELECT current_timestamp()").collect()[0][0],
+                detected_at=datetime.now(timezone.utc),
             )
             self._provider.record_schema_drift(record)
             message = f"Schema drift detected for {table.table_name}: {drift}"

@@ -8,6 +8,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Iterable, List
 
+import requests
+
 from ..logging_utils import StructuredLogger
 
 
@@ -45,3 +47,30 @@ class LoggerNotifier(Notifier):
 
     def notify(self, subject: str, body: str) -> None:
         self.logger.info("notifier.logger", {"subject": subject, "body": body})
+
+
+@dataclass
+class SendGridNotifier(Notifier):
+    api_key: str
+    sender: str
+    recipients: List[str]
+    logger: StructuredLogger
+
+    def notify(self, subject: str, body: str) -> None:
+        payload = {
+            "personalizations": [{"to": [{"email": recipient} for recipient in self.recipients]}],
+            "from": {"email": self.sender},
+            "subject": subject,
+            "content": [{"type": "text/plain", "value": body}],
+        }
+        try:
+            response = requests.post(
+                "https://api.sendgrid.com/v3/mail/send",
+                json=payload,
+                headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
+                timeout=10,
+            )
+            response.raise_for_status()
+            self.logger.info("notifier.sendgrid.sent", {"subject": subject, "recipients": self.recipients})
+        except Exception as exc:  # pragma: no cover - network dependent
+            self.logger.error("notifier.sendgrid.failed", {"error": str(exc), "subject": subject})

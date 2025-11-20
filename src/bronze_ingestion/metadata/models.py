@@ -58,6 +58,11 @@ class TableMetadata:
     concurrency_weight: int = 1
     sla_priority: int = 3
     table_run_properties: Dict[str, str] = field(default_factory=dict)
+    dq_tolerance_percent: float = 1.0
+    max_parallelism: Optional[int] = None
+    estimated_row_count: Optional[int] = None
+    size_bucket: str = "M"
+    cost_allocation_code: Optional[str] = None
     fallback_mode: Optional[LoadMode] = None
 
 
@@ -72,6 +77,7 @@ class SourceConnectionMetadata:
     include_list: List[str]
     exclude_list: List[str]
     is_ct_enabled: bool
+    metadata: Dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -119,3 +125,14 @@ class BenchmarkRecord:
     duration_seconds: float
     cluster_profile: str
     met_sla: bool
+
+
+@dataclass(frozen=True, slots=True)
+class CostRecord:
+    run_id: str
+    cluster_profile: str
+    duration_seconds: float
+    dbu_cost: float
+    storage_cost: float
+    total_cost: float
+    notes: Optional[str] = None

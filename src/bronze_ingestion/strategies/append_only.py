@@ -47,7 +47,8 @@ class AppendOnlyStrategy(LoadStrategy):
                 )
 
             context.schema_service.detect_and_log(source_df, context.table_metadata, context.run_id)
-            written_df = self._write_delta(source_df, context.table_metadata, mode="append")
+            optimized_df = self._optimize_dataframe(source_df, context.table_metadata, rows_read)
+            written_df = self._write_delta(optimized_df, context.table_metadata, mode="append")
             checkpoint = self._derive_checkpoint(
                 written_df,
                 context.table_metadata,

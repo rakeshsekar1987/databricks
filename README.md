@@ -9,57 +9,14 @@ Metadata-driven PySpark framework that ingests 260+ on-prem SQL Server tables in
 - Metadata-first design: table/source/audit metadata drive every decision (parallelism, retries, partitioning, notifications).
 - Observability built-in: JSON logging, audit tables, Azure Log Analytics hooks, notification providers.
 
-## Package Layout
+## Quick Folder Guide
 
-```
-src/
-└── bronze_ingestion
-    ├── config.py               # Runtime & environment configuration helpers
-    ├── constants.py            # Global constants and defaults
-    ├── exceptions.py           # Custom domain exceptions
-    ├── logging_utils.py        # Structured logging + Log Analytics emitter
-    ├── spark/
-    │   └── session.py          # Spark session builder & optimizations
-    ├── metadata/
-    │   ├── models.py           # Dataclasses for table/source/audit/benchmark metadata
-    │   └── provider.py         # Provider interfaces & Delta-backed implementation
-    ├── sources/
-    │   ├── base.py             # Source adapter contract + read context
-    │   ├── sql_server.py       # JDBC adapter with CT predicate pushdown
-    │   ├── rest_api.py         # REST/OData adapter
-    │   ├── file_system.py      # ABFSS/WABS/Blob adapter
-    │   ├── cassandra.py        # Cassandra adapter
-    │   └── factory.py          # Metadata-driven adapter factory
-    ├── strategies/
-    │   ├── base.py             # Strategy interface + load result helpers
-    │   ├── full_load.py        # Initial bulk ingestion
-    │   ├── incremental_ct.py   # CT-based incremental logic
-    │   └── append_only.py      # LMD/append fallback logic
-    ├── services/
-    │   ├── audit.py            # Audit logging with per-table durations
-    │   ├── data_quality.py     # Row-count + schema validation
-    │   ├── performance.py      # Run-level & per-table benchmarking
-    │   ├── notifier.py         # Email/SendGrid/Logger notifications
-    │   ├── retry.py            # Exponential backoff executor
-    │   ├── schema_evolution.py # Drift detection + alerting
-    │   └── secrets.py          # Key Vault/environment secret helpers
-    ├── execution/
-    │   └── orchestrator.py     # Parallel ingestion controller + benchmarking hooks
-    ├── utils/
-    │   ├── concurrency.py      # Thread utilities + cancellation tokens
-    │   └── timer.py            # Timing helper
-    └── run_ingestion.py        # CLI entry point for Databricks jobs
+Need a simple mental model? Start with `docs/project_structure.md`. In short:
 
-docs/
-└── optimization_guide.md       # Detailed Spark/Delta/cluster tuning playbook
-
-tests/
-├── test_config.py              # RuntimeConfig parsing coverage
-├── test_data_quality_service.py# DQ row-count + schema checks
-├── test_performance_services.py# Benchmark recorder coverage
-├── test_retry_executor.py      # Backoff + retry behavior
-└── test_source_adapter_factory.py # Adapter selection logic
-```
+- **notebooks/** – `bronze_ingestion_quickstart.py` is a Databricks-friendly driver. Drop it into a workspace, set a few parameters (mode, source ID, catalog, path, parallelism), and call `run_bronze_ingestion()` to kick off a run without digging into the library internals.
+- **src/bronze_ingestion/** – The reusable ingestion library: configs, metadata models/providers, all source adapters (SQL Server, REST/OData, ABFSS/WABS, Cassandra, etc.), load strategies (full, CT incremental, append/LMD), shared services (audit, data-quality, schema drift, retry, notifier, benchmarking, secrets), orchestration, utilities, and the `run_ingestion.py` CLI entry point.
+- **tests/** – Lightweight pytest suite for config parsing, retry/backoff, data-quality checks, adapter factory routing, and benchmarking helpers (`PYTHONPATH=./src python3 -m pytest`).
+- **docs/** – `optimization_guide.md` (Delta/Spark/cluster tuning playbook) and `project_structure.md` (plain-language layout overview).
 
 ## Metadata Expectations
 - **Table metadata**: schema, PKs, partition columns, CT flag, retry policy, include/exclude, append-only flag, concurrency weight, SLA priority, DQ tolerance, size bucket, max parallelism.

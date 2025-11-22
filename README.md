@@ -12,41 +12,53 @@ Metadata-driven PySpark framework that ingests 260+ on-prem SQL Server tables in
 ## Package Layout
 
 ```
-src/bronze_ingestion
-├── config.py               # Runtime & environment configuration helpers
-├── constants.py            # Global constants and defaults
-├── exceptions.py           # Custom domain exceptions
-├── logging_utils.py        # Structured logging facade
-├── spark/
-│   └── session.py          # Spark session builder & optimizations
-├── metadata/
-│   ├── models.py           # Dataclasses for metadata records
-│   └── provider.py         # Provider interfaces & sample implementations
-├── sources/
-│   ├── base.py             # Source adapter contract
-│   ├── sql_server.py       # JDBC adapter w/ CT support
-│   ├── rest_api.py         # REST + OData adapter
-│   ├── file_system.py      # ABFSS/WABS/Blob adapter
-│   ├── cassandra.py        # Cassandra adapter
-│   └── factory.py          # Metadata-driven adapter factory
-├── strategies/
-│   ├── base.py             # Strategy interface
-│   ├── full_load.py        # Full-load logic
-│   ├── incremental_ct.py   # CT-based incremental logic
-│   └── append_only.py      # Append/LMD fallback logic
-├── services/
-│   ├── audit.py            # Audit logging
-│   ├── data_quality.py     # Row-count + schema validation
-│   ├── performance.py      # Benchmark tracking services
-│   ├── notifier.py         # Email/SendGrid/Logger notifications
-│   ├── retry.py            # Exponential backoff executor
-│   └── schema_evolution.py # Drift detection + logging
-├── execution/
-│   └── orchestrator.py     # Parallel ingestion controller
-├── utils/
-│   ├── concurrency.py      # Thread utilities + cancellation tokens
-│   └── timer.py            # Timing helper
-└── run_ingestion.py        # Entry point for Databricks jobs
+src/
+└── bronze_ingestion
+    ├── config.py               # Runtime & environment configuration helpers
+    ├── constants.py            # Global constants and defaults
+    ├── exceptions.py           # Custom domain exceptions
+    ├── logging_utils.py        # Structured logging + Log Analytics emitter
+    ├── spark/
+    │   └── session.py          # Spark session builder & optimizations
+    ├── metadata/
+    │   ├── models.py           # Dataclasses for table/source/audit/benchmark metadata
+    │   └── provider.py         # Provider interfaces & Delta-backed implementation
+    ├── sources/
+    │   ├── base.py             # Source adapter contract + read context
+    │   ├── sql_server.py       # JDBC adapter with CT predicate pushdown
+    │   ├── rest_api.py         # REST/OData adapter
+    │   ├── file_system.py      # ABFSS/WABS/Blob adapter
+    │   ├── cassandra.py        # Cassandra adapter
+    │   └── factory.py          # Metadata-driven adapter factory
+    ├── strategies/
+    │   ├── base.py             # Strategy interface + load result helpers
+    │   ├── full_load.py        # Initial bulk ingestion
+    │   ├── incremental_ct.py   # CT-based incremental logic
+    │   └── append_only.py      # LMD/append fallback logic
+    ├── services/
+    │   ├── audit.py            # Audit logging with per-table durations
+    │   ├── data_quality.py     # Row-count + schema validation
+    │   ├── performance.py      # Run-level & per-table benchmarking
+    │   ├── notifier.py         # Email/SendGrid/Logger notifications
+    │   ├── retry.py            # Exponential backoff executor
+    │   ├── schema_evolution.py # Drift detection + alerting
+    │   └── secrets.py          # Key Vault/environment secret helpers
+    ├── execution/
+    │   └── orchestrator.py     # Parallel ingestion controller + benchmarking hooks
+    ├── utils/
+    │   ├── concurrency.py      # Thread utilities + cancellation tokens
+    │   └── timer.py            # Timing helper
+    └── run_ingestion.py        # CLI entry point for Databricks jobs
+
+docs/
+└── optimization_guide.md       # Detailed Spark/Delta/cluster tuning playbook
+
+tests/
+├── test_config.py              # RuntimeConfig parsing coverage
+├── test_data_quality_service.py# DQ row-count + schema checks
+├── test_performance_services.py# Benchmark recorder coverage
+├── test_retry_executor.py      # Backoff + retry behavior
+└── test_source_adapter_factory.py # Adapter selection logic
 ```
 
 ## Metadata Expectations

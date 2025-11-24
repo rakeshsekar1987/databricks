@@ -9,7 +9,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from functools import reduce
-from operator import and_
+from operator import and_, or_
 from typing import Any, Callable, Dict, List, Optional, Sequence
 from uuid import uuid4
 
@@ -183,11 +183,225 @@ class ColumnMutationApplier:
     def _as_column(expression: Any) -> Column:
         if isinstance(expression, Column):
             return expression
+        if isinstance(expression, dict):
+            if "sql" in expression:
+                return expr(expression["sql"])
+            if "expression" in expression:
+                return expr(expression["expression"])
+            if "literal" in expression:
+                return lit(expression["literal"])
+            if "value" in expression:
+                return lit(expression["value"])
+            if "column" in expression:
+                return col(expression["column"])
         if isinstance(expression, (int, float, bool)):
             return lit(expression)
         if expression is None:
             return lit(None)
         return expr(str(expression))
+
+
+class JoinConditionBuilder:
+    """Builds arbitrary join expressions from flexible configuration payloads."""
+
+    LOGICAL_OPERATORS = {
+        "AND": and_,
+        "OR": or_,
+    }
+
+    @classmethod
+    def build(
+        cls,
+        condition: Any,
+        *,
+        left_df: DataFrame,
+        right_df: DataFrame,
+    ) -> Optional[Column]:
+        if condition is None:
+            return None
+        if isinstance(condition, Column):
+            return condition
+        if isinstance(condition, str):
+            return expr(condition)
+        if isinstance(condition, list):
+            expressions: List[Column] = []
+            for entry in condition:
+                if isinstance(entry, str):
+                    expressions.append(cls._column_match(left_df, right_df, entry))
+                else:
+                    built = cls.build(entry, left_df=left_df, right_df=right_df)
+                    if built is not None:
+                        expressions.append(built)
+            return cls._combine(expressions, and_)
+        if isinstance(condition, dict):
+            if "sql" in condition or "expression" in condition:
+                return expr(condition.get("sql") or condition.get("expression"))
+            if "conditions" in condition:
+                logical_operator = condition.get("logical_operator", "AND").upper()
+                combinator = cls.LOGICAL_OPERATORS.get(logical_operator, and_)
+                nested = [
+                    cls.build(item, left_df=left_df, right_df=right_df)
+                    for item in condition.get("conditions", [])
+                ]
+                return cls._combine(nested, combinator)
+            left_expression = condition.get("left") or condition.get("left_column")
+            right_expression = condition.get("right") or condition.get("right_column")
+            operator_symbol = (condition.get("operator") or "=").upper()
+            null_safe = bool(condition.get("null_safe", False))
+            left_column = cls._operand_to_column(left_expression, left_df, right_df)
+            right_column = cls._operand_to_column(right_expression, left_df, right_df)
+            return cls._apply_operator(
+                left_column,
+                right_column,
+                operator_symbol,
+                null_safe=null_safe,
+                raw_right=condition.get("right"),
+                options=condition,
+                left_df=left_df,
+                right_df=right_df,
+            )
+        return expr(str(condition))
+
+    @staticmethod
+    def _column_match(left_df: DataFrame, right_df: DataFrame, descriptor: Any) -> Column:
+        if isinstance(descriptor, str):
+            return left_df[descriptor] == right_df[descriptor]
+        if isinstance(descriptor, dict):
+            left_key = descriptor.get("left") or descriptor.get("column") or descriptor.get(
+                "left_column"
+            )
+            right_key = descriptor.get("right") or descriptor.get("right_column") or left_key
+            if left_key is None:
+                raise ValueError(f"Invalid join column descriptor: {descriptor}")
+            return left_df[left_key] == right_df[right_key]
+        raise ValueError(f"Unsupported join column descriptor: {descriptor}")
+
+    @staticmethod
+    def _combine(
+        expressions: List[Column], operator_func: Callable[[Column, Column], Column]
+    ) -> Optional[Column]:
+        filtered = [expr for expr in expressions if expr is not None]
+        if not filtered:
+            return None
+        if len(filtered) == 1:
+            return filtered[0]
+        return reduce(operator_func, filtered)
+
+    @staticmethod
+    def _operand_to_column(
+        operand: Any, left_df: DataFrame, right_df: DataFrame
+    ) -> Optional[Column]:
+        if operand is None:
+            return None
+        if isinstance(operand, Column):
+            return operand
+        if isinstance(operand, dict):
+            if "sql" in operand or "expression" in operand:
+                return expr(operand.get("sql") or operand.get("expression"))
+            if "literal" in operand or "value" in operand:
+                return lit(operand.get("literal", operand.get("value")))
+            if "column" in operand:
+                column_name = operand["column"]
+                side = operand.get("side")
+                if side:
+                    target_df = left_df if side.lower() in {"left", "l"} else right_df
+                    return target_df[column_name]
+                return col(column_name)
+        if isinstance(operand, (int, float, bool)):
+            return lit(operand)
+        if isinstance(operand, str):
+            return expr(operand)
+        return lit(operand)
+
+    @staticmethod
+    def _apply_operator(
+        left_column: Optional[Column],
+        right_column: Optional[Column],
+        operator_symbol: str,
+        *,
+        null_safe: bool,
+        raw_right: Any,
+        options: Dict[str, Any],
+        left_df: DataFrame,
+        right_df: DataFrame,
+    ) -> Column:
+        if left_column is None:
+            raise ValueError("Left operand is required for join conditions.")
+        operator_symbol = operator_symbol.upper()
+
+        if operator_symbol in {"=", "==", "EQ"}:
+            if right_column is None:
+                raise ValueError("Right operand is required for equality joins.")
+            return left_column.eqNullSafe(right_column) if null_safe else left_column == right_column
+        if operator_symbol in {"!=", "<>", "NE"}:
+            if right_column is None:
+                raise ValueError("Right operand is required for inequality joins.")
+            return left_column != right_column
+        if operator_symbol == ">":
+            return left_column > right_column
+        if operator_symbol == "<":
+            return left_column < right_column
+        if operator_symbol == ">=":
+            return left_column >= right_column
+        if operator_symbol == "<=":
+            return left_column <= right_column
+        if operator_symbol in {"<=>", "NULLSAFE"}:
+            if right_column is None:
+                raise ValueError("Right operand is required for null-safe joins.")
+            return left_column.eqNullSafe(right_column)
+        if operator_symbol == "BETWEEN":
+            bounds = options.get("bounds") or raw_right
+            lower, upper = JoinConditionBuilder._prepare_bounds(bounds, left_df, right_df)
+            return left_column.between(lower, upper)
+        if operator_symbol == "IN":
+            values = JoinConditionBuilder._prepare_values(options.get("values") or raw_right)
+            return left_column.isin(*values)
+        if operator_symbol == "NOT IN":
+            values = JoinConditionBuilder._prepare_values(options.get("values") or raw_right)
+            return ~left_column.isin(*values)
+        if operator_symbol in {"LIKE", "ILIKE", "RLIKE"}:
+            pattern = JoinConditionBuilder._prepare_pattern(right_column, raw_right, operator_symbol)
+            if operator_symbol == "LIKE":
+                return left_column.like(pattern)
+            if operator_symbol == "ILIKE":
+                return left_column.ilike(pattern)
+            return left_column.rlike(pattern)
+        if operator_symbol == "IS NULL":
+            return left_column.isNull()
+        if operator_symbol == "IS NOT NULL":
+            return left_column.isNotNull()
+
+        raise ValueError(f"Unsupported join operator: {operator_symbol}")
+
+    @staticmethod
+    def _prepare_bounds(bounds: Any, left_df: DataFrame, right_df: DataFrame) -> Sequence[Any]:
+        if not isinstance(bounds, (list, tuple)) or len(bounds) != 2:
+            raise ValueError("Bounds for BETWEEN joins must be a two-element sequence.")
+        lower = JoinConditionBuilder._operand_to_column(bounds[0], left_df, right_df)
+        upper = JoinConditionBuilder._operand_to_column(bounds[1], left_df, right_df)
+        if lower is None or upper is None:
+            raise ValueError("Bounds for BETWEEN joins cannot be null.")
+        return lower, upper
+
+    @staticmethod
+    def _prepare_values(values: Any) -> List[Any]:
+        if values is None:
+            raise ValueError("Values must be supplied for IN/NOT IN joins.")
+        if isinstance(values, (list, tuple, set)):
+            if not values:
+                raise ValueError("Values for IN/NOT IN joins cannot be empty.")
+            return list(values)
+        return [values]
+
+    @staticmethod
+    def _prepare_pattern(
+        right_column: Optional[Column], raw_right: Any, operator_symbol: str
+    ) -> Any:
+        if isinstance(right_column, Column):
+            return right_column
+        if raw_right is None:
+            raise ValueError(f"A pattern must be supplied for {operator_symbol} joins.")
+        return raw_right
 
 
 def project_columns(df: DataFrame, columns: Sequence[str]) -> DataFrame:
@@ -268,23 +482,33 @@ class TablePlanBuilder:
     @staticmethod
     def _build_join_expr(
         join_condition: Any, left_df: DataFrame, right_df: DataFrame
-    ) -> Column:
-        if isinstance(join_condition, list):
-            if not join_condition:
-                raise ValueError("Join condition list cannot be empty")
-            comparisons = [left_df[column] == right_df[column] for column in join_condition]
-            return reduce(and_, comparisons)
-        return expr(join_condition)
+    ) -> Optional[Column]:
+        return JoinConditionBuilder.build(
+            join_condition, left_df=left_df, right_df=right_df
+        )
 
     def _join(self, left_df: DataFrame, right_df: DataFrame, table_step: Dict[str, Any]) -> DataFrame:
         join_condition = table_step.get("join_condition")
-        if join_condition is None:
-            raise ValueError(f"Join condition missing for {table_step['alias']}")
-        join_expr = self._build_join_expr(join_condition, left_df, right_df)
+        join_expr = (
+            self._build_join_expr(join_condition, left_df, right_df)
+            if join_condition is not None
+            else None
+        )
+        join_type_value = table_step.get("join_type") or "inner"
+        normalized_join_type = join_type_value.lower()
+
+        if normalized_join_type in {"cross", "cross_join"}:
+            if table_step.get("broadcast_hint"):
+                right_df = broadcast(right_df)
+            return left_df.crossJoin(right_df)
+
+        if join_expr is None:
+            raise ValueError(f"Join condition missing or invalid for {table_step['alias']}")
+
         if table_step.get("broadcast_hint"):
             right_df = broadcast(right_df)
-        join_type = table_step.get("join_type") or "inner"
-        return left_df.join(right_df, join_expr, join_type)
+
+        return left_df.join(right_df, join_expr, join_type_value)
 
     def _apply_aggregation(self, df: DataFrame, aggregation: Optional[Dict[str, Any]]) -> DataFrame:
         if not aggregation:

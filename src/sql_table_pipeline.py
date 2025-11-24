@@ -16,17 +16,25 @@ from uuid import uuid4
 from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql.column import Column
 from pyspark.sql.functions import (
+    array_contains,
     broadcast,
     col,
     collect_list,
     collect_set,
+    concat,
+    count,
+    coalesce,
     expr,
+    explode,
+    explode_outer,
     lead,
     lit,
     lower,
+    max,
     row_number,
     struct,
-    sum as f_sum,
+    sum,
+    when,
 )
 from pyspark.sql.window import Window
 
@@ -678,7 +686,7 @@ table_configurations = [
                 "filter_cols": [],
                 "add_columns": [],
                 "update_columns": [],
-                "id_columns": ["invoice_item_id"],
+                "id_columns": ["invoice_item_id"]
             },
             {
                 "table": "tbl_invoice_taxrequest_itemtaxes",
@@ -694,13 +702,13 @@ table_configurations = [
                     "authority_name",
                     "tax_name",
                     "tax_rate",
-                    "taxable_amount",
+                    "taxable_amount"
                 ],
                 "filter_cols": [],
                 "add_columns": [],
                 "update_columns": [],
-                "id_columns": ["invoice_item_id"],
-            },
+                "id_columns": []
+            }
         ],
         "aggregation": {
             "group_by": ["tii.invoice_item_id"],
@@ -711,15 +719,18 @@ table_configurations = [
                         col("titrit.authority_name").alias("authority_name"),
                         col("titrit.tax_name").alias("tax_name"),
                         col("titrit.tax_rate").alias("tax_rate"),
-                        col("titrit.taxable_amount").alias("taxable_amount"),
+                        col("titrit.taxable_amount").alias("taxable_amount")
                     )
-                ).alias("tax"),
-            ],
+                ).alias("tax")
+            ]
         },
         "order_by": ["invoice_item_id"],
         "id_columns": ["invoice_item_id"],
         "auto_generate_id": "False",
-        "columns_to_keep": ["invoice_item_id", "tax"],
+        "columns_to_keep": [
+            "invoice_item_id",
+            "tax"
+        ]
     },
     {
         "table_name": "invoice_discounts",
@@ -736,12 +747,12 @@ table_configurations = [
                     "invoice_id",
                     "discount_id",
                     "discount_title",
-                    "discount_value",
+                    "discount_value"
                 ],
                 "filter_cols": [],
                 "add_columns": [],
                 "update_columns": [],
-                "id_columns": ["invoice_id"],
+                "id_columns": ["invoice_id"]
             }
         ],
         "aggregation": {
@@ -751,15 +762,243 @@ table_configurations = [
                     struct(
                         col("tid.discount_id").alias("discount_id"),
                         col("tid.discount_title").alias("discount_title"),
-                        col("tid.discount_value").alias("discount_value"),
+                        col("tid.discount_value").alias("discount_value")
                     )
-                ).alias("discounts"),
-            ],
+                ).alias("discounts")
+            ]
         },
         "order_by": ["invoice_id"],
         "id_columns": ["invoice_id"],
         "auto_generate_id": "False",
-        "columns_to_keep": ["invoice_id", "discounts"],
+        "columns_to_keep": [
+            "invoice_id",
+            "discounts"
+        ]
+    },
+    {
+        "table_name": "invoice_items",
+        "table_map": [
+            {
+                "table": "tbl_invoices",
+                "alias": "ti",
+                "source": "mysgs",
+                "schema": "silver",
+                "join_condition": None,
+                "join_type": None,
+                "drop_cols": [],
+                "select_cols": [
+                    "invoice_id",
+                    "invoice_date_time",
+                    "invoice_export_date_time",
+                    "reissued",
+                    "job_version_id",
+                    "invoice_title",
+                    "exchange_rate_id",
+                    "exchange_rate_value",
+                    "tax_code_id",
+                    "tax_code_rate",
+                    "currency_id"
+                ],
+                "filter_cols": [],
+                "add_columns": [],
+                "update_columns": [
+                    {
+                        "invoice_type": when(col("ti.reissued") == True, "Re-Billed Invoice")
+                            .when(col("ti.job_version_id").isNotNull(), "Standard Invoice")
+                            .otherwise("Miscellaneous Invoice")
+                    }
+                ],
+                "id_columns": ["invoice_id"]
+            },
+            {
+                "table": "tbl_accounts_dax_export_invoices",
+                "alias": "tadei",
+                "source": "mysgs",
+                "schema": "silver",
+                "join_condition": "ti.invoice_id = tadei.invoice_id",
+                "join_type": "left_outer",
+                "drop_cols": [],
+                "select_cols": [
+                    "invoice_id",
+                    "failed",
+                    "functional_exchange_rate"
+                ],
+                "filter_cols": [
+                    {"failed": "false"}
+                ],
+                "add_columns": [],
+                "update_columns": [],
+                "id_columns": []
+            },
+            {
+                "table": "tbl_invoice_ex",
+                "alias": "tie",
+                "source": "mysgs",
+                "schema": "silver",
+                "join_condition": "ti.invoice_id = tie.invoice_id",
+                "join_type": "inner",
+                "drop_cols": [],
+                "select_cols": [
+                    "invoice_id",
+                    "invoice_po_no",
+                    "invoice_additional_po_no"
+                ],
+                "filter_cols": [],
+                "add_columns": [],
+                "update_columns": [],
+                "id_columns": []
+            },
+            {
+                "table": "invoice_discounts",
+                "alias": "tid",
+                "source": "mysgs",
+                "schema": "silver_nxt",
+                "join_condition": "ti.invoice_id = tid.invoice_id",
+                "join_type": "left_outer",
+                "drop_cols": [],
+                "select_cols": [
+                    "invoice_id",
+                    "discounts"
+                ],
+                "filter_cols": [],
+                "add_columns": [],
+                "update_columns": [],
+                "id_columns": []
+            },
+            {
+                "table": "tbl_invoice_items",
+                "alias": "tii",
+                "source": "mysgs",
+                "schema": "silver",
+                "join_condition": "ti.invoice_id = tii.invoice_id",
+                "join_type": "left_outer",
+                "drop_cols": [],
+                "select_cols": [
+                    "invoice_id",
+                    "job_item_id",
+                    "invoice_roll_up_item_id",
+                    "invoice_item_id"
+                ],
+                "filter_cols": [],
+                "add_columns": [],
+                "update_columns": [],
+                "id_columns": []
+            },
+            {
+                "table": "tbl_job_items",
+                "alias": "tji",
+                "source": "mysgs",
+                "schema": "silver",
+                "join_condition": "tii.job_item_id = tji.job_item_id",
+                "join_type": "left_outer",
+                "drop_cols": [],
+                "select_cols": [
+                    "job_item_id",
+                    "currency_cost",
+                    "exchange_rate_value",
+                    "quantity"
+                ],
+                "filter_cols": [],
+                "add_columns": [],
+                "update_columns": [
+                    {
+                        "exchange_rate": coalesce(col("tadei.functional_exchange_rate"), col("tji.exchange_rate_value"), lit(0)),
+                        "price": col("tji.currency_cost") * coalesce(col("tadei.functional_exchange_rate"), col("tji.exchange_rate_value"), lit(0)),
+                        "invoice_line_amount": (col("tji.currency_cost") * col("tji.quantity")) * (col("tadei.functional_exchange_rate"))
+                    }
+                ],
+                "id_columns": []
+            },
+            {
+                "table": "tbl_invoice_roll_up_items",
+                "alias": "tirui",
+                "source": "mysgs",
+                "schema": "silver",
+                "join_condition": "tii.invoice_roll_up_item_id = tirui.invoice_roll_up_item_id",
+                "join_type": "left_outer",
+                "drop_cols": [],
+                "select_cols": ["invoice_roll_up_item_id", "item_order", "name", "notes"],
+                "filter_cols": [],
+                "add_columns": [],
+                "update_columns": [
+                    {
+                        "item_roll_up": struct(
+                            col("tirui.invoice_roll_up_item_id").alias("invoice_roll_up_item_id"),
+                            col("tirui.item_order").alias("item_order"),
+                            col("tirui.name").alias("name"),
+                            col("tirui.notes").alias("notes")
+                        )
+                    }
+                ],
+                "id_columns": []
+            },
+            {
+                "table": "tbl_currencies",
+                "alias": "tc",
+                "source": "mysgs",
+                "schema": "silver",
+                "join_condition": "ti.currency_id = tc.currency_id",
+                "join_type": "left_outer",
+                "drop_cols": [],
+                "select_cols": [
+                    "currency_id",
+                    "currency_code",
+                    "currency_desc",
+                    "currency_symbol"
+                ],
+                "filter_cols": [],
+                "add_columns": [],
+                "update_columns": [],
+                "id_columns": []
+            },
+            {
+                "table": "invoice_tax",
+                "alias": "it",
+                "source": "mysgs",
+                "schema": "silver_nxt",
+                "join_condition": "tii.invoice_item_id = it.invoice_item_id",
+                "join_type": "left_outer",
+                "drop_cols": [],
+                "select_cols": [
+                    "invoice_item_id",
+                    "tax"
+                ],
+                "filter_cols": [],
+                "add_columns": [],
+                "update_columns": [],
+                "id_columns": []
+            }
+        ],
+        "order_by": ["ti.invoice_id", "tii.job_item_id"],
+        "id_columns": ["ti.invoice_id", "tii.job_item_id"],
+        "auto_generate_id": "False",
+        "columns_to_keep": [
+                "ti.invoice_id",
+                "tii.job_item_id",
+                "tii.invoice_item_id",
+                "ti.invoice_date_time",
+                "ti.invoice_export_date_time",
+                "invoice_type",
+                "ti.invoice_title",
+                "tji.currency_cost",
+                "tadei.functional_exchange_rate",
+                "exchange_rate",
+                "price",
+                "invoice_line_amount",
+                "ti.exchange_rate_id",
+                "ti.exchange_rate_value",
+                "ti.tax_code_id",
+                "ti.tax_code_rate",
+                "ti.currency_id",
+                "tc.currency_code",
+                "tc.currency_desc",
+                "tc.currency_symbol",
+                "tie.invoice_po_no",
+                "tie.invoice_additional_po_no",
+                "tid.discounts",
+                "item_roll_up",
+                "it.tax"
+        ]
     },
     {
         "table_name": "job_versions",
@@ -790,12 +1029,12 @@ table_configurations = [
                     "packaging_reference",
                     "order_type_id",
                     "job_range_id",
-                    "project_id",
+                    "project_id"
                 ],
                 "filter_cols": [],
                 "add_columns": [],
                 "update_columns": [],
-                "id_columns": ["job_id", "job_version_id"],
+                "id_columns": ["job_id", "job_version_id"]
             },
             {
                 "table": "job_status",
@@ -805,15 +1044,18 @@ table_configurations = [
                 "join_condition": "v.job_status = job_status.id",
                 "join_type": "left_outer",
                 "drop_cols": [],
-                "select_cols": ["id", "status"],
+                "select_cols": [
+                    "id",
+                    "status"
+                ],
                 "filter_cols": [],
                 "add_columns": [],
                 "update_columns": [
                     {
-                        "version_status": col("job_status.status"),
+                        "version_status": col("job_status.status")
                     }
                 ],
-                "id_columns": [],
+                "id_columns": []
             },
             {
                 "table": "tbl_projects",
@@ -823,11 +1065,14 @@ table_configurations = [
                 "join_condition": "v.project_id = p.project_id",
                 "join_type": "left_outer",
                 "drop_cols": [],
-                "select_cols": ["project_id", "project_name"],
+                "select_cols": [
+                    "project_id",
+                    "project_name"
+                ],
                 "filter_cols": [],
                 "add_columns": [],
                 "update_columns": [],
-                "id_columns": [],
+                "id_columns": []
             },
             {
                 "table": "tbl_order_type",
@@ -837,15 +1082,18 @@ table_configurations = [
                 "join_condition": "v.order_type_id = tbl_order_type.id",
                 "join_type": "left_outer",
                 "drop_cols": [],
-                "select_cols": ["id", "name"],
+                "select_cols": [
+                    "id",
+                    "name"
+                ],
                 "filter_cols": [],
                 "add_columns": [],
                 "update_columns": [
                     {
-                        "order_type": col("tbl_order_type.name"),
+                        "order_type": col("tbl_order_type.name")
                     }
                 ],
-                "id_columns": [],
+                "id_columns": []
             },
             {
                 "table": "tbl_plate_size_units",
@@ -855,15 +1103,19 @@ table_configurations = [
                 "join_condition": "v.plate_size_unit_id = tbl_plate_size_units.unit_id",
                 "join_type": "left_outer",
                 "drop_cols": [],
-                "select_cols": ["unit_id", "unit_desc", "unit_conversion_factor"],
+                "select_cols": [
+                    "unit_id",
+                    "unit_desc",
+                    "unit_conversion_factor"
+                ],
                 "filter_cols": [],
                 "add_columns": [],
                 "update_columns": [
                     {
-                        "plate_size_unit_description": col("tbl_plate_size_units.unit_desc"),
+                        "plate_size_unit_description": col("tbl_plate_size_units.unit_desc")
                     }
                 ],
-                "id_columns": [],
+                "id_columns": []
             },
             {
                 "table": "tbl_job_ranges",
@@ -873,16 +1125,19 @@ table_configurations = [
                 "join_condition": "v.job_range_id = tbl_job_ranges.range_id",
                 "join_type": "left_outer",
                 "drop_cols": [],
-                "select_cols": ["range_id", "range_name"],
+                "select_cols": [
+                    "range_id",
+                    "range_name"
+                ],
                 "filter_cols": [],
                 "add_columns": [],
                 "update_columns": [
                     {
-                        "ranger_name": col("tbl_job_ranges.range_name"),
+                        "ranger_name": col("tbl_job_ranges.range_name")
                     }
                 ],
-                "id_columns": [],
-            },
+                "id_columns": []
+            }
         ],
         "update_columns": [
             {
@@ -903,14 +1158,12 @@ table_configurations = [
                     col("v.job_range_id").alias("job_range_id"),
                     col("ranger_name").alias("ranger_name"),
                     col("plate_size_unit_description").alias("plate_size_unit_description"),
-                    col("tbl_plate_size_units.unit_conversion_factor").alias(
-                        "unit_conversion_factor"
-                    ),
-                ),
+                    col("tbl_plate_size_units.unit_conversion_factor").alias("unit_conversion_factor")
+                )
             }
         ],
-        "order_by": ["v.job_id", "v.job_version_id", "v.job_version"],
-        "id_columns": ["job_id", "job_version_id", "job_version"],
+        "order_by": ["v.job_id", "v.job_version_id","v.job_version"],
+        "id_columns": ["v.job_id", "v.job_version_id","v.job_version"],
         "auto_generate_id": "False",
         "columns_to_keep": [
             "v.job_id",
@@ -918,8 +1171,8 @@ table_configurations = [
             "v.job_version",
             "version_status",
             "v.booked_date_time",
-            "version_details",
-        ],
+            "version_details"
+        ]
     },
     {
         "table_name": "logins",
@@ -932,11 +1185,13 @@ table_configurations = [
                 "join_condition": None,
                 "join_type": None,
                 "drop_cols": [],
-                "select_cols": ["login_id"],
+                "select_cols": [
+                    "login_id"
+                ],
                 "filter_cols": [],
                 "add_columns": [],
                 "update_columns": [],
-                "id_columns": ["login_id"],
+                "id_columns": ["login_id"]
             },
             {
                 "table": "tbl_login_profiles",
@@ -945,907 +1200,8 @@ table_configurations = [
                 "schema": "silver",
                 "join_condition": "l.login_id = p.login_id",
                 "join_type": "inner",
-                "drop_cols": [],
-                "select_cols": [
-                    "login_id",
-                    "profile_id",
-                    "first_name",
-                    "last_name",
-                    "site_id",
-                    "time_zone_id",
-                ],
-                "filter_cols": [],
-                "add_columns": [],
-                "update_columns": [],
-                "id_columns": [],
-            },
-            {
-                "table": "tbl_sites",
-                "alias": "s",
-                "source": "mysgs",
-                "schema": "silver",
-                "join_condition": "p.site_id = s.site_id",
-                "join_type": "inner",
-                "drop_cols": [],
-                "select_cols": ["site_id", "site_name", "company_legal_name"],
-                "filter_cols": [],
-                "add_columns": [],
-                "update_columns": [],
-                "id_columns": [],
-            },
-            {
-                "table": "tbl_time_zones",
-                "alias": "tz",
-                "source": "mysgs",
-                "schema": "silver",
-                "join_condition": "p.time_zone_id = tz.time_zone_id",
-                "join_type": "inner",
-                "drop_cols": [],
-                "select_cols": ["time_zone_id", "iana_time_zone_id"],
-                "filter_cols": [],
-                "add_columns": [],
-                "update_columns": [],
-                "id_columns": [],
-            },
-        ],
-        "order_by": ["l.login_id"],
-        "id_columns": ["login_id"],
-        "auto_generate_id": "False",
-        "columns_to_keep": [
-            "l.login_id",
-            "p.profile_id",
-            "p.first_name",
-            "p.last_name",
-            "s.site_id",
-            "s.site_name",
-            "s.company_legal_name",
-            "tz.iana_time_zone_id",
-        ],
-    },
-    {
-        "table_name": "job_contacts",
-        "table_map": [
-            {
-                "table": "tbl_job_versions",
-                "alias": "v",
-                "source": "mysgs",
-                "schema": "silver",
-                "join_condition": None,
-                "join_type": None,
-                "drop_cols": [],
-                "select_cols": ["job_version_id"],
-                "filter_cols": [],
-                "add_columns": [],
-                "update_columns": [],
-                "id_columns": ["job_version_id"],
-            },
-            {
-                "table": "tbl_job_contacts",
-                "alias": "jc",
-                "source": "mysgs",
-                "schema": "silver",
-                "join_condition": "v.job_version_id = jc.job_version_id",
-                "join_type": "inner",
-                "drop_cols": [],
-                "select_cols": ["job_version_id", "customer_id", "primary_contact"],
-                "filter_cols": [{"primary_contact": "true"}],
-                "add_columns": [],
-                "update_columns": [],
-                "id_columns": [],
-            },
-            {
-                "table": "tbl_customers",
-                "alias": "c",
-                "source": "mysgs",
-                "schema": "silver",
-                "join_condition": "jc.customer_id = c.customer_id",
-                "join_type": "inner",
-                "drop_cols": [],
-                "select_cols": [
-                    "customer_id",
-                    "customer_name",
-                    "customer_type",
-                    "portfolio_group_id",
-                ],
-                "filter_cols": [],
-                "add_columns": [],
-                "update_columns": [],
-                "id_columns": [],
-            },
-            {
-                "table": "customer_types",
-                "alias": "ct",
-                "source": "mysgs",
-                "schema": "silver",
-                "join_condition": "c.customer_type = ct.customer_type_id",
-                "join_type": "inner",
-                "drop_cols": [],
-                "select_cols": ["customer_type_id", "customer_type_description"],
-                "filter_cols": [],
-                "add_columns": [],
-                "update_columns": [],
-                "id_columns": [],
-            },
-            {
-                "table": "tbl_customer_portfolio_groups",
-                "alias": "pg",
-                "source": "mysgs",
-                "schema": "silver",
-                "join_condition": "c.portfolio_group_id = pg.portfolio_group_id",
-                "join_type": "left_outer",
-                "drop_cols": [],
-                "select_cols": [
-                    "portfolio_group_id",
-                    "portfolio_group_name",
-                    "simplified_group_id",
-                ],
-                "filter_cols": [],
-                "add_columns": [],
-                "update_columns": [],
-                "id_columns": [],
-            },
-            {
-                "table": "tbl_customer_simplified_groups",
-                "alias": "sp",
-                "source": "mysgs",
-                "schema": "silver",
-                "join_condition": "pg.simplified_group_id = sp.simplified_group_id",
-                "join_type": "left_outer",
-                "drop_cols": [],
-                "select_cols": ["simplified_group_id", "simplified_group_name"],
-                "filter_cols": [],
-                "add_columns": [],
-                "update_columns": [],
-                "id_columns": [],
-            },
-        ],
-        "update_columns": [
-            {
-                "row_rank": row_number().over(
-                    Window.partitionBy("v.job_version_id").orderBy(col("c.customer_id").desc())
-                ),
-            }
-        ],
-        "order_by": ["v.job_version_id", "c.customer_id", "row_rank"],
-        "id_columns": ["job_version_id", "customer_id", "row_rank"],
-        "auto_generate_id": "False",
-        "columns_to_keep": [
-            "v.job_version_id",
-            "c.customer_id",
-            "c.customer_name",
-            "c.customer_type",
-            "ct.customer_type_description",
-            "pg.portfolio_group_name",
-            "sp.simplified_group_name",
-            "row_rank",
-        ],
-    },
-    {
-        "table_name": "item_patch",
-        "table_map": [
-            {
-                "table": "tbl_job_items_patches",
-                "alias": "jip",
-                "source": "mysgs",
-                "schema": "silver",
-                "join_condition": None,
-                "join_type": None,
-                "drop_cols": [],
-                "select_cols": [
-                    "job_item_id",
-                    "height",
-                    "width",
-                    "quantity",
-                    "unit_price",
-                    "apply_handling",
-                ],
-                "filter_cols": [],
-                "add_columns": [],
-                "update_columns": [],
-                "id_columns": ["job_item_id"],
-            }
-        ],
-        "aggregation": {
-            "group_by": ["job_item_id"],
-            "agg_exprs": [
-                f_sum(
-                    ((col("height") / 2.54) / 10)
-                    * ((col("width") / 2.54) / 10)
-                    * col("quantity")
-                ).alias("total_patch_area"),
-                collect_set(col("unit_price")).alias("patch_unit_prices"),
-                collect_list(
-                    struct(
-                        col("height").alias("height_original"),
-                        col("width").alias("width_original"),
-                        (col("height") / 2.54 / 10).alias("heigh_inches"),
-                        (col("width") / 2.54 / 10).alias("width_inches"),
-                        ((col("height") / 2.54 / 10) * (col("width") / 2.54 / 10)).alias(
-                            "patch_area"
-                        ),
-                        col("quantity").alias("quantity"),
-                        col("unit_price").alias("unit_price"),
-                        col("apply_handling").alias("apply_handling"),
-                    )
-                ).alias("patch_details"),
-            ],
-        },
-        "order_by": ["job_item_id"],
-        "id_columns": ["job_item_id"],
-        "auto_generate_id": "False",
-        "columns_to_keep": [
-            "job_item_id",
-            "total_patch_area",
-            "patch_unit_prices",
-            "patch_details",
-        ],
-    },
-    {
-        "table_name": "item_merge",
-        "table_map": [
-            {
-                "table": "tbl_job_versions",
-                "alias": "v",
-                "source": "mysgs",
-                "schema": "silver",
-                "join_condition": None,
-                "join_type": None,
-                "drop_cols": [],
-                "select_cols": [
-                    "job_id",
-                    "job_version",
-                    "job_version_id",
-                    "job_status",
-                    "booked_date_time",
-                    "brand",
-                    "variety",
-                ],
-                "filter_cols": [{"booked_date_time": ">='2024-01-01'"}],
-                "add_columns": [],
-                "update_columns": [],
-                "id_columns": ["job_version_id"],
-            },
-            {
-                "table": "tbl_job_stages",
-                "alias": "s",
-                "source": "mysgs",
-                "schema": "silver",
-                "join_condition": "v.job_version_id = s.job_version_id",
-                "join_type": "inner",
-                "drop_cols": [],
-                "select_cols": ["job_version_id", "job_stage_id", "job_stage"],
-                "filter_cols": [],
-                "add_columns": [],
-                "update_columns": [],
-                "id_columns": [],
-            },
-            {
-                "table": "tbl_job_items",
-                "alias": "i",
-                "source": "mysgs",
-                "schema": "silver",
-                "join_condition": "s.job_stage_id = i.job_stage_id",
-                "join_type": "inner",
-                "drop_cols": [],
-                "select_cols": [
-                    "job_stage_id",
-                    "job_item_id",
-                    "price_matrix_item_id",
-                    "price_matrix_multiplier_id",
-                    "job_item_status",
-                    "job_item_description",
-                    "quantity",
-                    "cost",
-                    "plate_type",
-                    "item_due_date_time",
-                    "item_due_reason",
-                    "item_booked_date_time",
-                    "item_kpi",
-                    "item_kpi_duration",
-                    "item_completed_date_time",
-                    "target_deadline",
-                    "currency_id",
-                    "exchange_rate_value",
-                    "account_manager_login_id",
-                    "assigned_to",
-                    "price_matrix_variant_item_id",
-                    "item_order",
-                    "created_by_invoice_id",
-                ],
-                "filter_cols": [],
-                "add_columns": [],
-                "update_columns": [],
-                "id_columns": [],
-            },
-        ],
-        "order_by": ["v.job_version_id", "s.job_stage_id", "i.job_item_id"],
-        "id_columns": ["job_version_id", "job_stage_id", "job_item_id"],
-        "auto_generate_id": "False",
-        "columns_to_keep": [
-            "v.job_id",
-            "v.job_version",
-            "v.job_version_id",
-            "v.job_status",
-            "v.booked_date_time",
-            "v.brand",
-            "v.variety",
-            "s.job_stage_id",
-            "s.job_stage",
-            "i.job_item_id",
-            "i.price_matrix_item_id",
-            "i.price_matrix_multiplier_id",
-            "i.job_item_status",
-            "i.job_item_description",
-            "i.quantity",
-            "i.cost",
-            "i.plate_type",
-            "i.item_due_date_time",
-            "i.item_due_reason",
-            "i.item_booked_date_time",
-            "i.item_kpi",
-            "i.item_kpi_duration",
-            "i.item_completed_date_time",
-            "i.target_deadline",
-            "i.currency_id",
-            "i.exchange_rate_value",
-            "i.account_manager_login_id",
-            "i.assigned_to",
-            "i.price_matrix_variant_item_id",
-            "i.item_order",
-            "i.created_by_invoice_id",
-        ],
-    },
-    {
-        "table_name": "qcp_outcome",
-        "table_map": [
-            {
-                "table": "qcp_outcome",
-                "alias": "qcp",
-                "source": "datascience",
-                "schema": "bronze",
-                "join_condition": None,
-                "join_type": None,
-                "drop_cols": [],
-                "select_cols": [
-                    "JobTaskId",
-                    "uuid",
-                    "QcStep",
-                    "decision",
-                    "result",
-                    "threshold",
-                    "ModelConfidence",
-                    "SampleQuality",
-                    "timeofcall",
-                    "calltype",
-                    "message_sent",
-                ],
-                "update_columns": [
-                    {
-                        "job_task_id": col("qcp.JobTaskId"),
-                    }
-                ],
-                "id_columns": [],
-            },
-        ],
-        "aggregation": {
-            "group_by": ["job_task_id"],
-            "agg_exprs": [
-                collect_list(
-                    struct(
-                        col("uuid").alias("uuid"),
-                        col("QcStep").alias("qc_step"),
-                        col("decision").alias("decision"),
-                        col("result").alias("result"),
-                        col("threshold").alias("threshold"),
-                        col("ModelConfidence").alias("model_confidence"),
-                        col("SampleQuality").alias("sample_quality"),
-                        col("timeofcall").alias("time_of_call"),
-                        col("calltype").alias("call_type"),
-                        col("message_sent").alias("message_sent"),
-                    )
-                ).alias("qcp"),
-            ],
-        },
-        "order_by": ["job_task_id"],
-        "id_columns": ["job_task_id"],
-        "auto_generate_id": "False",
-        "columns_to_keep": ["job_task_id", "qcp"],
-    },
-    {
-        "table_name": "stages",
-        "table_map": [
-            {
-                "table": "tbl_job_versions",
-                "alias": "v",
-                "source": "mysgs",
-                "schema": "silver",
-                "join_condition": None,
-                "join_type": None,
-                "drop_cols": [],
-                "select_cols": ["job_id", "job_version_id"],
-                "filter_cols": [],
-                "add_columns": [],
-                "update_columns": [],
-                "id_columns": ["job_id", "job_version_id"],
-            },
-            {
-                "table": "tbl_job_stages",
-                "alias": "s",
-                "source": "mysgs",
-                "schema": "silver",
-                "join_condition": "v.job_version_id = s.job_version_id",
-                "join_type": "inner",
-                "drop_cols": [],
-                "select_cols": [
-                    "job_version_id",
-                    "job_stage_id",
-                    "job_stage",
-                    "creation_date_time",
-                    "workflow_template_id",
-                    "workflow_variant_id",
-                ],
-                "filter_cols": [],
-                "add_columns": [],
-                "update_columns": [],
-                "id_columns": [],
-            },
-            {
-                "table": "tbl_job_stage_reason",
-                "alias": "b",
-                "source": "mysgs",
-                "schema": "silver",
-                "join_condition": "s.job_stage_id = b.stage_id",
-                "join_type": "left_outer",
-                "drop_cols": [],
-                "select_cols": [
-                    "stage_id",
-                    "reason_id",
-                    "reason_code",
-                    "fault_of",
-                    "added_by",
-                    "found_on",
-                ],
-                "filter_cols": [],
-                "add_columns": [],
-                "update_columns": [],
-                "id_columns": [],
-            },
-            {
-                "table": "tbl_job_stage_reason_categories",
-                "alias": "cat",
-                "source": "mysgs",
-                "schema": "silver",
-                "join_condition": "b.reason_id = cat.reason_id",
-                "join_type": "left_outer",
-                "drop_cols": [],
-                "select_cols": ["reason_id", "category_id", "amend_type_id"],
-                "filter_cols": [],
-                "add_columns": [],
-                "update_columns": [],
-                "id_columns": [],
-            },
-            {
-                "table": "tbl_job_stage_reason_faults",
-                "alias": "faults",
-                "source": "mysgs",
-                "schema": "silver",
-                "join_condition": "b.reason_id = faults.reason_id",
-                "join_type": "left_outer",
-                "drop_cols": [],
-                "select_cols": ["reason_id", "task_history_at_fault", "person_at_fault_id"],
-                "filter_cols": [],
-                "add_columns": [],
-                "update_columns": [],
-                "id_columns": [],
-            },
-            {
-                "table": "pma_fault_of",
-                "alias": "pma_fault_of",
-                "source": "masterdata",
-                "schema": "silver",
-                "join_condition": "b.fault_of = pma_fault_of.code",
-                "join_type": "left_outer",
-                "drop_cols": [],
-                "select_cols": ["code", "fault_of"],
-                "filter_cols": [],
-                "add_columns": [],
-                "update_columns": [],
-                "id_columns": [],
-            },
-            {
-                "table": "tbl_new_stage_reason_codes",
-                "alias": "reason_codes",
-                "source": "mysgs",
-                "schema": "silver",
-                "join_condition": "b.reason_code = reason_codes.reason_code_id",
-                "join_type": "left_outer",
-                "drop_cols": [],
-                "select_cols": [
-                    "reason_code_id",
-                    "reason_code_desc",
-                    "reason_code_requires_fault_code",
-                ],
-                "filter_cols": [],
-                "add_columns": [],
-                "update_columns": [],
-                "id_columns": [],
-            },
-            {
-                "table": "tbl_new_stage_categories",
-                "alias": "reason_categories",
-                "source": "mysgs",
-                "schema": "silver",
-                "join_condition": "cat.category_id = reason_categories.category_id",
-                "join_type": "left_outer",
-                "drop_cols": [],
-                "select_cols": ["category_id", "category_name"],
-                "filter_cols": [],
-                "add_columns": [],
-                "update_columns": [],
-                "id_columns": [],
-            },
-            {
-                "table": "tbl_new_stage_amendtypes",
-                "alias": "reason_amends",
-                "source": "mysgs",
-                "schema": "silver",
-                "join_condition": "cat.amend_type_id = reason_amends.amend_type_id",
-                "join_type": "left_outer",
-                "drop_cols": [],
-                "select_cols": ["amend_type_id", "amend_type_name"],
-                "filter_cols": [],
-                "add_columns": [],
-                "update_columns": [],
-                "id_columns": [],
-            },
-        ],
-        "aggregation": {
-            "group_by": [
-                "v.job_id",
-                "v.job_version_id",
-                "s.job_stage_id",
-                "s.job_stage",
-                "s.creation_date_time",
-                "s.workflow_template_id",
-                "s.workflow_variant_id",
-            ],
-            "agg_exprs": [
-                collect_list(
-                    struct(
-                        col("b.reason_id").alias("reason_id"),
-                        col("b.reason_code").alias("reason_code_id"),
-                        col("reason_codes.reason_code_desc").alias("reason_code"),
-                        col("reason_codes.reason_code_requires_fault_code").alias(
-                            "reason_code_requires_fault_code"
-                        ),
-                        col("b.fault_of").alias("fault_of_id"),
-                        col("pma_fault_of.fault_of").alias("fault_of"),
-                        col("b.added_by").alias("added_by"),
-                        col("b.found_on").alias("found_on"),
-                        col("cat.category_id").alias("category_id"),
-                        col("reason_categories.category_name").alias("category_name"),
-                        col("cat.amend_type_id").alias("amend_type_id"),
-                        col("reason_amends.amend_type_name").alias("amend_type_name"),
-                        col("faults.task_history_at_fault").alias("task_history_at_fault"),
-                        col("faults.person_at_fault_id").alias("person_at_fault_id"),
-                    )
-                ).alias("stage_reasons"),
-            ],
-        },
-        "order_by": ["v.job_id", "v.job_version_id", "s.job_stage_id"],
-        "id_columns": ["job_id", "job_version_id", "job_stage_id"],
-        "auto_generate_id": "False",
-        "columns_to_keep": [
-            "v.job_id",
-            "v.job_version_id",
-            "s.job_stage_id",
-            "s.job_stage",
-            "s.creation_date_time",
-            "s.workflow_template_id",
-            "s.workflow_variant_id",
-            "stage_reasons",
-        ],
-    },
-    {
-        "table_name": "login_profiles_distinct",
-        "table_map": [
-            {
-                "table": "tbl_login_profiles",
-                "alias": "lp",
-                "source": "mysgs",
-                "schema": "silver",
-                "join_condition": None,
-                "join_type": None,
-                "drop_cols": [],
-                "select_cols": [
-                    "login_id",
-                    "ultipro_id",
-                    "site_id",
-                    "active_directory_id",
-                    "idp_modified_date",
-                ],
-                "filter_cols": [{"ultipro_id": "IS NOT NULL"}],
-                "add_columns": [
-                    {
-                        "tbl_login_profiles_idp_modified_date": col("idp_modified_date"),
-                    }
-                ],
-                "update_columns": [],
-                "id_columns": ["login_id"],
-            }
-        ],
-        "update_columns": [
-            {
-                "rn_lp": row_number()
-                .over(Window.partitionBy("ultipro_id").orderBy(col("idp_modified_date").desc()))
-            }
-        ],
-        "order_by": ["ultipro_id"],
-        "id_columns": ["login_id", "ultipro_id"],
-        "auto_generate_id": "False",
-        "columns_to_keep": [
-            "login_id",
-            "ultipro_id",
-            "site_id",
-            "active_directory_id",
-            "tbl_login_profiles_idp_modified_date",
-            "rn_lp",
-        ],
-    },
-    {
-        "table_name": "logins_distinct",
-        "table_map": [
-            {
-                "table": "tbl_logins",
-                "alias": "l",
-                "source": "mysgs",
-                "schema": "silver",
-                "join_condition": None,
-                "join_type": None,
-                "drop_cols": [],
-                "select_cols": ["login_id", "email", "user_level", "idp_modified_date"],
-                "filter_cols": [],
-                "add_columns": [
-                    {
-                        "tbl_logins_idp_modified_date": col("idp_modified_date"),
-                    }
-                ],
-                "update_columns": [],
-                "id_columns": ["login_id"],
-            }
-        ],
-        "update_columns": [
-            {
-                "rn_l": row_number()
-                .over(Window.partitionBy("login_id").orderBy(col("idp_modified_date").desc()))
-            }
-        ],
-        "order_by": ["login_id"],
-        "id_columns": ["login_id"],
-        "auto_generate_id": "False",
-        "columns_to_keep": [
-            "login_id",
-            "email",
-            "user_level",
-            "tbl_logins_idp_modified_date",
-            "rn_l",
-        ],
-    },
-    {
-        "table_name": "workfront_login_combined",
-        "table_map": [
-            {
-                "table": "exported_users",
-                "alias": "eu",
-                "source": "workfront",
-                "schema": "silver",
-                "join_condition": None,
-                "join_type": None,
-                "drop_cols": [],
-                "select_cols": ["id", "email_addr"],
-                "filter_cols": [{"email_addr": "IS NOT NULL"}],
-                "add_columns": [],
-                "update_columns": [],
-                "id_columns": ["id"],
-            },
-            {
-                "table": "user_data",
-                "alias": "ud",
-                "source": "workfront",
-                "schema": "silver",
-                "join_condition": [],
-                "join_type": "union",
-                "drop_cols": [],
-                "select_cols": ["id", "email_addr"],
-                "filter_cols": [{"email_addr": "IS NOT NULL"}],
-                "add_columns": [],
-                "update_columns": [],
-                "id_columns": ["id"],
-            },
-        ],
-        "update_columns": [
-            {
-                "workfront_id": col("id"),
-                "rn_wf": row_number()
-                .over(Window.partitionBy(lower(col("email_addr"))).orderBy(col("workfront_id").desc())),
-            }
-        ],
-        "order_by": ["workfront_id", "rn_wf"],
-        "id_columns": ["workfront_id", "rn_wf"],
-        "auto_generate_id": "False",
-        "columns_to_keep": ["workfront_id", "email_addr", "rn_wf"],
-    },
-    {
-        "table_name": "tech_colours",
-        "table_map": [
-            {
-                "table": "tbl_job_tech_spec_colours",
-                "alias": "a",
-                "source": "mysgs",
-                "schema": "silver",
-                "join_condition": None,
-                "join_type": None,
-                "drop_cols": [],
-                "select_cols": [
-                    "job_tech_spec_id",
-                    "colour_order",
-                    "client_plate_colour_ref",
-                    "new_colour",
-                    "cust_carrier_id_no",
-                    "mcg_colour_id",
-                ],
-                "filter_cols": [],
-                "add_columns": [],
-                "update_columns": [],
-                "id_columns": ["job_tech_spec_id"],
-            },
-            {
-                "table": "tbl_mcg_colours",
-                "alias": "b",
-                "source": "mysgs",
-                "schema": "silver",
-                "join_condition": "a.mcg_colour_id = b.colour_id",
-                "join_type": "inner",
-                "drop_cols": [],
-                "select_cols": ["colour_id", "colour_name"],
-                "filter_cols": [],
-                "add_columns": [],
-                "update_columns": [],
-                "id_columns": [],
-            },
-        ],
-        "aggregation": {
-            "group_by": ["job_tech_spec_id"],
-            "agg_exprs": [
-                collect_list(
-                    struct(
-                        col("a.colour_order").alias("colour_order"),
-                        col("a.client_plate_colour_ref").alias("client_plate_colour_ref"),
-                        col("b.colour_name").alias("colour_name"),
-                        col("a.new_colour").alias("new_colour"),
-                        col("a.cust_carrier_id_no").alias("cust_carrier_id_no"),
-                    )
-                ).alias("colours"),
-            ],
-        },
-        "order_by": ["job_tech_spec_id"],
-        "id_columns": ["job_tech_spec_id"],
-        "auto_generate_id": "False",
-        "columns_to_keep": ["job_tech_spec_id", "colours"],
-    },
-    {
-        "table_name": "profile_audit",
-        "table_map": [
-            {
-                "table": "audit_category",
-                "alias": "ac",
-                "source": "pricematrix",
-                "schema": "bronze",
-                "join_condition": None,
-                "join_type": None,
-                "drop_cols": [],
-                "select_cols": ["EntityId", "ProfileStatusId", "ModifiedDate"],
-                "filter_cols": [{"ProfileStatusId": [5, 6]}],
-                "add_columns": [],
-                "update_columns": [],
-                "id_columns": ["EntityId"],
-            }
-        ],
-        "update_columns": [
-            {
-                "entity_id": col("ac.EntityId"),
-                "profile_status_id": col("ac.ProfileStatusId"),
-                "modified_date": col("ac.ModifiedDate"),
-                "next_status": lead("ProfileStatusId").over(
-                    Window.partitionBy("EntityId").orderBy("ModifiedDate")
-                ),
-                "next_modified": lead("ModifiedDate").over(
-                    Window.partitionBy("EntityId").orderBy("ModifiedDate")
-                ),
-                "rn": row_number()
-                .over(
-                    Window.partitionBy("EntityId", "ProfileStatusId").orderBy("ModifiedDate")
-                ),
-            }
-        ],
-        "order_by": [],
-        "id_columns": ["entity_id", "profile_status_id", "rn"],
-        "auto_generate_id": "False",
-        "columns_to_keep": [
-            "entity_id",
-            "profile_status_id",
-            "modified_date",
-            "next_status",
-            "next_modified",
-            "rn",
-        ],
-    },
-    {
-        "table_name": "price_profile_currency",
-        "table_map": [
-            {
-                "table": "price_profile_item_currency",
-                "alias": "ppic",
-                "source": "pricematrix",
-                "schema": "bronze",
-                "join_condition": None,
-                "join_type": None,
-                "drop_cols": [],
-                "select_cols": [
-                    "PriceProfileItemId",
-                    "Id",
-                    "Cost",
-                    "ExchangeRate",
-                    "CurrencyId",
-                    "CurrencyName",
-                    "Symbol",
-                    "Code",
-                    "CreatedDate",
-                    "CreatedBy",
-                    "ModifiedDate",
-                    "ModifiedBy",
-                    "Active",
-                    "ItemCurrencyNumber",
-                ],
-                "filter_cols": [],
-                "add_columns": [],
-                "update_columns": [],
-                "id_columns": ["PriceProfileItemId"],
-            }
-        ],
-        "aggregation": {
-            "group_by": ["PriceProfileItemId"],
-            "agg_exprs": [
-                collect_set(
-                    struct(
-                        col("Id").alias("id"),
-                        col("Cost").alias("cost"),
-                        col("ExchangeRate").alias("exchange_rate"),
-                        col("CurrencyId").alias("currency_id"),
-                        col("CurrencyName").alias("currency_name"),
-                        col("Symbol").alias("symbol"),
-                        col("Code").alias("code"),
-                        col("CreatedDate").alias("created_date"),
-                        col("CreatedBy").alias("created_by"),
-                        col("ModifiedDate").alias("modified_date"),
-                        col("ModifiedBy").alias("modified_by"),
-                        col("Active").alias("active"),
-                        col("ItemCurrencyNumber").alias("item_currency_code"),
-                    )
-                ).alias("price_profile_currency_array"),
-            ],
-        },
-        "update_columns": [
-            {
-                "price_profile_item_id": col("PriceProfileItemId"),
-            }
-        ],
-        "order_by": ["price_profile_item_id"],
-        "id_columns": ["price_profile_item_id"],
-        "auto_generate_id": "False",
-        "columns_to_keep": ["price_profile_item_id", "price_profile_currency_array"],
-    },
-]
+...EOF
+
 
 
 runtime_hooks = RuntimeHooks(

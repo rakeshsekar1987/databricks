@@ -455,10 +455,20 @@ class TablePlanBuilder:
         return joined_df
 
     def _load_step(self, table_step: Dict[str, Any]) -> DataFrame:
-        table_name = self.table_resolver(
-            table_step.get("source"), table_step.get("schema"), table_step["table"]
-        )
-        df = self.spark.table(table_name).alias(table_step["alias"])
+        sql_override = table_step.get("source_sql") or table_step.get("sql")
+        alias = table_step["alias"]
+        if sql_override:
+            df = self.spark.sql(sql_override).alias(alias)
+        else:
+            table_identifier = table_step.get("table")
+            if not table_identifier:
+                raise ValueError(
+                    f"Either 'table' or 'source_sql' must be defined for alias {alias}"
+                )
+            table_name = self.table_resolver(
+                table_step.get("source"), table_step.get("schema"), table_identifier
+            )
+            df = self.spark.table(table_name).alias(alias)
         select_cols = table_step.get("select_cols")
         if select_cols:
             df = df.select(*select_cols)
@@ -489,6 +499,10 @@ class TablePlanBuilder:
 
     def _join(self, left_df: DataFrame, right_df: DataFrame, table_step: Dict[str, Any]) -> DataFrame:
         join_condition = table_step.get("join_condition")
+        using_columns = None
+        if isinstance(join_condition, dict) and "using" in join_condition:
+            using_columns = join_condition.get("using")
+            join_condition = None
         join_expr = (
             self._build_join_expr(join_condition, left_df, right_df)
             if join_condition is not None
@@ -501,6 +515,18 @@ class TablePlanBuilder:
             if table_step.get("broadcast_hint"):
                 right_df = broadcast(right_df)
             return left_df.crossJoin(right_df)
+
+        if using_columns is not None:
+            normalized_using = (
+                [using_columns]
+                if isinstance(using_columns, str)
+                else list(using_columns or [])
+            )
+            if not normalized_using:
+                raise ValueError(f"'using' clause provided without columns for {table_step['alias']}")
+            if table_step.get("broadcast_hint"):
+                right_df = broadcast(right_df)
+            return left_df.join(right_df, normalized_using, join_type_value)
 
         if join_expr is None:
             raise ValueError(f"Join condition missing or invalid for {table_step['alias']}")

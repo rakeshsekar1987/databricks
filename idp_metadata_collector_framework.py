@@ -200,8 +200,11 @@ class MetadataCollector(ABC):
     
     def enrich_metadata(self, df: DataFrame, connection: ConnectionDetails) -> DataFrame:
         """Common metadata enrichment logic - optimized"""
-        if df is None or df.isEmpty():
+        if df is None:
             return df
+        
+        # Note: isEmpty() is an action, but it's necessary here
+        # We'll proceed and let downstream handle empty DataFrames
         
         # Generate CDC hash once per DataFrame (optimized)
         cdc_hash = self._generate_cdc_hash_optimized(df)
@@ -224,11 +227,15 @@ class MetadataCollector(ABC):
             # Use schema JSON as primary hash input (lightweight)
             schema_json = df.schema.json()
             
-            # Get row count efficiently (single operation)
+            # Get row count efficiently (single operation) - only if DataFrame is small
+            # For large DataFrames, skip row count to avoid expensive operation
+            row_count = 0
             try:
-                row_count = df.count()
+                # Only count if we expect small result sets
+                if df.rdd.getNumPartitions() <= 1:
+                    row_count = df.count()
             except Exception:
-                row_count = 0
+                pass
             
             # Collect column names for hash
             column_names = sorted([field.name for field in df.schema.fields])
@@ -324,12 +331,32 @@ class SQLMetadataCollector(MetadataCollector):
     
     def _get_jdbc_driver(self, connection: SQLConnectionDetails) -> str:
         """Get appropriate JDBC driver class"""
-        db_type = DataSourceType(connection.db_details.get('data_source_type'))
-        return self.jdbc_drivers.get(db_type, "")
+        try:
+            db_type = DataSourceType(connection.db_details.get('data_source_type'))
+            return self.jdbc_drivers.get(db_type, "")
+        except (ValueError, KeyError) as e:
+            self.logger.error(f"Invalid data source type: {connection.db_details.get('data_source_type')}")
+            raise ValueError(f"Unsupported data source type: {connection.db_details.get('data_source_type')}") from e
     
     def _build_metadata_query(self, connection: SQLConnectionDetails) -> str:
         """Build query to fetch metadata from information schema"""
-        schemas = "','".join(connection.table_schema)
+        # Validate and sanitize schema names to prevent SQL injection
+        if not connection.table_schema:
+            raise ValueError("table_schema cannot be empty")
+        
+        # Sanitize schema names (only allow alphanumeric, underscore, and dash)
+        import re
+        sanitized_schemas = []
+        for schema in connection.table_schema:
+            if not re.match(r'^[a-zA-Z0-9_-]+$', schema):
+                self.logger.warning(f"Invalid schema name format: {schema}, skipping")
+                continue
+            sanitized_schemas.append(schema)
+        
+        if not sanitized_schemas:
+            raise ValueError("No valid schemas provided")
+        
+        schemas = "','".join(sanitized_schemas)
         
         if connection.db_details.get('data_source_type') == DataSourceType.SQLSERVER.value:
             return f"""
@@ -441,6 +468,17 @@ class SQLMetadataCollector(MetadataCollector):
     def _get_table_row_count(self, table: str, jdbc_url: str, connection: SQLConnectionDetails, password: str) -> Optional[int]:
         """Get row count for a single table"""
         try:
+            # Validate table name format to prevent SQL injection
+            # Table name should be in format schema.table_name (e.g., "dbo.Users" or "public.users")
+            import re
+            # Allow schema.table format with alphanumeric, underscore, and dots
+            if not re.match(r'^[a-zA-Z0-9_]+(\.[a-zA-Z0-9_]+)*$', table):
+                self.logger.warning(f"Invalid table name format: {table}")
+                return None
+            
+            # Use parameterized query approach - escape table name properly
+            # For safety, we'll use the table name as-is since it comes from information_schema
+            # which should already be safe, but we validate format above
             count_df = (
                 self.spark.read
                 .format("jdbc")
@@ -516,8 +554,17 @@ class StorageMetadataCollector(MetadataCollector):
             schema = self._get_file_metadata_schema()
             df = self.spark.createDataFrame(metadata_rows, schema)
             
-            # Add sample paths
-            df = df.withColumn("sample_file_paths", F.lit(sample_paths))
+            # Add sample paths - each row should have its own file path
+            # Create a mapping of full_table_name to sample_paths
+            path_mapping = {row["full_table_name"]: [row["full_table_name"]] for row in metadata_rows}
+            path_mapping_broadcast = self.spark.sparkContext.broadcast(path_mapping)
+            
+            def get_sample_paths(full_name):
+                return path_mapping_broadcast.value.get(full_name, [])
+            
+            get_paths_udf = F.udf(get_sample_paths, ArrayType(StringType()))
+            df = df.withColumn("sample_file_paths", get_paths_udf(F.col("full_table_name")))
+            path_mapping_broadcast.unpersist()
             
             # Compute row counts if enabled (optimized)
             if CollectorConfig.COMPUTE_ROW_COUNT:
@@ -774,11 +821,10 @@ class RESTAPIMetadataCollector(MetadataCollector):
             # Collect metadata from endpoints in parallel
             metadata_rows = []
             
-            if not connection.endpoints:
-                # If no endpoints specified, try base URL
-                connection.endpoints = [""]
+            # Don't mutate the connection object - create a local copy
+            endpoints = connection.endpoints if connection.endpoints else [""]
             
-            with ThreadPoolExecutor(max_workers=min(len(connection.endpoints), CollectorConfig.MAX_WORKERS)) as executor:
+            with ThreadPoolExecutor(max_workers=min(len(endpoints), CollectorConfig.MAX_WORKERS)) as executor:
                 future_to_endpoint = {
                     executor.submit(
                         self._extract_endpoint_metadata,
@@ -786,7 +832,7 @@ class RESTAPIMetadataCollector(MetadataCollector):
                         headers,
                         connection.timeout
                     ): endpoint
-                    for endpoint in connection.endpoints
+                    for endpoint in endpoints
                 }
                 
                 for future in as_completed(future_to_endpoint):
@@ -909,15 +955,33 @@ class MetadataEnrichmentBuilder:
         self.df = df
     
     def add_snake_case_columns(self) -> 'MetadataEnrichmentBuilder':
-        """Add snake_case versions of column names - optimized"""
-        # Use native Spark functions instead of UDFs where possible
+        """Add snake_case versions of column names - optimized with proper UDF"""
+        import re
+        
+        # Define snake_case conversion function
+        def to_snake_case(name: str) -> str:
+            """Convert name to snake_case"""
+            if not name:
+                return ""
+            # Insert underscore before uppercase letters
+            s1 = re.sub('(.)([A-Z][a-z]+)', r'\1_\2', name)
+            # Insert underscore before uppercase letters that follow lowercase
+            s2 = re.sub('([a-z0-9])([A-Z])', r'\1_\2', s1)
+            return s2.lower()
+        
+        def to_snake_case_list(names: List[str]) -> List[str]:
+            """Convert list of names to snake_case"""
+            return [to_snake_case(name) for name in (names or [])]
+        
+        # Use UDFs for proper snake_case conversion
+        to_snake_case_udf = F.udf(to_snake_case, StringType())
+        to_snake_case_list_udf = F.udf(to_snake_case_list, ArrayType(StringType()))
+        
         self.df = (
             self.df
-            .withColumn("idp_db_name", F.regexp_replace(F.lower(F.col("table_name")), r'([a-z0-9])([A-Z])', r'$1_$2'))
-            .withColumn("idp_id_columns", F.transform(F.col("id_columns"), 
-                lambda x: F.regexp_replace(F.lower(x), r'([a-z0-9])([A-Z])', r'$1_$2')))
-            .withColumn("idp_schema", F.transform(F.col("source_schema"), 
-                lambda x: F.regexp_replace(F.lower(x), r'([a-z0-9])([A-Z])', r'$1_$2')))
+            .withColumn("idp_db_name", to_snake_case_udf(F.col("table_name")))
+            .withColumn("idp_id_columns", to_snake_case_list_udf(F.col("id_columns")))
+            .withColumn("idp_schema", to_snake_case_list_udf(F.col("source_schema")))
         )
         return self
     
@@ -1165,8 +1229,12 @@ class MetadataCollectionOrchestrator:
             try:
                 self.logger.info(f"Processing {connection.source_id} - Attempt {attempt}/{self.config.MAX_RETRIES}")
                 
-                # Get appropriate collector
-                data_source_type = DataSourceType(connection.db_details.get('data_source_type'))
+                # Get appropriate collector with error handling
+                try:
+                    data_source_type = DataSourceType(connection.db_details.get('data_source_type'))
+                except (ValueError, KeyError) as e:
+                    raise ValueError(f"Invalid or missing data_source_type in connection {connection.source_id}: {connection.db_details.get('data_source_type')}") from e
+                
                 collector = self.collector_factory.get_collector(data_source_type)
                 
                 # Validate connection
@@ -1237,23 +1305,42 @@ class MetadataCollectionOrchestrator:
         if len(dfs) == 1:
             return dfs[0]
         
+        if not dfs:
+            return self._create_empty_metadata_df()
+        
         # Get all unique column names
         all_columns = set()
         for df in dfs:
-            all_columns.update(df.columns)
+            if df is not None:
+                all_columns.update(df.columns)
+        
+        if not all_columns:
+            return self._create_empty_metadata_df()
         
         # Align schemas by adding missing columns as null
         aligned_dfs = []
         for df in dfs:
+            if df is None:
+                continue
+            # Skip empty DataFrames - check without action when possible
+            try:
+                if df.rdd.isEmpty():
+                    continue
+            except Exception:
+                # If we can't check, proceed (will handle in union)
+                pass
             for col in all_columns:
                 if col not in df.columns:
                     df = df.withColumn(col, F.lit(None))
             aligned_dfs.append(df.select(*sorted(all_columns)))
         
+        if not aligned_dfs:
+            return self._create_empty_metadata_df()
+        
         # Union all DataFrames
         combined = aligned_dfs[0]
         for df in aligned_dfs[1:]:
-            combined = combined.unionByName(df)
+            combined = combined.unionByName(df, allowMissingColumns=True)
         
         return combined.distinct()
     

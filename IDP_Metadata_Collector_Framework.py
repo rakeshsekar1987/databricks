@@ -14,10 +14,11 @@ import ast
 import json
 import logging
 import os
-import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from hashlib import sha256
+from threading import Lock
 from typing import Any, Dict, Iterable, List, Optional, Protocol, Sequence, Tuple, runtime_checkable
 
 try:  # pragma: no cover - pyspark is available at runtime
@@ -45,6 +46,7 @@ except ImportError:  # pragma: no cover - inject your own writer in tests
 
 LOGGER = logging.getLogger(__name__)
 DEFAULT_LOG_LEVEL = os.getenv("IDP_METADATA_LOG_LEVEL", "INFO")
+DEFAULT_SECRET_SCOPE = os.getenv("IDP_SECRET_SCOPE")
 
 CONFIG_TABLE = "qa_idp.config.metadata_source_connection_details"
 DEFAULT_REGISTRY_TABLE = "qa_idp.config.meta_data_registry"
@@ -205,19 +207,29 @@ class SecretProvider(Protocol):
 
 
 class DatabricksSecretProvider:
-    def __init__(self, dbutils_module: Any) -> None:
+    def __init__(self, dbutils_module: Any, default_scope: Optional[str] = None) -> None:
         self._dbutils = dbutils_module
+        self._default_scope = default_scope or DEFAULT_SECRET_SCOPE
 
     def get(self, key: str, fallback: Optional[str] = None) -> str:  # pragma: no cover
-        scope, sep, secret_key = key.partition(":")
-        if not scope or not secret_key:
-            raise ValueError("Secret key must be 'scope:key' format")
+        scope, secret_key = self._resolve_scope_and_key(key)
         try:
             return self._dbutils.secrets.get(scope=scope, key=secret_key)
         except Exception:
             if fallback is not None:
                 return fallback
             raise
+
+    def _resolve_scope_and_key(self, key: str) -> Tuple[str, str]:
+        if ":" in key:
+            scope, secret_key = key.split(":", 1)
+            if scope and secret_key:
+                return scope, secret_key
+        if self._default_scope:
+            return self._default_scope, key
+        raise ValueError(
+            "Secret reference must either be 'scope:key' or provide IDP_SECRET_SCOPE env var"
+        )
 
 
 @runtime_checkable
@@ -480,12 +492,16 @@ class CollectorFactory:
     def __init__(self, context: CollectorContext) -> None:
         self.context = context
         self._cache: Dict[str, BaseCollector] = {}
+        self._lock = Lock()
 
     def get(self, source_type: str) -> BaseCollector:
         key = source_type.upper()
-        if key not in self._cache:
-            self._cache[key] = self._build_collector(key)
-        return self._cache[key]
+        with self._lock:
+            collector = self._cache.get(key)
+            if collector is None:
+                collector = self._build_collector(key)
+                self._cache[key] = collector
+        return collector
 
     def _build_collector(self, source_type: str) -> BaseCollector:
         if source_type in {"SQLSERVER", "POSTGRESQL", "MARIADB"}:
@@ -608,8 +624,9 @@ class JdbcMetadataCollector(BaseCollector):
         schemas = _normalize_list(config.db_details.get("table_schema"))
         if schemas:
             placeholder = ",".join(f"'{schema}'" for schema in schemas)
-            clause = "table_schema" if query_type == "columns" else "table_schema"
-            sql = f"{sql} AND {clause} IN ({placeholder})" if "WHERE" in sql.upper() else f"{sql} WHERE {clause} IN ({placeholder})"
+            column_ref = self._schema_column_reference(query_type, sql)
+            condition = f"{column_ref} IN ({placeholder})"
+            sql = f"{sql} AND {condition}" if "WHERE" in sql.upper() else f"{sql} WHERE {condition}"
         df = (
             self.spark.read.format("jdbc")
             .options(**options)
@@ -617,6 +634,15 @@ class JdbcMetadataCollector(BaseCollector):
             .load()
         )
         return [row.asDict(True) for row in df.collect()]
+
+    def _schema_column_reference(self, query_type: str, sql: str) -> str:
+        if query_type == "columns":
+            return "table_schema"
+        if "ku.table_schema" in sql:
+            return "ku.table_schema"
+        if "kcu.table_schema" in sql:
+            return "kcu.table_schema"
+        return "table_schema"
 
     def _build_pk_lookup(self, pk_rows: List[Dict[str, Any]]) -> Dict[Tuple[str, str], set]:
         lookup: Dict[Tuple[str, str], set] = {}
@@ -692,7 +718,11 @@ class FileStorageCollector(BaseCollector):
     def _gather_file_stats(self, path: str) -> Dict[str, Any]:
         if not self.fs_client:
             return {"size": None, "last_modified": None, "sample_paths": []}
-        entries = self.fs_client.list(path)
+        try:
+            entries = self.fs_client.list(path)
+        except Exception:
+            self.logger.warning("Failed to list storage path %s", path, exc_info=True)
+            return {"size": None, "last_modified": None, "sample_paths": []}
         if not entries:
             return {"size": None, "last_modified": None, "sample_paths": []}
         sorted_entries = sorted(entries, key=lambda item: item.get("modification_time", 0), reverse=True)
@@ -722,7 +752,7 @@ class CassandraMetadataCollector(BaseCollector):
         password_key = details.get("password_key")
         if username:
             read_options["spark.cassandra.auth.username"] = username
-        if password_key:
+        if password_key and self.secret_provider:
             read_options["spark.cassandra.auth.password"] = self.secret_provider.get(password_key)
         df = (
             self.spark.read.format("org.apache.spark.sql.cassandra")
@@ -875,6 +905,7 @@ class MetadataCollectorOrchestrator:
         summary_writer: SummaryWriter,
         registry_table: str = DEFAULT_REGISTRY_TABLE,
         batch_size: int = 10,
+        max_workers: int = 5,
     ) -> None:
         self.context = context
         self.config_repository = config_repository
@@ -882,6 +913,7 @@ class MetadataCollectorOrchestrator:
         self.summary_writer = summary_writer
         self.registry_table = registry_table
         self.batch_size = batch_size
+        self.max_workers = max(1, max_workers)
         self.logger = _ensure_logger()
 
     def run(self) -> None:
@@ -914,23 +946,25 @@ class MetadataCollectorOrchestrator:
         self.summary_writer.write(summary_rows)
 
     def _collect_batch(self, batch: Sequence[DataSourceConfig]) -> List[CollectorOutput]:
+        if not batch:
+            return []
         outputs: List[CollectorOutput] = []
-        lock = threading.Lock()
-
-        def worker(config: DataSourceConfig) -> None:
-            collector = self.collector_factory.get(config.data_source_type)
-            result = collector.collect(config)
-            with lock:
-                outputs.append(result)
-
-        threads: List[threading.Thread] = []
-        for config in batch:
-            thread = threading.Thread(target=worker, args=(config,), daemon=True)
-            thread.start()
-            threads.append(thread)
-        for thread in threads:
-            thread.join()
+        max_workers = min(self.max_workers, len(batch))
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_config = {
+                executor.submit(self._collect_single, config): config for config in batch
+            }
+            for future in as_completed(future_to_config):
+                config = future_to_config[future]
+                try:
+                    outputs.append(future.result())
+                except Exception as exc:  # pragma: no cover - defensive
+                    outputs.append(CollectorOutput([], (config.id, "Failure", str(exc))))
         return outputs
+
+    def _collect_single(self, config: DataSourceConfig) -> CollectorOutput:
+        collector = self.collector_factory.get(config.data_source_type)
+        return collector.collect(config)
 
 
 # ---------------------------------------------------------------------------
@@ -947,6 +981,7 @@ def run_job(
     summary_table: str = DEFAULT_SUMMARY_TABLE,
     registry_table: str = DEFAULT_REGISTRY_TABLE,
     batch_size: int = 10,
+    max_workers: int = 5,
 ) -> None:
     context = CollectorContext(
         spark=spark,
@@ -968,6 +1003,7 @@ def run_job(
         summary_writer,
         registry_table=registry_table,
         batch_size=batch_size,
+        max_workers=max_workers,
     )
     orchestrator.run()
 

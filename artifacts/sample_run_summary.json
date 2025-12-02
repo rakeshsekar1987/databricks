@@ -1,0 +1,12 @@
+{
+  "run_id": "sample-run-001",
+  "generated_at": "2025-12-01T10:00:00Z",
+  "sources": [
+    {"source_id": "AEXML-001", "status": "Success", "tables_collected": 4},
+    {"source_id": "AISEARCH-001", "status": "Success", "tables_collected": 18},
+    {"source_id": "FUSION_API-001", "status": "Success", "endpoints_collected": 1},
+    {"source_id": "SCORO-001", "status": "Failure", "error": "Authentication error"}
+  ],
+  "registry_table": "qa_idp.config.meta_data_registry",
+  "summary_table": "qa_idp.logs.meta_data_registry_summary"
+}

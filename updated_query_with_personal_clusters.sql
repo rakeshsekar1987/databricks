@@ -1,6 +1,7 @@
             -- =====================================================
             -- QUERY FOR JOBS, PIPELINES, AND PERSONAL CLUSTER USAGE
             -- Includes execution times and notebook tracking
+            -- All parameters are optional with sensible defaults
             -- =====================================================
             
             -- eval tags param
@@ -9,9 +10,9 @@
                 explode(
                   split(
                     if(
-                      trim(:param_single_tag_key) = '<USE TAG FILTER>',
-                      :param_tag_entries,
-                      :param_single_tag_key
+                      trim(COALESCE(:param_single_tag_key, '<USE TAG FILTER>')) = '<USE TAG FILTER>',
+                      COALESCE(:param_tag_entries, '<ANY>'),
+                      COALESCE(:param_single_tag_key, '<USE TAG FILTER>')
                     ),
                     ';'
                   )
@@ -61,21 +62,21 @@
                       )
                     )
                     AND (
-                      usage_date BETWEEN :param_start_date
-                      AND :param_end_date
+                      usage_date BETWEEN COALESCE(:param_start_date, DATE_SUB(CURRENT_DATE(), 30))
+                      AND COALESCE(:param_end_date, CURRENT_DATE())
                     )
                     AND IF(
-                      :param_workspace = '<ALL WORKSPACES>',
+                      COALESCE(:param_workspace, '<ALL WORKSPACES>') = '<ALL WORKSPACES>',
                       true,
                       workspace_name = :param_workspace
                     )
                     AND IF(
-                      :param_run_as = '<ALL USERS>',
+                      COALESCE(:param_run_as, '<ALL USERS>') = '<ALL USERS>',
                       true,
                       identity_metadata.run_as = :param_run_as
                     )
                     AND IF(
-                      :param_cluster_type = '<ALL CLUSTER TYPES>',
+                      COALESCE(:param_cluster_type, '<ALL CLUSTER TYPES>') = '<ALL CLUSTER TYPES>',
                       true,
                       IF(
                         :param_cluster_type = 'Serverless',
@@ -86,7 +87,7 @@
                 )
               WHERE
                 IF(
-                  :param_object_type = '<ALL>',
+                  COALESCE(:param_object_type, '<ALL>') = '<ALL>',
                   true,
                   IF(
                     :param_object_type = 'Jobs',
@@ -122,7 +123,7 @@
               where
                 (
                   custom_tag_key_value_pairs != '<MISMATCH>'
-                  OR trim(:param_tag_entries) = '<ANY>'
+                  OR trim(COALESCE(:param_tag_entries, '<ANY>')) = '<ANY>'
                 )
             ),
             list_cost_per_job as (
@@ -148,8 +149,8 @@
                   (UNIX_TIMESTAMP(MAX(t1.usage_end_time)) - UNIX_TIMESTAMP(MIN(t1.usage_start_time))) / 60.0,
                   2
                 ) as execution_time_minutes,
-                NULL as cluster_id,
-                NULL as notebook_id
+                CAST(NULL AS STRING) as cluster_id,
+                CAST(NULL AS STRING) as notebook_id
               FROM
                 filtered_usage t1
                 INNER JOIN system.billing.list_prices list_prices on t1.cloud = list_prices.cloud
@@ -177,21 +178,21 @@
                 -- All-Purpose / Interactive compute
                 billing_origin_product IN ("ALL_PURPOSE", "INTERACTIVE")
                 AND (
-                  usage_date BETWEEN :param_start_date
-                  AND :param_end_date
+                  usage_date BETWEEN COALESCE(:param_start_date, DATE_SUB(CURRENT_DATE(), 30))
+                  AND COALESCE(:param_end_date, CURRENT_DATE())
                 )
                 AND IF(
-                  :param_workspace = '<ALL WORKSPACES>',
+                  COALESCE(:param_workspace, '<ALL WORKSPACES>') = '<ALL WORKSPACES>',
                   true,
                   t2.workspace_name = :param_workspace
                 )
                 AND IF(
-                  :param_run_as = '<ALL USERS>',
+                  COALESCE(:param_run_as, '<ALL USERS>') = '<ALL USERS>',
                   true,
                   identity_metadata.run_as = :param_run_as
                 )
                 AND IF(
-                  :param_cluster_type = '<ALL CLUSTER TYPES>',
+                  COALESCE(:param_cluster_type, '<ALL CLUSTER TYPES>') = '<ALL CLUSTER TYPES>',
                   true,
                   IF(
                     :param_cluster_type = 'Serverless',
@@ -290,16 +291,16 @@
                 t1.usage_metadata.notebook_id IS NOT NULL
                 AND billing_origin_product IN ("ALL_PURPOSE", "INTERACTIVE")
                 AND (
-                  usage_date BETWEEN :param_start_date
-                  AND :param_end_date
+                  usage_date BETWEEN COALESCE(:param_start_date, DATE_SUB(CURRENT_DATE(), 30))
+                  AND COALESCE(:param_end_date, CURRENT_DATE())
                 )
                 AND IF(
-                  :param_workspace = '<ALL WORKSPACES>',
+                  COALESCE(:param_workspace, '<ALL WORKSPACES>') = '<ALL WORKSPACES>',
                   true,
                   t2.workspace_name = :param_workspace
                 )
                 AND IF(
-                  :param_run_as = '<ALL USERS>',
+                  COALESCE(:param_run_as, '<ALL USERS>') = '<ALL USERS>',
                   true,
                   identity_metadata.run_as = :param_run_as
                 )
@@ -387,7 +388,7 @@
                 list_cost_per_personal_cluster
               WHERE
                 IF(
-                  :param_object_type = '<ALL>',
+                  COALESCE(:param_object_type, '<ALL>') = '<ALL>',
                   true,
                   :param_object_type = 'Interactive Clusters'
                 )
@@ -413,7 +414,7 @@
                 notebook_usage
               WHERE
                 IF(
-                  :param_object_type = '<ALL>',
+                  COALESCE(:param_object_type, '<ALL>') = '<ALL>',
                   true,
                   :param_object_type = 'Notebooks'
                 )
@@ -457,7 +458,7 @@
                   "' target='_blank'>",
                   t2.workspace_name,
                   "</a>"
-                ), t1.workspace_id) as workspace,
+                ), CAST(t1.workspace_id AS STRING)) as workspace,
                 coalesce(CASE 
                   WHEN entity_type LIKE '%JOB%' THEN 
                     CONCAT(

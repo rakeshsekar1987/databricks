@@ -4,7 +4,7 @@ WITH list_cost_per_job_run AS (
     t1.usage_metadata.job_id,
     t1.usage_metadata.job_run_id AS run_id,
     SUM(t1.usage_quantity * list_prices.pricing.default) AS list_cost,
-    FIRST(identity_metadata.run_as, TRUE) AS run_as,
+    FIRST(t1.identity_metadata.run_as, TRUE) AS run_as,
     FIRST(t1.custom_tags, TRUE) AS custom_tags,
     MIN(t1.usage_start_time) AS job_start_time,
     MAX(t1.usage_end_time) AS job_end_time,

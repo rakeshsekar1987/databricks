@@ -1,3 +1,5 @@
+-- Option 1: Save full results to a table (recommended for large datasets)
+CREATE OR REPLACE TABLE your_database.your_schema.job_run_time_cost_2025 AS
 WITH list_cost_per_job_run AS (
   SELECT
     t1.workspace_id,
@@ -48,5 +50,7 @@ SELECT
 FROM list_cost_per_job_run t1
   LEFT JOIN most_recent_jobs t2 USING (workspace_id, job_id)
 GROUP BY ALL
-ORDER BY list_cost DESC
-LIMIT 10000
+ORDER BY list_cost DESC;
+
+-- Then query the table:
+-- SELECT * FROM your_database.your_schema.job_run_time_cost_2025;

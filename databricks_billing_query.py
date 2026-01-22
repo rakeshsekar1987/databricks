@@ -246,6 +246,119 @@ def get_download_link(dbfs_path):
         return f"https://<your-workspace>.azuredatabricks.net/files/{relative_path}"
 
 
+def trigger_auto_download(file_path, file_format="csv"):
+    """
+    Trigger automatic file download in the browser using displayHTML.
+    
+    Args:
+        file_path (str): Path to file in DBFS FileStore
+        file_format (str): File format for display ("csv" or "excel")
+    
+    Note:
+        This uses JavaScript to automatically trigger a download.
+        The file must be in /dbfs/FileStore/ for this to work.
+    """
+    # Get the download URL
+    download_url = get_download_link(file_path)
+    
+    if download_url is None:
+        print("Cannot trigger auto-download: file not in FileStore")
+        return
+    
+    # Extract filename from path
+    filename = os.path.basename(file_path)
+    
+    # Create HTML with JavaScript for auto-download
+    html_content = f"""
+    <html>
+    <head>
+        <style>
+            .download-container {{
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+                padding: 20px;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                border-radius: 10px;
+                color: white;
+                text-align: center;
+                margin: 10px 0;
+            }}
+            .download-title {{
+                font-size: 24px;
+                margin-bottom: 15px;
+            }}
+            .download-icon {{
+                font-size: 48px;
+                margin-bottom: 10px;
+            }}
+            .download-link {{
+                display: inline-block;
+                background: white;
+                color: #667eea;
+                padding: 12px 30px;
+                border-radius: 25px;
+                text-decoration: none;
+                font-weight: bold;
+                font-size: 16px;
+                margin: 10px 0;
+                transition: transform 0.2s, box-shadow 0.2s;
+            }}
+            .download-link:hover {{
+                transform: scale(1.05);
+                box-shadow: 0 5px 20px rgba(0,0,0,0.3);
+            }}
+            .file-info {{
+                font-size: 14px;
+                opacity: 0.9;
+                margin-top: 15px;
+            }}
+            .status {{
+                margin-top: 10px;
+                font-size: 14px;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="download-container">
+            <div class="download-icon">📥</div>
+            <div class="download-title">Export Complete!</div>
+            <div class="status" id="status">Starting download automatically...</div>
+            <a href="{download_url}" class="download-link" id="downloadLink" download="{filename}">
+                Click here if download doesn't start
+            </a>
+            <div class="file-info">
+                <strong>File:</strong> {filename}<br>
+                <strong>Format:</strong> {file_format.upper()}
+            </div>
+        </div>
+        
+        <script>
+            // Auto-trigger download after a short delay
+            setTimeout(function() {{
+                var link = document.getElementById('downloadLink');
+                var status = document.getElementById('status');
+                
+                // Method 1: Create a hidden iframe to trigger download
+                var iframe = document.createElement('iframe');
+                iframe.style.display = 'none';
+                iframe.src = '{download_url}';
+                document.body.appendChild(iframe);
+                
+                // Update status
+                status.innerHTML = '✅ Download started! Check your browser downloads.';
+                
+                // Method 2: Also try window.open as backup (some browsers block iframe downloads)
+                // Uncomment if iframe method doesn't work:
+                // window.open('{download_url}', '_blank');
+            }}, 1500);
+        </script>
+    </body>
+    </html>
+    """
+    
+    # Display the HTML to trigger download
+    displayHTML(html_content)
+
+
 def map_databricks_type_to_spark(databricks_type):
     """
     Map Databricks SQL type to PySpark data type
@@ -1146,20 +1259,22 @@ LIMIT 40000;
         return None
 
 
-def query_and_export(export_format="csv", export_path=None):
+def query_and_export(export_format="csv", export_path=None, auto_download=True):
     """
     Query billing data and export to file in one step.
     
     Args:
         export_format (str): "csv", "excel", "parquet", or "delta"
         export_path (str, optional): Custom export path. If None, auto-generates path.
+        auto_download (bool): If True, automatically trigger browser download (default: True)
     
     Returns:
         tuple: (DataFrame, export_path)
     
     Example:
-        >>> df, path = query_and_export("csv")
-        >>> df, path = query_and_export("excel", "/dbfs/FileStore/exports/my_billing.xlsx")
+        >>> df, path = query_and_export("csv")  # Auto-downloads
+        >>> df, path = query_and_export("excel", auto_download=True)
+        >>> df, path = query_and_export("csv", auto_download=False)  # No auto-download
     """
     # Generate timestamp for unique filename
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -1210,13 +1325,20 @@ def query_and_export(export_format="csv", export_path=None):
     elif export_format == "delta":
         export_to_delta(df, export_path.replace("/dbfs/", "dbfs:/"))
     
-    # Generate download link
-    download_url = get_download_link(export_path)
-    if download_url:
-        print(f"\n{'=' * 60}")
-        print("DOWNLOAD YOUR FILE:")
-        print(download_url)
+    # Trigger auto-download if enabled (only for CSV and Excel)
+    if auto_download and export_format in ["csv", "excel"]:
+        print("\n" + "=" * 60)
+        print("STEP 3: Triggering automatic download...")
         print("=" * 60)
+        trigger_auto_download(export_path, export_format)
+    else:
+        # Just show the download link
+        download_url = get_download_link(export_path)
+        if download_url:
+            print(f"\n{'=' * 60}")
+            print("DOWNLOAD YOUR FILE:")
+            print(download_url)
+            print("=" * 60)
     
     return df, export_path
 
@@ -1225,11 +1347,14 @@ def query_and_export(export_format="csv", export_path=None):
 # USAGE EXAMPLES
 # =============================================================================
 """
-# Example 1: Query and export to CSV (recommended for large datasets)
+# Example 1: Query and export to CSV with AUTO-DOWNLOAD (default)
 df, path = query_and_export("csv")
 
-# Example 2: Query and export to Excel
+# Example 2: Query and export to Excel with AUTO-DOWNLOAD
 df, path = query_and_export("excel")
+
+# Example 3: Export WITHOUT auto-download (just show link)
+df, path = query_and_export("csv", auto_download=False)
 
 # Example 3: Query only, then export manually
 df = query_billing_table()

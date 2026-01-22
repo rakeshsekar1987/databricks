@@ -6,16 +6,244 @@ using the REST API and handle large result sets using EXTERNAL_LINKS disposition
 
 The EXTERNAL_LINKS disposition is required when query results exceed the inline
 byte limit of ~26MB. This implementation handles chunked downloads and pagination.
+
+Export Options:
+- CSV: Save to DBFS, cloud storage (ADLS/S3), or download locally
+- Excel: Save to DBFS or download locally (requires openpyxl)
 """
 
 import requests
 import json
 import time
+import os
+from datetime import datetime
 from pyspark.sql.types import (
     StructType, StructField, StringType, IntegerType, 
     DoubleType, BooleanType, TimestampType, DateType, LongType
 )
 from pyspark.sql.functions import col as spark_col
+
+
+# =============================================================================
+# EXPORT FUNCTIONS
+# =============================================================================
+
+def export_to_csv(df, file_path, single_file=True, include_header=True):
+    """
+    Export DataFrame to CSV file(s).
+    
+    Args:
+        df (DataFrame): PySpark DataFrame to export
+        file_path (str): Destination path. Can be:
+            - DBFS path: "/dbfs/FileStore/exports/billing.csv"
+            - ADLS path: "abfss://container@account.dfs.core.windows.net/path/file.csv"
+            - Local path: "/tmp/billing.csv"
+        single_file (bool): If True, coalesce to single file (slower for large data)
+        include_header (bool): Include column headers in CSV
+    
+    Returns:
+        str: Path where file was saved
+    
+    Example:
+        >>> export_to_csv(df, "/dbfs/FileStore/exports/billing_2025.csv")
+        >>> export_to_csv(df, "abfss://data@myaccount.dfs.core.windows.net/exports/billing.csv")
+    """
+    print(f"Exporting {df.count()} rows to CSV...")
+    
+    # For DBFS FileStore paths, convert for Spark
+    spark_path = file_path
+    if file_path.startswith("/dbfs/"):
+        spark_path = "dbfs:" + file_path[5:]  # Convert /dbfs/path to dbfs:/path
+    
+    try:
+        if single_file:
+            # Coalesce to single file - good for smaller datasets
+            df.coalesce(1).write.mode("overwrite").option("header", str(include_header).lower()).csv(spark_path)
+            print(f"CSV exported to: {spark_path}")
+            print("Note: For single file mode, look for 'part-00000*.csv' in the output folder")
+        else:
+            # Multiple files - faster for large datasets
+            df.write.mode("overwrite").option("header", str(include_header).lower()).csv(spark_path)
+            print(f"CSV files exported to folder: {spark_path}")
+        
+        return spark_path
+    except Exception as e:
+        print(f"Error exporting to CSV: {str(e)}")
+        raise
+
+
+def export_to_csv_single(df, file_path):
+    """
+    Export DataFrame to a single CSV file using Pandas.
+    Best for datasets that fit in driver memory (< 1-2 GB).
+    
+    Args:
+        df (DataFrame): PySpark DataFrame to export
+        file_path (str): Destination path (local or /dbfs/ path)
+    
+    Returns:
+        str: Path where file was saved
+    
+    Example:
+        >>> export_to_csv_single(df, "/dbfs/FileStore/exports/billing_2025.csv")
+        >>> # Download from: https://<workspace>.azuredatabricks.net/files/exports/billing_2025.csv
+    """
+    print(f"Converting DataFrame to Pandas and exporting to CSV...")
+    row_count = df.count()
+    print(f"Processing {row_count} rows...")
+    
+    # Convert to Pandas
+    pdf = df.toPandas()
+    
+    # Export to CSV
+    pdf.to_csv(file_path, index=False, encoding='utf-8')
+    print(f"CSV exported to: {file_path}")
+    
+    # If saved to FileStore, provide download URL
+    if "/dbfs/FileStore/" in file_path:
+        relative_path = file_path.replace("/dbfs/FileStore/", "")
+        print(f"\nDownload URL: https://<your-workspace>.azuredatabricks.net/files/{relative_path}")
+    
+    return file_path
+
+
+def export_to_excel(df, file_path, sheet_name="Billing Data"):
+    """
+    Export DataFrame to Excel file (.xlsx).
+    Best for datasets that fit in driver memory (< 1 GB / ~500K rows).
+    
+    Args:
+        df (DataFrame): PySpark DataFrame to export
+        file_path (str): Destination path (must end with .xlsx)
+        sheet_name (str): Name of the Excel sheet
+    
+    Returns:
+        str: Path where file was saved
+    
+    Example:
+        >>> export_to_excel(df, "/dbfs/FileStore/exports/billing_2025.xlsx")
+        >>> # Download from: https://<workspace>.azuredatabricks.net/files/exports/billing_2025.xlsx
+    
+    Note:
+        Requires openpyxl library. Install with: %pip install openpyxl
+    """
+    print(f"Converting DataFrame to Pandas and exporting to Excel...")
+    row_count = df.count()
+    print(f"Processing {row_count} rows...")
+    
+    if row_count > 500000:
+        print("Warning: Large dataset may take a while and consume significant memory.")
+        print("Consider using CSV export for datasets > 500K rows.")
+    
+    # Convert to Pandas
+    pdf = df.toPandas()
+    
+    # Export to Excel
+    try:
+        pdf.to_excel(file_path, index=False, sheet_name=sheet_name, engine='openpyxl')
+        print(f"Excel file exported to: {file_path}")
+        
+        # If saved to FileStore, provide download URL
+        if "/dbfs/FileStore/" in file_path:
+            relative_path = file_path.replace("/dbfs/FileStore/", "")
+            print(f"\nDownload URL: https://<your-workspace>.azuredatabricks.net/files/{relative_path}")
+        
+        return file_path
+    except ImportError:
+        print("Error: openpyxl library not installed.")
+        print("Install it by running: %pip install openpyxl")
+        raise
+    except Exception as e:
+        print(f"Error exporting to Excel: {str(e)}")
+        raise
+
+
+def export_to_delta(df, table_path, table_name=None):
+    """
+    Export DataFrame to Delta table for persistent storage.
+    Best for large datasets and when you need to query the data later.
+    
+    Args:
+        df (DataFrame): PySpark DataFrame to export
+        table_path (str): Path for Delta table storage
+        table_name (str, optional): Register as managed table with this name
+    
+    Returns:
+        str: Path or table name where data was saved
+    
+    Example:
+        >>> export_to_delta(df, "/mnt/data/billing_export", "billing_analysis")
+    """
+    print(f"Exporting {df.count()} rows to Delta format...")
+    
+    df.write.mode("overwrite").format("delta").save(table_path)
+    print(f"Delta table saved to: {table_path}")
+    
+    if table_name:
+        spark.sql(f"CREATE TABLE IF NOT EXISTS {table_name} USING DELTA LOCATION '{table_path}'")
+        print(f"Registered as table: {table_name}")
+        return table_name
+    
+    return table_path
+
+
+def export_to_adls(df, storage_account, container, file_path, file_format="csv"):
+    """
+    Export DataFrame directly to Azure Data Lake Storage (ADLS Gen2).
+    
+    Args:
+        df (DataFrame): PySpark DataFrame to export
+        storage_account (str): Azure storage account name
+        container (str): Container name
+        file_path (str): Path within the container (e.g., "exports/billing_2025.csv")
+        file_format (str): "csv", "parquet", or "delta"
+    
+    Returns:
+        str: Full ADLS path where data was saved
+    
+    Example:
+        >>> export_to_adls(df, "mystorageaccount", "data", "exports/billing.csv", "csv")
+    """
+    adls_path = f"abfss://{container}@{storage_account}.dfs.core.windows.net/{file_path}"
+    print(f"Exporting to ADLS: {adls_path}")
+    
+    if file_format == "csv":
+        df.coalesce(1).write.mode("overwrite").option("header", "true").csv(adls_path)
+    elif file_format == "parquet":
+        df.write.mode("overwrite").parquet(adls_path)
+    elif file_format == "delta":
+        df.write.mode("overwrite").format("delta").save(adls_path)
+    else:
+        raise ValueError(f"Unsupported format: {file_format}. Use 'csv', 'parquet', or 'delta'.")
+    
+    print(f"Export complete: {adls_path}")
+    return adls_path
+
+
+def get_download_link(dbfs_path):
+    """
+    Generate a downloadable URL for a file in DBFS FileStore.
+    
+    Args:
+        dbfs_path (str): Path in DBFS (e.g., "/dbfs/FileStore/exports/file.csv")
+    
+    Returns:
+        str: Download URL
+    
+    Note:
+        Files must be in /dbfs/FileStore/ to be downloadable via browser.
+    """
+    if not dbfs_path.startswith("/dbfs/FileStore/"):
+        print("Warning: Only files in /dbfs/FileStore/ can be downloaded via browser URL.")
+        return None
+    
+    relative_path = dbfs_path.replace("/dbfs/FileStore/", "")
+    # Get workspace URL from context
+    try:
+        workspace_url = spark.conf.get("spark.databricks.workspaceUrl")
+        return f"https://{workspace_url}/files/{relative_path}"
+    except:
+        return f"https://<your-workspace>.azuredatabricks.net/files/{relative_path}"
 
 
 def map_databricks_type_to_spark(databricks_type):
@@ -918,6 +1146,127 @@ LIMIT 40000;
         return None
 
 
+def query_and_export(export_format="csv", export_path=None):
+    """
+    Query billing data and export to file in one step.
+    
+    Args:
+        export_format (str): "csv", "excel", "parquet", or "delta"
+        export_path (str, optional): Custom export path. If None, auto-generates path.
+    
+    Returns:
+        tuple: (DataFrame, export_path)
+    
+    Example:
+        >>> df, path = query_and_export("csv")
+        >>> df, path = query_and_export("excel", "/dbfs/FileStore/exports/my_billing.xlsx")
+    """
+    # Generate timestamp for unique filename
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    
+    # Set default paths based on format
+    if export_path is None:
+        if export_format == "csv":
+            export_path = f"/dbfs/FileStore/exports/billing_export_{timestamp}.csv"
+        elif export_format == "excel":
+            export_path = f"/dbfs/FileStore/exports/billing_export_{timestamp}.xlsx"
+        elif export_format == "parquet":
+            export_path = f"/dbfs/FileStore/exports/billing_export_{timestamp}.parquet"
+        elif export_format == "delta":
+            export_path = f"/dbfs/FileStore/exports/billing_export_{timestamp}_delta"
+        else:
+            raise ValueError(f"Unsupported format: {export_format}")
+    
+    # Ensure export directory exists
+    export_dir = os.path.dirname(export_path)
+    if export_dir.startswith("/dbfs/"):
+        try:
+            dbutils.fs.mkdirs(export_dir.replace("/dbfs/", "dbfs:/"))
+        except:
+            pass
+    
+    # Run the query
+    print("=" * 60)
+    print("STEP 1: Running billing query...")
+    print("=" * 60)
+    df = query_billing_table()
+    
+    if df is None:
+        print("Query failed. No data to export.")
+        return None, None
+    
+    # Export the data
+    print("\n" + "=" * 60)
+    print(f"STEP 2: Exporting to {export_format.upper()}...")
+    print("=" * 60)
+    
+    if export_format == "csv":
+        export_to_csv_single(df, export_path)
+    elif export_format == "excel":
+        export_to_excel(df, export_path)
+    elif export_format == "parquet":
+        df.write.mode("overwrite").parquet(export_path.replace("/dbfs/", "dbfs:/"))
+        print(f"Parquet exported to: {export_path}")
+    elif export_format == "delta":
+        export_to_delta(df, export_path.replace("/dbfs/", "dbfs:/"))
+    
+    # Generate download link
+    download_url = get_download_link(export_path)
+    if download_url:
+        print(f"\n{'=' * 60}")
+        print("DOWNLOAD YOUR FILE:")
+        print(download_url)
+        print("=" * 60)
+    
+    return df, export_path
+
+
+# =============================================================================
+# USAGE EXAMPLES
+# =============================================================================
+"""
+# Example 1: Query and export to CSV (recommended for large datasets)
+df, path = query_and_export("csv")
+
+# Example 2: Query and export to Excel
+df, path = query_and_export("excel")
+
+# Example 3: Query only, then export manually
+df = query_billing_table()
+if df:
+    # Export to CSV
+    export_to_csv_single(df, "/dbfs/FileStore/exports/billing_2025.csv")
+    
+    # Or export to Excel
+    # %pip install openpyxl  # Run this first if not installed
+    export_to_excel(df, "/dbfs/FileStore/exports/billing_2025.xlsx")
+    
+    # Or export to ADLS
+    export_to_adls(df, "mystorageaccount", "mycontainer", "exports/billing.csv", "csv")
+
+# Example 4: Export to custom path
+df, path = query_and_export("csv", "/dbfs/FileStore/my_custom_folder/billing_report.csv")
+
+# Example 5: Save as Delta table for future querying
+df = query_billing_table()
+if df:
+    export_to_delta(df, "dbfs:/mnt/data/billing_analysis", "billing_analysis_table")
+    # Now you can query: SELECT * FROM billing_analysis_table
+
+# Downloading files:
+# Files saved to /dbfs/FileStore/ can be downloaded via browser:
+# https://<your-workspace>.azuredatabricks.net/files/<path-after-FileStore>
+#
+# For example:
+# /dbfs/FileStore/exports/billing_2025.csv
+# -> https://adb-5244115429641560.0.azuredatabricks.net/files/exports/billing_2025.csv
+"""
+
+
 # Run the query when executed
 if __name__ == "__main__":
-    query_billing_table()
+    # Just query (no export)
+    # query_billing_table()
+    
+    # Or query and export to CSV
+    query_and_export("csv")

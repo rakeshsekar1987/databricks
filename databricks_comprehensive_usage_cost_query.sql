@@ -8,6 +8,21 @@
 --   - Dimension tables filtered by workspace_id
 --   - Only necessary columns selected
 --   - Conditional joins to avoid unnecessary lookups
+--
+-- Tables Used (verified against sample data):
+--   - system.billing.usage (usage records)
+--   - system.billing.list_prices (pricing - join on sku_name, cloud, time range)
+--   - system.access.workspaces_latest (workspace info - join on workspace_id)
+--   - system.lakeflow.jobs (job definitions - join on job_id as STRING)
+--   - system.compute.clusters (cluster info - join on cluster_id)
+--   - system.compute.node_types (node specs - join on node_type)
+--   - system.compute.warehouses (SQL warehouses - join on warehouse_id)
+--   - system.lakeflow.pipelines (DLT pipelines - join on pipeline_id)
+--
+-- Key Type Notes:
+--   - usage_metadata.job_id is STRING, jobs.job_id is BIGINT (cast required)
+--   - product_features.is_serverless is STRING ("true"/"false"), not BOOLEAN
+--   - custom_tags is MAP<STRING,STRING>, access via ['key']
 -- ============================================================================
 
 -- Configuration: Set your filters here
@@ -155,11 +170,12 @@ node_specs AS (
 
 -- ============================================================================
 -- CTE 6: SQL WAREHOUSES (Filtered by workspace_id)
+-- Note: warehouse_id column required for join with usage_metadata.warehouse_id
 -- ============================================================================
 warehouse_info AS (
   SELECT
     workspace_id,
-    warehouse_id,
+    warehouse_id,  -- Join key to usage_metadata.warehouse_id
     warehouse_name,
     warehouse_type,
     warehouse_size

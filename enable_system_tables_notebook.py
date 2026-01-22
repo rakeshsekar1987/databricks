@@ -49,7 +49,27 @@ STORAGE_ROOT = None  # e.g., "abfss://unity-catalog@mystorageaccount.dfs.core.wi
 REGION = "eastus2"  # e.g., "eastus", "westus2", "eastus2"
 
 # Metastore ID (set to None for auto-detection/creation, or specify manually)
+# If you know your metastore ID, set it here to skip account-level API calls
 METASTORE_ID = None  # e.g., "12345678-1234-1234-1234-123456789abc"
+
+# ============================================================================
+# ACCOUNT-LEVEL CONFIGURATION (Required for creating/assigning metastores)
+# ============================================================================
+
+# Databricks Account Console URL (for account-level operations)
+# Azure: https://accounts.azuredatabricks.net
+# AWS: https://accounts.cloud.databricks.com
+# GCP: https://accounts.gcp.databricks.com
+ACCOUNT_CONSOLE_URL = "https://accounts.azuredatabricks.net"
+
+# Databricks Account ID (found in Account Console URL or settings)
+# Format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+ACCOUNT_ID = None  # e.g., "12345678-1234-1234-1234-123456789abc"
+
+# Account Admin Token (different from workspace token!)
+# You can use the same secret or a different one for account-level token
+# Set to None to use the same token as workspace
+ACCOUNT_ADMIN_SECRET_KEY = None  # e.g., "databricks-account-admin-token"
 
 # ============================================================================
 # SYSTEM TABLES CONFIGURATION
@@ -139,9 +159,53 @@ def check_unity_catalog_enabled(workspace_url: str, token: str) -> Dict[str, Any
     return {"enabled": False, "metastore_id": None}
 
 
+def get_account_token() -> str:
+    """Get the account admin token (may be different from workspace token)."""
+    if ACCOUNT_ADMIN_SECRET_KEY:
+        return dbutils.secrets.get(scope=SECRET_SCOPE, key=ACCOUNT_ADMIN_SECRET_KEY)
+    return get_token()
+
+
+def list_metastores_account_api(account_url: str, account_id: str, token: str) -> List[Dict]:
+    """
+    List all metastores using the Account Console API.
+    
+    Args:
+        account_url: Account console URL
+        account_id: Databricks account ID
+        token: Account admin token
+        
+    Returns:
+        List of metastore dictionaries
+    """
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
+    
+    try:
+        response = requests.get(
+            f"{account_url}/api/2.0/accounts/{account_id}/metastores",
+            headers=headers
+        )
+        if response.status_code == 200:
+            return response.json().get('metastores', [])
+        else:
+            print(f"  Error listing metastores: {response.status_code}")
+            try:
+                error_detail = response.json().get('message', response.text)
+                print(f"  {error_detail}")
+            except Exception:
+                pass
+            return []
+    except Exception as e:
+        print(f"  Error listing metastores: {str(e)}")
+        return []
+
+
 def list_metastores(workspace_url: str, token: str) -> List[Dict]:
     """
-    List all metastores in the account.
+    List all metastores in the account (workspace API - requires account admin).
     
     Returns:
         List of metastore dictionaries
@@ -158,12 +222,66 @@ def list_metastores(workspace_url: str, token: str) -> List[Dict]:
         )
         if response.status_code == 200:
             return response.json().get('metastores', [])
+        elif response.status_code == 403:
+            print(f"  Permission denied - workspace token is not account admin")
+            # Try account API if configured
+            if ACCOUNT_ID and ACCOUNT_CONSOLE_URL:
+                print(f"  Trying Account Console API...")
+                account_token = get_account_token()
+                return list_metastores_account_api(ACCOUNT_CONSOLE_URL, ACCOUNT_ID, account_token)
+            return []
         else:
-            print(f"Error listing metastores: {response.status_code} - {response.text}")
+            print(f"  Error listing metastores: {response.status_code} - {response.text}")
             return []
     except Exception as e:
-        print(f"Error listing metastores: {str(e)}")
+        print(f"  Error listing metastores: {str(e)}")
         return []
+
+
+def create_metastore_account_api(
+    account_url: str,
+    account_id: str,
+    token: str,
+    name: str,
+    storage_root: str,
+    region: str
+) -> Optional[Dict]:
+    """
+    Create a metastore using the Account Console API.
+    """
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
+    
+    payload = {
+        "name": name,
+        "storage_root": storage_root,
+        "region": region
+    }
+    
+    try:
+        response = requests.post(
+            f"{account_url}/api/2.0/accounts/{account_id}/metastores",
+            headers=headers,
+            json=payload
+        )
+        
+        if response.status_code in [200, 201]:
+            result = response.json()
+            print(f"  ✓ Metastore created successfully!")
+            print(f"  Metastore ID: {result.get('metastore_id')}")
+            return result
+        elif response.status_code == 409:
+            print(f"  ✓ Metastore already exists")
+            return {"exists": True}
+        else:
+            error_msg = response.json().get('message', response.text)
+            print(f"  ✗ Failed: {error_msg}")
+            return None
+    except Exception as e:
+        print(f"  ✗ Error: {str(e)}")
+        return None
 
 
 def create_metastore(
@@ -221,6 +339,16 @@ def create_metastore(
                 if m.get('name') == name:
                     return m
             return None
+        elif response.status_code == 403:
+            print(f"  Permission denied - trying Account Console API...")
+            if ACCOUNT_ID and ACCOUNT_CONSOLE_URL:
+                account_token = get_account_token()
+                return create_metastore_account_api(
+                    ACCOUNT_CONSOLE_URL, ACCOUNT_ID, account_token, name, storage_root, region
+                )
+            else:
+                print(f"  ✗ Account Console API not configured")
+                return None
         else:
             error_msg = response.json().get('message', response.text)
             print(f"  ✗ Failed to create metastore: {error_msg}")
@@ -229,6 +357,48 @@ def create_metastore(
     except Exception as e:
         print(f"  ✗ Error creating metastore: {str(e)}")
         return None
+
+
+def assign_metastore_account_api(
+    account_url: str,
+    account_id: str,
+    token: str,
+    metastore_id: str,
+    workspace_id: str
+) -> bool:
+    """
+    Assign metastore to workspace using Account Console API.
+    """
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
+    
+    payload = {
+        "metastore_id": metastore_id,
+        "default_catalog_name": "main"
+    }
+    
+    try:
+        response = requests.put(
+            f"{account_url}/api/2.0/accounts/{account_id}/workspaces/{workspace_id}/metastore",
+            headers=headers,
+            json=payload
+        )
+        
+        if response.status_code in [200, 201, 204]:
+            print(f"  ✓ Metastore assigned successfully!")
+            return True
+        elif response.status_code == 409:
+            print(f"  ✓ Workspace already has metastore assigned")
+            return True
+        else:
+            error_msg = response.json().get('message', response.text) if response.text else str(response.status_code)
+            print(f"  ✗ Failed: {error_msg}")
+            return False
+    except Exception as e:
+        print(f"  ✗ Error: {str(e)}")
+        return False
 
 
 def assign_metastore_to_workspace(
@@ -278,6 +448,16 @@ def assign_metastore_to_workspace(
         elif response.status_code == 409:
             print(f"  ✓ Workspace already has a metastore assigned")
             return True
+        elif response.status_code == 403:
+            print(f"  Permission denied - trying Account Console API...")
+            if ACCOUNT_ID and ACCOUNT_CONSOLE_URL:
+                account_token = get_account_token()
+                return assign_metastore_account_api(
+                    ACCOUNT_CONSOLE_URL, ACCOUNT_ID, account_token, metastore_id, workspace_id
+                )
+            else:
+                print(f"  ✗ Account Console API not configured")
+                return False
         else:
             error_msg = response.json().get('message', response.text) if response.text else str(response.status_code)
             print(f"  ✗ Failed to assign metastore: {error_msg}")
@@ -286,6 +466,62 @@ def assign_metastore_to_workspace(
     except Exception as e:
         print(f"  ✗ Error assigning metastore: {str(e)}")
         return False
+
+
+def print_manual_setup_instructions():
+    """Print instructions for manual Unity Catalog setup."""
+    print("\n" + "=" * 60)
+    print("MANUAL SETUP REQUIRED")
+    print("=" * 60)
+    print("""
+Your token does not have Account Admin privileges, which are required
+to create or assign Unity Catalog metastores.
+
+OPTIONS TO PROCEED:
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+OPTION 1: Use Account Console API (Recommended)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Configure these variables in the script:
+
+  ACCOUNT_CONSOLE_URL = "https://accounts.azuredatabricks.net"
+  ACCOUNT_ID = "<your-account-id>"  # Found in Account Console
+  ACCOUNT_ADMIN_SECRET_KEY = "<secret-key-for-account-admin-token>"
+
+To get the Account ID:
+1. Go to https://accounts.azuredatabricks.net
+2. Log in with account admin credentials
+3. The Account ID is in the URL or Settings page
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+OPTION 2: Enable via Azure Portal (Easiest for Azure)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. Go to Azure Portal → your Databricks workspace
+2. Click on "Launch Workspace"
+3. In the workspace, go to Catalog (left sidebar)
+4. Azure will prompt you to enable Unity Catalog
+5. Follow the wizard to create/assign a metastore
+6. Once done, run this script again to enable system tables
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+OPTION 3: Use Databricks Account Console UI
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. Go to https://accounts.azuredatabricks.net
+2. Log in as Account Admin
+3. Go to Data → Metastores
+4. Create a new metastore (if needed)
+5. Assign it to your workspace
+6. Come back and run this script to enable system tables
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+OPTION 4: Have Account Admin provide Metastore ID
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Ask your account admin to:
+1. Enable Unity Catalog for your workspace
+2. Give you the Metastore ID
+3. Then set: METASTORE_ID = "<the-metastore-id>"
+
+""")
 
 
 def setup_unity_catalog(
@@ -333,6 +569,7 @@ def setup_unity_catalog(
     metastores = list_metastores(workspace_url, token)
     
     metastore_id = None
+    permission_denied = False
     
     if metastores:
         print(f"  Found {len(metastores)} existing metastore(s):")
@@ -351,24 +588,35 @@ def setup_unity_catalog(
             metastore_id = metastores[0].get('metastore_id')
             print(f"  Using first available metastore: {metastore_id}")
     else:
-        print("  No existing metastores found")
+        print("  No existing metastores found (or permission denied)")
+        
+        # Check if we have account-level configuration
+        if not ACCOUNT_ID or not ACCOUNT_CONSOLE_URL:
+            permission_denied = True
         
         # Step 3: Create a new metastore
-        if storage_root:
+        if not permission_denied and storage_root:
             print("\nStep 3: Creating new metastore...")
             metastore = create_metastore(workspace_url, token, metastore_name, storage_root, region)
             if metastore:
                 metastore_id = metastore.get('metastore_id')
-        else:
+            else:
+                permission_denied = True
+        elif not storage_root:
             print("\nStep 3: Cannot create metastore - STORAGE_ROOT not configured")
             print("  Please set STORAGE_ROOT to your cloud storage location:")
             print("  Azure: abfss://<container>@<storage-account>.dfs.core.windows.net/<path>")
             print("  AWS:   s3://<bucket>/<path>")
             print("  GCP:   gs://<bucket>/<path>")
-            return None
+    
+    # If we hit permission issues, show manual setup instructions
+    if permission_denied and not metastore_id:
+        print_manual_setup_instructions()
+        return None
     
     if not metastore_id:
         print("\n✗ Failed to obtain metastore ID")
+        print_manual_setup_instructions()
         return None
     
     # Step 4: Assign metastore to workspace
@@ -400,6 +648,10 @@ def setup_unity_catalog(
                 print(f"  ✓ Metastore assigned successfully!")
             elif response.status_code == 409:
                 print(f"  ✓ Workspace already has a metastore assigned")
+            elif response.status_code == 403:
+                print(f"  ✗ Permission denied")
+                print_manual_setup_instructions()
+                return None
             else:
                 print(f"  ✗ Failed: {response.text}")
                 return None
@@ -408,6 +660,8 @@ def setup_unity_catalog(
             return None
     else:
         if not assign_metastore_to_workspace(workspace_url, token, metastore_id, workspace_id):
+            # Check if it was permission denied
+            print_manual_setup_instructions()
             return None
     
     print("\n" + "=" * 60)

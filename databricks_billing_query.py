@@ -57,6 +57,10 @@ def download_chunk_data(external_link, headers):
     # External links may have their own headers or be pre-signed URLs
     link_url = external_link.get('external_link')
     link_headers = external_link.get('http_headers', {})
+    row_count = external_link.get('row_count', 'unknown')
+    
+    print(f"  Expected rows in chunk: {row_count}")
+    print(f"  Downloading from URL: {link_url[:100]}..." if len(str(link_url)) > 100 else f"  Downloading from URL: {link_url}")
     
     # Build request headers from the external link's headers
     request_headers = {}
@@ -65,6 +69,7 @@ def download_chunk_data(external_link, headers):
         if isinstance(link_headers, dict):
             # Headers as dictionary: {"Header-Name": "value", ...}
             request_headers = link_headers.copy()
+            print(f"  Using {len(request_headers)} header(s) from external link")
         elif isinstance(link_headers, list):
             # Headers as list of objects: [{"name": "Header-Name", "value": "value"}, ...]
             for header in link_headers:
@@ -73,27 +78,59 @@ def download_chunk_data(external_link, headers):
                 elif isinstance(header, str):
                     # Skip string headers we can't parse
                     continue
+            print(f"  Using {len(request_headers)} header(s) from external link")
     
     try:
+        print("  Making HTTP request...")
         response = requests.get(link_url, headers=request_headers)
+        print(f"  Response status code: {response.status_code}")
         response.raise_for_status()
         
         # Parse the response - it's typically newline-delimited JSON or CSV
         content_type = response.headers.get('Content-Type', '')
-        response_text = response.text.strip()
+        print(f"  Response Content-Type: {content_type}")
         
-        if not response_text:
+        response_text = response.text
+        print(f"  Response size: {len(response_text)} bytes")
+        
+        if not response_text.strip():
+            print("  Warning: Empty response received")
             return []
+        
+        # Show first 200 chars for debugging
+        print(f"  Response preview: {response_text[:200]}...")
+        
+        # Try parsing based on content
+        response_text = response_text.strip()
         
         if 'json' in content_type.lower() or response_text.startswith('['):
             # JSON array format
-            return json.loads(response_text)
+            data = json.loads(response_text)
+            print(f"  Parsed as JSON array: {len(data)} rows")
+            return data
+        elif response_text.startswith('{'):
+            # Single JSON object - might be wrapped result
+            data = json.loads(response_text)
+            if isinstance(data, dict) and 'data_array' in data:
+                print(f"  Parsed as wrapped JSON with data_array: {len(data['data_array'])} rows")
+                return data['data_array']
+            elif isinstance(data, list):
+                print(f"  Parsed as JSON list: {len(data)} rows")
+                return data
+            else:
+                print(f"  Warning: Unexpected JSON structure: {list(data.keys()) if isinstance(data, dict) else type(data)}")
+                return [data]
         else:
             # Try to parse as JSON anyway (common for Databricks responses)
             try:
-                return json.loads(response_text)
+                data = json.loads(response_text)
+                if isinstance(data, list):
+                    print(f"  Parsed as JSON: {len(data)} rows")
+                    return data
+                return [data]
             except json.JSONDecodeError:
-                # Might be newline-delimited JSON (NDJSON)
+                # Might be newline-delimited JSON (NDJSON) or Arrow format
+                print("  Attempting to parse as newline-delimited JSON...")
                 rows = []
                 for line in response_text.split('\n'):
                     line = line.strip()
@@ -101,10 +138,17 @@ def download_chunk_data(external_link, headers):
                         try:
                             rows.append(json.loads(line))
                         except json.JSONDecodeError:
-                            print(f"Warning: Could not parse line as JSON: {line[:100]}...")
+                            print(f"  Warning: Could not parse line as JSON: {line[:50]}...")
+                            continue
+                print(f"  Parsed {len(rows)} rows from NDJSON")
                 return rows
+    except requests.exceptions.HTTPError as e:
+        print(f"  HTTP Error: {e.response.status_code} - {e.response.text[:200]}")
+        return []
     except Exception as e:
-        print(f"Error downloading chunk: {str(e)}")
+        print(f"  Error downloading chunk: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return []
 
 

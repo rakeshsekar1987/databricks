@@ -70,7 +70,8 @@ class DatabricksSystemTablesManager:
         method: str, 
         endpoint: str, 
         payload: Optional[Dict] = None,
-        retry_count: int = 3
+        retry_count: int = 3,
+        silent_404: bool = False
     ) -> Optional[Dict]:
         """
         Make an HTTP request to the Databricks API with retry logic.
@@ -80,6 +81,7 @@ class DatabricksSystemTablesManager:
             endpoint: API endpoint path
             payload: Optional request payload
             retry_count: Number of retries on failure
+            silent_404: If True, don't retry on 404 errors (endpoint doesn't exist)
             
         Returns:
             Response JSON or None on failure
@@ -99,6 +101,12 @@ class DatabricksSystemTablesManager:
                 else:
                     raise ValueError(f"Unsupported HTTP method: {method}")
                 
+                # Handle 404 errors - don't retry, endpoint doesn't exist
+                if response.status_code == 404:
+                    if not silent_404:
+                        print(f"  ✗ Endpoint not found (404): {endpoint}")
+                    return None
+                
                 response.raise_for_status()
                 
                 # Handle empty responses (204 No Content)
@@ -108,6 +116,10 @@ class DatabricksSystemTablesManager:
                 return response.json()
                 
             except requests.exceptions.RequestException as e:
+                # Don't retry on 404
+                if hasattr(e, 'response') and e.response is not None and e.response.status_code == 404:
+                    return None
+                    
                 wait_time = 2 ** attempt
                 print(f"Request failed (attempt {attempt + 1}/{retry_count}): {str(e)}")
                 if attempt < retry_count - 1:
@@ -122,21 +134,48 @@ class DatabricksSystemTablesManager:
     def get_current_metastore(self) -> Optional[str]:
         """
         Get the current metastore ID assigned to the workspace.
+        Tries multiple API endpoints for compatibility.
         
         Returns:
             Metastore ID or None if not found
         """
         print("Fetching current metastore assignment...")
         
-        result = self._make_request("GET", "/api/2.1/unity-catalog/current-metastore-assignment")
+        # Try multiple endpoints in order of preference
+        endpoints_to_try = [
+            # Method 1: Current metastore assignment (newer API)
+            ("/api/2.1/unity-catalog/current-metastore-assignment", "metastore_id"),
+            # Method 2: Metastore summary
+            ("/api/2.1/unity-catalog/metastore_summary", "metastore_id"),
+            # Method 3: List metastores and get the first one
+            ("/api/2.1/unity-catalog/metastores", None),
+        ]
         
-        if result and 'metastore_id' in result:
-            self.metastore_id = result['metastore_id']
-            print(f"Found metastore ID: {self.metastore_id}")
-            return self.metastore_id
-        else:
-            print("Could not determine metastore ID. Please provide it explicitly.")
-            return None
+        for endpoint, key in endpoints_to_try:
+            print(f"  Trying: {endpoint}")
+            result = self._make_request("GET", endpoint)
+            
+            if result is not None:
+                if key:
+                    # Direct key lookup
+                    metastore_id = result.get(key)
+                else:
+                    # List response - get first metastore
+                    metastores = result.get('metastores', [])
+                    if metastores:
+                        metastore_id = metastores[0].get('metastore_id')
+                    else:
+                        continue
+                
+                if metastore_id:
+                    self.metastore_id = metastore_id
+                    print(f"  ✓ Found metastore ID: {self.metastore_id}")
+                    return self.metastore_id
+        
+        print("\nCould not determine metastore ID from any source.")
+        print("Please provide it explicitly with --metastore-id")
+        print("You can find your metastore ID by running: SELECT current_metastore()")
+        return None
     
     def list_system_schemas(self) -> List[Dict[str, Any]]:
         """

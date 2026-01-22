@@ -31,6 +31,10 @@ SECRET_KEY = "databricks-admin-token-scrt"
 # Available: access, billing, compute, lineage, storage, workflow, marketplace, serving, query
 SCHEMAS_TO_ENABLE = None  # Set to list like ["access", "billing"] for specific schemas
 
+# Metastore ID (set to None for auto-detection, or specify manually if auto-detection fails)
+# You can find this in Unity Catalog settings or by running: SELECT current_metastore()
+METASTORE_ID = None  # e.g., "12345678-1234-1234-1234-123456789abc"
+
 # ============================================================================
 # HELPER FUNCTIONS
 # ============================================================================
@@ -51,6 +55,7 @@ def get_token() -> str:
 def get_current_metastore_id(workspace_url: str, token: str) -> Optional[str]:
     """
     Get the current metastore ID assigned to the workspace.
+    Tries multiple API endpoints for compatibility.
     
     Args:
         workspace_url: The Databricks workspace URL
@@ -64,18 +69,64 @@ def get_current_metastore_id(workspace_url: str, token: str) -> Optional[str]:
         "Content-Type": "application/json"
     }
     
-    api_endpoint = f"{workspace_url}/api/2.1/unity-catalog/current-metastore-assignment"
+    # Try multiple endpoints in order of preference
+    endpoints_to_try = [
+        # Method 1: Current metastore assignment (newer API)
+        ("/api/2.1/unity-catalog/current-metastore-assignment", "metastore_id"),
+        # Method 2: Metastore summary
+        ("/api/2.1/unity-catalog/metastore_summary", "metastore_id"),
+        # Method 3: List metastores and get the first one
+        ("/api/2.1/unity-catalog/metastores", None),
+    ]
     
+    for endpoint, key in endpoints_to_try:
+        api_url = f"{workspace_url}{endpoint}"
+        print(f"  Trying: {endpoint}")
+        
+        try:
+            response = requests.get(api_url, headers=headers)
+            
+            if response.status_code == 200:
+                result = response.json()
+                
+                if key:
+                    # Direct key lookup
+                    metastore_id = result.get(key)
+                else:
+                    # List response - get first metastore
+                    metastores = result.get('metastores', [])
+                    if metastores:
+                        metastore_id = metastores[0].get('metastore_id')
+                    else:
+                        continue
+                
+                if metastore_id:
+                    print(f"  ✓ Found metastore ID: {metastore_id}")
+                    return metastore_id
+                    
+            elif response.status_code == 404:
+                print(f"  ✗ Endpoint not available (404)")
+                continue
+            else:
+                print(f"  ✗ Error: {response.status_code}")
+                continue
+                
+        except requests.exceptions.RequestException as e:
+            print(f"  ✗ Request failed: {str(e)}")
+            continue
+    
+    # If all API methods fail, try to get from Spark config (in notebook)
     try:
-        response = requests.get(api_endpoint, headers=headers)
-        response.raise_for_status()
-        result = response.json()
-        metastore_id = result.get('metastore_id')
-        print(f"Found metastore ID: {metastore_id}")
-        return metastore_id
-    except requests.exceptions.RequestException as e:
-        print(f"Error getting metastore ID: {str(e)}")
-        return None
+        # This works in Databricks notebooks with Unity Catalog
+        metastore_id = spark.conf.get("spark.databricks.unityCatalog.metastoreId", None)
+        if metastore_id:
+            print(f"  ✓ Found metastore ID from Spark config: {metastore_id}")
+            return metastore_id
+    except Exception:
+        pass
+    
+    print("  ✗ Could not determine metastore ID from any source")
+    return None
 
 
 def list_system_schemas(workspace_url: str, token: str, metastore_id: str) -> List[Dict]:
@@ -234,7 +285,8 @@ def print_status_report(schemas: List[Dict]) -> None:
 
 def enable_system_tables(
     schemas_to_enable: Optional[List[str]] = None,
-    show_status: bool = True
+    show_status: bool = True,
+    metastore_id: Optional[str] = None
 ) -> Dict[str, bool]:
     """
     Main function to enable system tables.
@@ -242,6 +294,7 @@ def enable_system_tables(
     Args:
         schemas_to_enable: List of schema names to enable, or None for all
         show_status: Whether to show status report after enabling
+        metastore_id: Optional metastore ID (will auto-detect if not provided)
         
     Returns:
         Dictionary mapping schema names to success status
@@ -263,12 +316,23 @@ def enable_system_tables(
     print("Retrieving access token...")
     token = get_token()
     
-    # Get metastore ID
-    print("Getting metastore ID...")
-    metastore_id = get_current_metastore_id(WORKSPACE_URL, token)
+    # Get metastore ID - use provided value or auto-detect
+    if metastore_id:
+        print(f"Using provided metastore ID: {metastore_id}")
+    else:
+        print("Auto-detecting metastore ID...")
+        metastore_id = get_current_metastore_id(WORKSPACE_URL, token)
     
     if not metastore_id:
-        print("ERROR: Could not determine metastore ID. Aborting.")
+        print("\n" + "=" * 60)
+        print("ERROR: Could not determine metastore ID.")
+        print("=" * 60)
+        print("\nPossible solutions:")
+        print("1. Ensure Unity Catalog is enabled for this workspace")
+        print("2. Manually set METASTORE_ID in the configuration section")
+        print("3. Run this SQL to find your metastore ID:")
+        print("   SELECT current_metastore()")
+        print("=" * 60)
         return {}
     
     # Determine which schemas to enable
@@ -304,9 +368,12 @@ def enable_system_tables(
     return results
 
 
-def get_system_tables_status() -> List[Dict]:
+def get_system_tables_status(metastore_id: Optional[str] = None) -> List[Dict]:
     """
     Get and display the current status of all system tables.
+    
+    Args:
+        metastore_id: Optional metastore ID (will auto-detect if not provided)
     
     Returns:
         List of system schema dictionaries
@@ -314,11 +381,23 @@ def get_system_tables_status() -> List[Dict]:
     print("Retrieving access token...")
     token = get_token()
     
-    print("Getting metastore ID...")
-    metastore_id = get_current_metastore_id(WORKSPACE_URL, token)
+    # Get metastore ID - use provided value or auto-detect
+    if metastore_id:
+        print(f"Using provided metastore ID: {metastore_id}")
+    else:
+        print("Auto-detecting metastore ID...")
+        metastore_id = get_current_metastore_id(WORKSPACE_URL, token)
     
     if not metastore_id:
+        print("\n" + "=" * 60)
         print("ERROR: Could not determine metastore ID.")
+        print("=" * 60)
+        print("\nPossible solutions:")
+        print("1. Ensure Unity Catalog is enabled for this workspace")
+        print("2. Manually set METASTORE_ID in the configuration section")
+        print("3. Run this SQL to find your metastore ID:")
+        print("   SELECT current_metastore()")
+        print("=" * 60)
         return []
     
     print("Fetching system schemas status...")
@@ -354,12 +433,16 @@ if __name__ == "__main__" or True:  # Set to True to run in notebook
     print(f"\nWorkspace URL: {WORKSPACE_URL}")
     print(f"Secret Scope: {SECRET_SCOPE}")
     print(f"Target Schemas: {SCHEMAS_TO_ENABLE or 'ALL'}")
+    print(f"Metastore ID: {METASTORE_ID or 'Auto-detect'}")
     print()
     
     # Uncomment ONE of the following:
     
     # Enable system tables
-    results = enable_system_tables(schemas_to_enable=SCHEMAS_TO_ENABLE)
+    results = enable_system_tables(
+        schemas_to_enable=SCHEMAS_TO_ENABLE,
+        metastore_id=METASTORE_ID
+    )
     
     # Or just check status
-    # get_system_tables_status()
+    # get_system_tables_status(metastore_id=METASTORE_ID)

@@ -58,12 +58,21 @@ def download_chunk_data(external_link, headers):
     link_url = external_link.get('external_link')
     link_headers = external_link.get('http_headers', {})
     
-    # If the external link has its own headers (like pre-signed URL headers), use those
+    # Build request headers from the external link's headers
     request_headers = {}
     if link_headers:
-        # Convert headers from API format to request format
-        for header in link_headers:
-            request_headers[header.get('name')] = header.get('value')
+        # Handle different header formats from the API
+        if isinstance(link_headers, dict):
+            # Headers as dictionary: {"Header-Name": "value", ...}
+            request_headers = link_headers.copy()
+        elif isinstance(link_headers, list):
+            # Headers as list of objects: [{"name": "Header-Name", "value": "value"}, ...]
+            for header in link_headers:
+                if isinstance(header, dict):
+                    request_headers[header.get('name')] = header.get('value')
+                elif isinstance(header, str):
+                    # Skip string headers we can't parse
+                    continue
     
     try:
         response = requests.get(link_url, headers=request_headers)
@@ -71,20 +80,28 @@ def download_chunk_data(external_link, headers):
         
         # Parse the response - it's typically newline-delimited JSON or CSV
         content_type = response.headers.get('Content-Type', '')
+        response_text = response.text.strip()
         
-        if 'json' in content_type.lower() or response.text.strip().startswith('['):
+        if not response_text:
+            return []
+        
+        if 'json' in content_type.lower() or response_text.startswith('['):
             # JSON array format
-            return json.loads(response.text)
+            return json.loads(response_text)
         else:
             # Try to parse as JSON anyway (common for Databricks responses)
             try:
-                return json.loads(response.text)
+                return json.loads(response_text)
             except json.JSONDecodeError:
-                # Might be newline-delimited JSON
+                # Might be newline-delimited JSON (NDJSON)
                 rows = []
-                for line in response.text.strip().split('\n'):
+                for line in response_text.split('\n'):
+                    line = line.strip()
                     if line:
-                        rows.append(json.loads(line))
+                        try:
+                            rows.append(json.loads(line))
+                        except json.JSONDecodeError:
+                            print(f"Warning: Could not parse line as JSON: {line[:100]}...")
                 return rows
     except Exception as e:
         print(f"Error downloading chunk: {str(e)}")
@@ -117,6 +134,15 @@ def fetch_all_external_data(result, headers, api_endpoint, statement_id):
         
         for i, link in enumerate(external_links):
             print(f"Downloading chunk {i + 1}/{len(external_links)}...")
+            
+            # Debug: show link structure (first chunk only)
+            if i == 0:
+                print(f"  External link type: {type(link)}")
+                if isinstance(link, dict):
+                    print(f"  External link keys: {list(link.keys())}")
+                    if 'http_headers' in link:
+                        print(f"  HTTP headers type: {type(link.get('http_headers'))}")
+            
             chunk_data = download_chunk_data(link, headers)
             if chunk_data:
                 all_data.extend(chunk_data)

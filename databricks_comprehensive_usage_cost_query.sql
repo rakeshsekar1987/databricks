@@ -1,5 +1,5 @@
 -- ============================================================================
--- COMPREHENSIVE DATABRICKS USAGE & COST ANALYSIS QUERY
+-- COMPREHENSIVE DATABRICKS USAGE & COST ANALYSIS QUERY (v2 - Corrected)
 -- ============================================================================
 -- Purpose: Analyze all compute usage including Jobs, SQL, Interactive clusters,
 --          and DLT pipelines with full cost, cluster details, and execution metrics
@@ -11,11 +11,20 @@
 --   - Pool-based workloads
 --   - DLT pipeline runs
 --   - Notebook paths, cluster specs, execution time, trigger type
+--
+-- Fixes in v2:
+--   - Fixed FIRST_VALUE window function misuse (replaced with FIRST aggregate)
+--   - Fixed workspace_id type comparison
+--   - Fixed TIMESTAMPDIFF usage with aggregates
+--   - Removed delete_time filter to include deleted resources in historical analysis
+--   - Used GROUP BY ALL for cleaner syntax
+--   - Fixed job_id type casting for joins
 -- ============================================================================
 
 WITH 
 -- ============================================================================
 -- CTE 1: Get the most recent version of each job (SCD Type 2 handling)
+-- Note: Don't filter by delete_time - we want to show info for deleted jobs too
 -- ============================================================================
 most_recent_jobs AS (
   SELECT
@@ -32,7 +41,6 @@ most_recent_jobs AS (
     tags AS job_tags,
     ROW_NUMBER() OVER(PARTITION BY workspace_id, job_id ORDER BY change_time DESC) AS rn
   FROM system.lakeflow.jobs
-  WHERE delete_time IS NULL OR delete_time = '-'
   QUALIFY rn = 1
 ),
 
@@ -58,7 +66,6 @@ most_recent_clusters AS (
     tags AS cluster_tags,
     ROW_NUMBER() OVER(PARTITION BY workspace_id, cluster_id ORDER BY change_time DESC) AS rn
   FROM system.compute.clusters
-  WHERE delete_time IS NULL OR delete_time = '-'
   QUALIFY rn = 1
 ),
 
@@ -93,7 +100,7 @@ warehouse_info AS (
 -- ============================================================================
 -- CTE 5: DLT Pipeline information
 -- ============================================================================
-pipeline_info AS (
+most_recent_pipelines AS (
   SELECT
     workspace_id,
     pipeline_id,
@@ -105,15 +112,14 @@ pipeline_info AS (
     settings.photon AS is_photon_pipeline,
     ROW_NUMBER() OVER(PARTITION BY workspace_id, pipeline_id ORDER BY change_time DESC) AS rn
   FROM system.lakeflow.pipelines
-  WHERE delete_time IS NULL OR delete_time = '-'
   QUALIFY rn = 1
 ),
 
 -- ============================================================================
--- CTE 6: Unified usage records with cost calculation
--- This is the core CTE that captures ALL usage types
+-- CTE 6: Base usage with cost calculation
+-- Joins usage with list_prices to get costs
 -- ============================================================================
-unified_usage_with_cost AS (
+usage_with_cost AS (
   SELECT
     -- Identifiers
     u.account_id,
@@ -124,6 +130,19 @@ unified_usage_with_cost AS (
     u.billing_origin_product,
     u.sku_name,
     u.usage_type,
+    
+    -- Derive entity type similar to reference query pattern
+    CONCAT_WS(
+      ' ',
+      CASE WHEN u.product_features.is_serverless = 'true' THEN 'SERVERLESS' ELSE '' END,
+      CASE 
+        WHEN u.billing_origin_product = 'JOBS' THEN 'JOB'
+        WHEN u.billing_origin_product = 'DLT' THEN 'PIPELINE'
+        WHEN u.billing_origin_product = 'ALL_PURPOSE' THEN 'INTERACTIVE'
+        WHEN u.billing_origin_product = 'SQL' THEN 'SQL_WAREHOUSE'
+        ELSE u.billing_origin_product
+      END
+    ) AS entity_type,
     
     -- Resource identifiers from usage_metadata
     u.usage_metadata.job_id AS job_id,
@@ -163,22 +182,14 @@ unified_usage_with_cost AS (
     u.usage_end_time,
     u.usage_date,
     
-    -- Calculate execution time in minutes for this usage record
-    TIMESTAMPDIFF(MINUTE, u.usage_start_time, u.usage_end_time) AS usage_duration_minutes,
-    
     -- Usage and cost
     u.usage_quantity,
     u.usage_unit,
-    CAST(lp.pricing.default AS DECIMAL(18, 6)) AS list_price_per_dbu,
-    u.usage_quantity * CAST(lp.pricing.default AS DECIMAL(18, 6)) AS list_cost,
-    
-    -- Effective price (after any promotions)
-    CAST(lp.pricing.effective_list.default AS DECIMAL(18, 6)) AS effective_price_per_dbu,
-    u.usage_quantity * CAST(lp.pricing.effective_list.default AS DECIMAL(18, 6)) AS effective_cost
+    u.usage_quantity * CAST(lp.pricing.default AS DECIMAL(18, 6)) AS list_cost
 
   FROM system.billing.usage u
   
-  -- Join to get pricing
+  -- Join to get pricing (same pattern as reference query)
   INNER JOIN system.billing.list_prices lp 
     ON u.cloud = lp.cloud 
     AND u.sku_name = lp.sku_name 
@@ -188,94 +199,100 @@ unified_usage_with_cost AS (
   WHERE 
     -- Date filter - adjust as needed
     u.usage_date BETWEEN '2025-01-01' AND '2025-12-31'
-    -- Workspace filter - adjust or remove as needed
-    AND u.workspace_id = '5244115429641560'
+    -- Workspace filter - NOTE: workspace_id is BIGINT, use without quotes
+    AND u.workspace_id = 5244115429641560
     -- Include all compute-related billing products
-    AND u.billing_origin_product IN ('JOBS', 'ALL_PURPOSE', 'SQL', 'DLT', 'MODEL_SERVING', 'SERVERLESS_REAL_TIME_INFERENCE')
+    AND u.billing_origin_product IN ('JOBS', 'ALL_PURPOSE', 'SQL', 'DLT', 'MODEL_SERVING', 'SERVERLESS_REAL_TIME_INFERENCE', 'LAKEFLOW_CONNECT')
 ),
 
 -- ============================================================================
 -- CTE 7: Aggregate usage by logical execution unit
--- Groups by the appropriate identifier based on usage type
+-- Uses FIRST() aggregate with TRUE for ignore nulls (Databricks SQL syntax)
+-- Uses GROUP BY ALL for cleaner code
 -- ============================================================================
 aggregated_usage AS (
   SELECT
-    u.workspace_id,
-    u.billing_origin_product,
-    u.sku_name,
+    workspace_id,
+    billing_origin_product,
+    entity_type,
+    sku_name,
+    
+    -- Entity identifier: job_id for jobs, pipeline_id for DLT, cluster_id for interactive
+    COALESCE(job_id, dlt_pipeline_id, cluster_id, warehouse_id) AS entity_id,
+    
+    -- Run identifier: job_run_id for jobs, dlt_update_id for DLT
+    CASE 
+      WHEN billing_origin_product = 'JOBS' THEN job_run_id
+      WHEN billing_origin_product = 'DLT' THEN dlt_update_id
+      ELSE cluster_id  -- For interactive, group by cluster
+    END AS run_id,
     
     -- Job information
-    u.job_id,
-    u.job_run_id,
-    u.job_name_from_usage,
+    job_id,
+    job_run_id,
     
     -- Cluster information  
-    u.cluster_id,
+    cluster_id,
     
     -- SQL Warehouse information
-    u.warehouse_id,
+    warehouse_id,
     
     -- DLT Pipeline information
-    u.dlt_pipeline_id,
-    u.dlt_update_id,
+    dlt_pipeline_id,
+    dlt_update_id,
     
     -- Pool information
-    u.instance_pool_id,
+    FIRST(instance_pool_id, TRUE) AS instance_pool_id,
     
-    -- Node type used
-    u.node_type,
+    -- Node type used (take first non-null)
+    FIRST(node_type, TRUE) AS node_type,
     
-    -- Notebook path
-    FIRST_VALUE(u.notebook_path) IGNORE NULLS OVER (
-      PARTITION BY u.workspace_id, u.billing_origin_product, 
-                   COALESCE(u.job_run_id, u.cluster_id, u.warehouse_id, u.dlt_update_id)
-      ORDER BY u.usage_start_time
-    ) AS notebook_path,
+    -- Notebook path (take first non-null)
+    FIRST(notebook_path, TRUE) AS notebook_path,
     
-    -- Identity
-    FIRST(u.run_as, TRUE) AS run_as,
-    FIRST(u.created_by, TRUE) AS created_by,
+    -- Job name from usage metadata
+    FIRST(job_name_from_usage, TRUE) AS job_name_from_usage,
     
-    -- Custom tags
-    FIRST(u.custom_tags, TRUE) AS custom_tags,
+    -- Identity (take first non-null)
+    FIRST(run_as, TRUE) AS run_as,
+    FIRST(created_by, TRUE) AS created_by,
     
-    -- Product features
-    FIRST(u.is_photon, TRUE) AS is_photon,
-    FIRST(u.is_serverless, TRUE) AS is_serverless,
-    FIRST(u.jobs_tier, TRUE) AS jobs_tier,
+    -- Custom tags (take first non-null)
+    FIRST(custom_tags, TRUE) AS custom_tags,
+    
+    -- Product features (take first non-null)
+    FIRST(is_photon, TRUE) AS is_photon,
+    FIRST(is_serverless, TRUE) AS is_serverless,
+    FIRST(jobs_tier, TRUE) AS jobs_tier,
     
     -- Aggregated metrics
-    SUM(u.usage_quantity) AS total_dbu,
-    SUM(u.list_cost) AS total_list_cost,
-    SUM(u.effective_cost) AS total_effective_cost,
-    SUM(u.usage_duration_minutes) AS total_usage_minutes,
+    SUM(usage_quantity) AS total_dbu,
+    SUM(list_cost) AS total_list_cost,
     
     -- Time range
-    MIN(u.usage_start_time) AS execution_start_time,
-    MAX(u.usage_end_time) AS execution_end_time,
-    
-    -- Calculate actual execution duration (wall clock time)
-    TIMESTAMPDIFF(MINUTE, MIN(u.usage_start_time), MAX(u.usage_end_time)) AS execution_wall_time_minutes,
+    MIN(usage_start_time) AS execution_start_time,
+    MAX(usage_end_time) AS execution_end_time,
     
     -- Record counts
-    COUNT(DISTINCT u.record_id) AS usage_record_count
+    COUNT(DISTINCT record_id) AS usage_record_count
 
-  FROM unified_usage_with_cost u
+  FROM usage_with_cost
   
-  GROUP BY
-    u.workspace_id,
-    u.billing_origin_product,
-    u.sku_name,
-    u.job_id,
-    u.job_run_id,
-    u.job_name_from_usage,
-    u.cluster_id,
-    u.warehouse_id,
-    u.dlt_pipeline_id,
-    u.dlt_update_id,
-    u.instance_pool_id,
-    u.node_type,
-    u.notebook_path
+  GROUP BY ALL
+),
+
+-- ============================================================================
+-- CTE 8: Calculate execution duration (separate to avoid aggregate in function)
+-- ============================================================================
+usage_with_duration AS (
+  SELECT
+    a.*,
+    -- Calculate execution duration in minutes using unix_timestamp
+    ROUND(
+      (UNIX_TIMESTAMP(a.execution_end_time) - UNIX_TIMESTAMP(a.execution_start_time)) / 60.0, 
+      2
+    ) AS execution_duration_minutes
+  FROM aggregated_usage a
 )
 
 -- ============================================================================
@@ -283,44 +300,56 @@ aggregated_usage AS (
 -- ============================================================================
 SELECT
     -- ========================================================================
-    -- IDENTIFIERS
+    -- WORKSPACE INFO
     -- ========================================================================
-    a.workspace_id,
+    u.workspace_id,
     w.workspace_name,
+    w.workspace_url,
     
     -- ========================================================================
     -- USAGE TYPE CLASSIFICATION
     -- ========================================================================
-    a.billing_origin_product AS usage_category,
+    u.billing_origin_product AS usage_category,
+    u.entity_type,
     CASE 
-      WHEN a.billing_origin_product = 'JOBS' AND a.job_run_id IS NOT NULL THEN 'Scheduled/Triggered Job Run'
-      WHEN a.billing_origin_product = 'JOBS' AND a.job_run_id IS NULL THEN 'Job Cluster Usage'
-      WHEN a.billing_origin_product = 'ALL_PURPOSE' THEN 'Interactive Cluster'
-      WHEN a.billing_origin_product = 'SQL' THEN 'SQL Warehouse Query'
-      WHEN a.billing_origin_product = 'DLT' THEN 'DLT Pipeline Run'
-      WHEN a.billing_origin_product = 'MODEL_SERVING' THEN 'Model Serving'
-      WHEN a.billing_origin_product = 'SERVERLESS_REAL_TIME_INFERENCE' THEN 'Serverless Inference'
-      ELSE a.billing_origin_product
+      WHEN u.entity_type LIKE '%JOB%' AND u.job_run_id IS NOT NULL THEN 'Job Run'
+      WHEN u.entity_type LIKE '%JOB%' AND u.job_run_id IS NULL THEN 'Job Cluster Usage'
+      WHEN u.entity_type LIKE '%INTERACTIVE%' THEN 'Interactive Cluster'
+      WHEN u.entity_type LIKE '%SQL_WAREHOUSE%' THEN 'SQL Warehouse Query'
+      WHEN u.entity_type LIKE '%PIPELINE%' THEN 'DLT Pipeline Run'
+      WHEN u.billing_origin_product = 'MODEL_SERVING' THEN 'Model Serving'
+      ELSE u.billing_origin_product
     END AS usage_type_description,
     
     -- ========================================================================
     -- JOB DETAILS
     -- ========================================================================
-    a.job_id,
-    COALESCE(j.job_name, a.job_name_from_usage) AS job_name,
-    a.job_run_id,
+    u.job_id,
+    COALESCE(j.job_name, u.job_name_from_usage) AS job_name,
+    u.job_run_id,
     j.creator_user_name AS job_creator,
+    j.run_as_user_name AS job_run_as_user,
     
     -- Trigger type determination
     CASE
-      WHEN a.billing_origin_product = 'ALL_PURPOSE' THEN 'INTERACTIVE'
-      WHEN a.billing_origin_product = 'SQL' THEN 'SQL_QUERY'
-      WHEN a.billing_origin_product = 'DLT' THEN 
-        CASE WHEN p.is_serverless_pipeline = TRUE THEN 'DLT_SERVERLESS' ELSE 'DLT_CLASSIC' END
+      WHEN u.entity_type LIKE '%INTERACTIVE%' THEN 'INTERACTIVE'
+      WHEN u.entity_type LIKE '%SQL_WAREHOUSE%' THEN 'SQL_QUERY'
+      WHEN u.entity_type LIKE '%PIPELINE%' THEN 
+        CASE WHEN p.is_serverless_pipeline = TRUE THEN 'DLT_SERVERLESS' ELSE 'DLT_SCHEDULED' END
       WHEN j.trigger_type IS NOT NULL THEN j.trigger_type
       WHEN j.cron_schedule IS NOT NULL THEN 'CRON'
-      ELSE 'MANUAL_OR_API'
+      WHEN u.job_id IS NOT NULL THEN 'MANUAL_OR_API'
+      ELSE 'UNKNOWN'
     END AS trigger_type,
+    
+    -- Is it a scheduled cron job?
+    CASE 
+      WHEN j.cron_schedule IS NOT NULL THEN 'SCHEDULED'
+      WHEN j.trigger_type = 'CRON' THEN 'SCHEDULED'
+      WHEN u.entity_type LIKE '%INTERACTIVE%' THEN 'INTERACTIVE'
+      WHEN u.entity_type LIKE '%SQL_WAREHOUSE%' THEN 'AD_HOC'
+      ELSE 'MANUAL'
+    END AS run_trigger_category,
     
     j.cron_schedule,
     j.schedule_timezone,
@@ -329,12 +358,12 @@ SELECT
     -- ========================================================================
     -- NOTEBOOK DETAILS
     -- ========================================================================
-    a.notebook_path,
+    u.notebook_path,
     
     -- ========================================================================
     -- CLUSTER DETAILS
     -- ========================================================================
-    a.cluster_id,
+    u.cluster_id,
     c.cluster_name,
     c.cluster_source,
     c.cluster_owner,
@@ -358,117 +387,148 @@ SELECT
     c.min_autoscale_workers,
     c.max_autoscale_workers,
     
-    -- Total cluster capacity (estimated)
+    -- Cluster size description
     CASE 
       WHEN c.worker_count IS NOT NULL THEN 
-        CONCAT(c.worker_count, ' workers (fixed)')
+        CONCAT(
+          COALESCE(CAST(c.worker_count AS STRING), '0'), ' workers (fixed) | ',
+          'Driver: ', COALESCE(c.driver_node_type, 'N/A'), ' | ',
+          'Workers: ', COALESCE(c.worker_node_type, 'N/A')
+        )
       WHEN c.min_autoscale_workers IS NOT NULL THEN 
-        CONCAT(c.min_autoscale_workers, '-', c.max_autoscale_workers, ' workers (autoscale)')
-      ELSE 'Unknown'
-    END AS cluster_worker_config,
+        CONCAT(
+          COALESCE(CAST(c.min_autoscale_workers AS STRING), '0'), '-', 
+          COALESCE(CAST(c.max_autoscale_workers AS STRING), '0'), ' workers (autoscale) | ',
+          'Driver: ', COALESCE(c.driver_node_type, 'N/A'), ' | ',
+          'Workers: ', COALESCE(c.worker_node_type, 'N/A')
+        )
+      WHEN u.is_serverless = 'true' THEN 'Serverless'
+      ELSE 'Unknown Configuration'
+    END AS cluster_size_description,
     
-    -- Total cores calculation
+    -- Estimated total cores at max capacity
     COALESCE(driver_specs.core_count, 0) + 
       (COALESCE(c.worker_count, c.max_autoscale_workers, 0) * COALESCE(worker_specs.core_count, 0)) 
       AS max_total_cores,
     
+    -- Estimated total memory at max capacity (GB)
+    COALESCE(driver_specs.memory_gb, 0) + 
+      (COALESCE(c.worker_count, c.max_autoscale_workers, 0) * COALESCE(worker_specs.memory_gb, 0)) 
+      AS max_total_memory_gb,
+    
     -- ========================================================================
     -- INSTANCE POOL DETAILS
     -- ========================================================================
-    a.instance_pool_id,
+    u.instance_pool_id,
     CASE 
-      WHEN a.instance_pool_id IS NOT NULL THEN 'Yes'
-      ELSE 'No'
-    END AS uses_instance_pool,
+      WHEN u.instance_pool_id IS NOT NULL THEN 'Pool-based'
+      WHEN u.is_serverless = 'true' THEN 'Serverless'
+      ELSE 'On-demand'
+    END AS compute_type,
     
     -- ========================================================================
     -- SQL WAREHOUSE DETAILS
     -- ========================================================================
-    a.warehouse_id,
+    u.warehouse_id,
     wh.warehouse_name,
     wh.warehouse_type,
     wh.warehouse_size,
-    CONCAT(wh.warehouse_min_clusters, '-', wh.warehouse_max_clusters) AS warehouse_cluster_range,
+    CONCAT(
+      COALESCE(CAST(wh.warehouse_min_clusters AS STRING), '1'), '-', 
+      COALESCE(CAST(wh.warehouse_max_clusters AS STRING), '1')
+    ) AS warehouse_cluster_range,
     
     -- ========================================================================
     -- DLT PIPELINE DETAILS
     -- ========================================================================
-    a.dlt_pipeline_id,
-    a.dlt_update_id,
+    u.dlt_pipeline_id,
+    u.dlt_update_id,
     p.pipeline_name,
     p.pipeline_type,
     p.pipeline_creator,
+    p.pipeline_run_as,
     
     -- ========================================================================
     -- PRODUCT FEATURES
     -- ========================================================================
-    a.is_photon,
-    a.is_serverless,
-    a.jobs_tier,
-    a.sku_name,
+    u.is_photon,
+    u.is_serverless,
+    u.jobs_tier,
+    u.sku_name,
     
     -- ========================================================================
     -- IDENTITY & COST ALLOCATION
     -- ========================================================================
-    a.run_as,
-    a.created_by,
-    a.custom_tags,
+    COALESCE(u.run_as, j.run_as_user_name, p.pipeline_run_as) AS run_as,
+    u.created_by,
+    u.custom_tags,
     
-    -- Extract common custom tags
-    a.custom_tags['ClientName'] AS client_name,
-    a.custom_tags['ServiceLine'] AS service_line,
-    a.custom_tags['TeamName'] AS team_name,
-    a.custom_tags['ENVIRONMENT'] AS environment,
-    a.custom_tags['OWNER'] AS owner_tag,
+    -- Extract common custom tags for easy filtering/grouping
+    u.custom_tags['ClientName'] AS client_name,
+    u.custom_tags['ServiceLine'] AS service_line,
+    u.custom_tags['TeamName'] AS team_name,
+    u.custom_tags['ENVIRONMENT'] AS environment,
+    u.custom_tags['OWNER'] AS owner_tag,
+    u.custom_tags['ENGAGEMENT_ID'] AS engagement_id,
+    u.custom_tags['DEPLOYMENT_ID'] AS deployment_id,
     
     -- ========================================================================
     -- COST METRICS
     -- ========================================================================
-    ROUND(a.total_dbu, 4) AS total_dbu,
-    ROUND(a.total_list_cost, 2) AS total_list_cost_usd,
-    ROUND(a.total_effective_cost, 2) AS total_effective_cost_usd,
+    ROUND(u.total_dbu, 4) AS total_dbu,
+    ROUND(u.total_list_cost, 2) AS total_list_cost_usd,
     
     -- ========================================================================
     -- EXECUTION TIME METRICS
     -- ========================================================================
-    a.execution_start_time,
-    a.execution_end_time,
-    a.total_usage_minutes AS billed_usage_minutes,
-    a.execution_wall_time_minutes AS execution_duration_minutes,
+    u.execution_start_time,
+    u.execution_end_time,
+    u.execution_duration_minutes,
     
     -- Format execution time for readability
     CASE 
-      WHEN a.execution_wall_time_minutes >= 1440 THEN 
-        CONCAT(FLOOR(a.execution_wall_time_minutes / 1440), 'd ', 
-               FLOOR(MOD(a.execution_wall_time_minutes, 1440) / 60), 'h ',
-               MOD(a.execution_wall_time_minutes, 60), 'm')
-      WHEN a.execution_wall_time_minutes >= 60 THEN 
-        CONCAT(FLOOR(a.execution_wall_time_minutes / 60), 'h ', 
-               MOD(a.execution_wall_time_minutes, 60), 'm')
+      WHEN u.execution_duration_minutes IS NULL THEN 'N/A'
+      WHEN u.execution_duration_minutes >= 1440 THEN 
+        CONCAT(
+          CAST(FLOOR(u.execution_duration_minutes / 1440) AS STRING), 'd ', 
+          CAST(FLOOR(MOD(u.execution_duration_minutes, 1440) / 60) AS STRING), 'h ',
+          CAST(CAST(MOD(u.execution_duration_minutes, 60) AS INT) AS STRING), 'm'
+        )
+      WHEN u.execution_duration_minutes >= 60 THEN 
+        CONCAT(
+          CAST(FLOOR(u.execution_duration_minutes / 60) AS STRING), 'h ', 
+          CAST(CAST(MOD(u.execution_duration_minutes, 60) AS INT) AS STRING), 'm'
+        )
       ELSE 
-        CONCAT(a.execution_wall_time_minutes, 'm')
+        CONCAT(CAST(ROUND(u.execution_duration_minutes, 1) AS STRING), 'm')
     END AS execution_duration_formatted,
+    
+    -- Execution hours (for easier aggregation)
+    ROUND(u.execution_duration_minutes / 60.0, 2) AS execution_duration_hours,
     
     -- ========================================================================
     -- METADATA
     -- ========================================================================
-    a.usage_record_count
+    u.usage_record_count,
+    u.run_id,
+    u.entity_id
 
-FROM aggregated_usage a
+FROM usage_with_duration u
 
 -- Join workspace info
 LEFT JOIN system.access.workspaces_latest w
-  ON a.workspace_id = w.workspace_id
+  ON u.workspace_id = w.workspace_id
 
--- Join job info
+-- Join job info (job_id in usage is STRING, in jobs table is BIGINT)
 LEFT JOIN most_recent_jobs j
-  ON a.workspace_id = j.workspace_id 
-  AND a.job_id = CAST(j.job_id AS STRING)
+  ON u.entity_type LIKE '%JOB%'
+  AND u.workspace_id = j.workspace_id 
+  AND u.job_id = CAST(j.job_id AS STRING)
 
 -- Join cluster info
 LEFT JOIN most_recent_clusters c
-  ON a.workspace_id = c.workspace_id 
-  AND a.cluster_id = c.cluster_id
+  ON u.workspace_id = c.workspace_id 
+  AND u.cluster_id = c.cluster_id
 
 -- Join driver node specs
 LEFT JOIN node_specs driver_specs
@@ -480,37 +540,84 @@ LEFT JOIN node_specs worker_specs
 
 -- Join warehouse info
 LEFT JOIN warehouse_info wh
-  ON a.workspace_id = wh.workspace_id 
-  AND a.warehouse_id = wh.warehouse_id
+  ON u.workspace_id = wh.workspace_id 
+  AND u.warehouse_id = wh.warehouse_id
 
 -- Join pipeline info
-LEFT JOIN pipeline_info p
-  ON a.workspace_id = p.workspace_id 
-  AND a.dlt_pipeline_id = p.pipeline_id
+LEFT JOIN most_recent_pipelines p
+  ON u.entity_type LIKE '%PIPELINE%'
+  AND u.workspace_id = p.workspace_id 
+  AND u.dlt_pipeline_id = p.pipeline_id
 
 ORDER BY 
-  a.total_list_cost DESC,
-  a.execution_start_time DESC;
+  u.total_list_cost DESC,
+  u.execution_start_time DESC;
 
 
 -- ============================================================================
--- ALTERNATIVE: SUMMARY VIEW BY USAGE TYPE
+-- OPTIONAL: PARAMETERIZED VERSION (for Databricks SQL Dashboards)
 -- ============================================================================
--- Uncomment below for a high-level summary instead of detailed records
+-- Uncomment and use with SQL parameters for interactive filtering
+/*
+WITH 
+-- ... (same CTEs as above) ...
+-- Replace the WHERE clause in usage_with_cost with:
+  WHERE 
+    u.usage_date BETWEEN :param_start_date AND :param_end_date
+    AND IF(:param_workspace = '<ALL WORKSPACES>', TRUE, w.workspace_name = :param_workspace)
+    AND IF(:param_run_as = '<ALL USERS>', TRUE, u.identity_metadata.run_as = :param_run_as)
+    AND IF(
+      :param_cluster_type = '<ALL CLUSTER TYPES>',
+      TRUE,
+      IF(
+        :param_cluster_type = 'Serverless',
+        u.product_features.is_serverless = 'true',
+        u.product_features.is_serverless = 'false'
+      )
+    )
+*/
 
+
+-- ============================================================================
+-- SUMMARY BY CATEGORY (Optional - Uncomment to use)
+-- ============================================================================
 /*
 SELECT
     billing_origin_product AS usage_category,
-    COUNT(DISTINCT COALESCE(job_run_id, cluster_id, warehouse_id, dlt_update_id)) AS execution_count,
+    entity_type,
+    COUNT(DISTINCT run_id) AS total_runs,
     COUNT(DISTINCT job_id) AS unique_jobs,
     COUNT(DISTINCT cluster_id) AS unique_clusters,
-    SUM(total_dbu) AS total_dbu,
-    ROUND(SUM(total_list_cost), 2) AS total_cost_usd,
-    SUM(execution_wall_time_minutes) AS total_execution_minutes,
-    ROUND(SUM(execution_wall_time_minutes) / 60.0, 1) AS total_execution_hours
+    COUNT(DISTINCT dlt_pipeline_id) AS unique_pipelines,
+    ROUND(SUM(total_dbu), 2) AS total_dbu,
+    ROUND(SUM(total_list_cost_usd), 2) AS total_cost_usd,
+    ROUND(SUM(execution_duration_minutes), 0) AS total_execution_minutes,
+    ROUND(SUM(execution_duration_minutes) / 60.0, 1) AS total_execution_hours
 FROM (
-    -- Use the main query above as subquery
+    -- Insert main query here
 )
-GROUP BY billing_origin_product
+GROUP BY billing_origin_product, entity_type
+ORDER BY total_cost_usd DESC;
+*/
+
+
+-- ============================================================================
+-- SUMMARY BY CLIENT/TEAM (Optional - Uncomment to use)
+-- ============================================================================
+/*
+SELECT
+    client_name,
+    service_line,
+    team_name,
+    environment,
+    COUNT(DISTINCT run_id) AS total_runs,
+    ROUND(SUM(total_dbu), 2) AS total_dbu,
+    ROUND(SUM(total_list_cost_usd), 2) AS total_cost_usd,
+    ROUND(SUM(execution_duration_hours), 1) AS total_execution_hours
+FROM (
+    -- Insert main query here
+)
+WHERE client_name IS NOT NULL
+GROUP BY client_name, service_line, team_name, environment
 ORDER BY total_cost_usd DESC;
 */

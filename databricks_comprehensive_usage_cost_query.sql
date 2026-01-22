@@ -1,14 +1,20 @@
 -- ============================================================================
--- COMPREHENSIVE DATABRICKS USAGE & COST ANALYSIS QUERY (v4 - Business Focused)
+-- COMPREHENSIVE DATABRICKS USAGE & COST ANALYSIS QUERY (v5 - Fixed Issues)
 -- ============================================================================
 -- 
+-- FIXES IN V5:
+--   - notebook_path: Added note that billing doesn't capture notebook for jobs
+--   - cron_schedule: Added job_found flag to debug join issues
+--   - how_was_it_triggered: Fixed logic to handle missing job metadata
+--   - warehouse: Clarified that warehouse columns only apply to SQL usage
+--
 -- BUSINESS GOALS ADDRESSED:
---   1. Job run cost of a single job → total_list_cost_usd (grouped by job_run_id)
---   2. Total execution time → execution_time_minutes, execution_time_formatted
---   3. Execution source → executed_from (Job/Pipeline/Personal Notebook/SQL Warehouse)
+--   1. Job run cost → total_list_cost_usd
+--   2. Execution time → execution_time_minutes/formatted
+--   3. Execution source → executed_from
 --   4. Cluster used → cluster_name, cluster_id
---   5. Trigger type → how_was_it_triggered (Cron Schedule/Manual/Interactive/SQL Query)
---   6. Node & cluster details → node_details, cluster_size_details, warehouse_details
+--   5. Trigger type → how_was_it_triggered
+--   6. Node/Warehouse/Cluster details → detailed columns
 --
 -- Filters:
 --   - Date: 2025-01-01 to 2025-12-31
@@ -34,6 +40,8 @@ usage_with_cost AS (
     u.usage_metadata.dlt_update_id AS dlt_update_id,
     u.usage_metadata.instance_pool_id AS instance_pool_id,
     u.usage_metadata.node_type AS node_type,
+    -- NOTE: notebook_path is ONLY populated for ALL_PURPOSE (interactive) usage
+    -- For JOBS, the notebook info is in job task config, NOT in billing metadata
     u.usage_metadata.notebook_path AS notebook_path,
     u.identity_metadata.run_as AS run_as,
     u.custom_tags,
@@ -64,18 +72,28 @@ workspace_info AS (
 ),
 
 -- ============================================================================
--- CTE 3: JOBS
+-- CTE 3: ALL JOBS (Not filtered by workspace to catch cross-workspace refs)
+-- Convert job_id to STRING for easier joining
 -- ============================================================================
 most_recent_jobs AS (
   SELECT
-    workspace_id,
-    job_id,
+    workspace_id AS job_workspace_id,
+    CAST(job_id AS STRING) AS job_id_str,  -- Convert to STRING for join
+    job_id AS job_id_original,
     name AS job_name,
     creator_user_name,
     run_as_user_name,
     trigger_type,
     trigger.schedule.quartz_cron_expression AS cron_schedule,
     trigger.schedule.timezone_id AS schedule_timezone,
+    -- Check if job has any schedule configuration
+    CASE 
+      WHEN trigger.schedule.quartz_cron_expression IS NOT NULL THEN TRUE
+      WHEN trigger_type = 'CRON' THEN TRUE
+      WHEN trigger_type = 'CONTINUOUS' THEN TRUE
+      WHEN trigger_type = 'FILE_ARRIVAL' THEN TRUE
+      ELSE FALSE
+    END AS has_schedule,
     ROW_NUMBER() OVER(PARTITION BY workspace_id, job_id ORDER BY change_time DESC) AS rn
   FROM system.lakeflow.jobs
   WHERE workspace_id = 5244115429641560
@@ -109,11 +127,11 @@ most_recent_clusters AS (
 -- ============================================================================
 node_specs AS (
   SELECT DISTINCT
-    ns.node_type,
-    ns.core_count,
-    ns.memory_mb,
-    ROUND(ns.memory_mb / 1024.0, 1) AS memory_gb
-  FROM system.compute.node_types ns
+    node_type,
+    core_count,
+    memory_mb,
+    ROUND(memory_mb / 1024.0, 1) AS memory_gb
+  FROM system.compute.node_types
 ),
 
 -- ============================================================================
@@ -148,7 +166,7 @@ most_recent_pipelines AS (
 ),
 
 -- ============================================================================
--- CTE 8: AGGREGATE USAGE BY RUN (Each row = one job run / one session)
+-- CTE 8: AGGREGATE USAGE BY RUN
 -- ============================================================================
 aggregated_usage AS (
   SELECT
@@ -188,11 +206,11 @@ usage_final AS (
 )
 
 -- ============================================================================
--- FINAL SELECT - ORGANIZED BY BUSINESS PRIORITY
+-- FINAL SELECT
 -- ============================================================================
 SELECT
     -- =========================================================================
-    -- GOAL 1: JOB RUN COST (Cost of single job run)
+    -- GOAL 1: JOB RUN COST
     -- =========================================================================
     ROUND(u.total_list_cost, 2) AS total_list_cost_usd,
     ROUND(u.total_dbu, 4) AS total_dbu_consumed,
@@ -217,7 +235,7 @@ SELECT
     u.execution_end_time,
     
     -- =========================================================================
-    -- GOAL 3: WHERE WAS IT EXECUTED FROM (Job/Pipeline/Personal Notebook/SQL)
+    -- GOAL 3: WHERE WAS IT EXECUTED FROM
     -- =========================================================================
     CASE 
       WHEN u.billing_origin_product = 'JOBS' AND u.job_run_id IS NOT NULL 
@@ -235,7 +253,18 @@ SELECT
       ELSE u.billing_origin_product
     END AS executed_from,
     
+    -- Notebook path (NOTE: Only available for ALL_PURPOSE/interactive usage)
+    -- For JOBS, notebook info is in job task configuration, not billing metadata
     u.notebook_path,
+    CASE 
+      WHEN u.billing_origin_product = 'JOBS' AND u.notebook_path IS NULL 
+        THEN 'Notebook path not available in billing data for jobs - check job task configuration'
+      WHEN u.billing_origin_product = 'ALL_PURPOSE' AND u.notebook_path IS NULL 
+        THEN 'No notebook - cluster session only'
+      WHEN u.notebook_path IS NOT NULL 
+        THEN u.notebook_path
+      ELSE 'N/A'
+    END AS notebook_path_info,
     
     -- Job/Pipeline Name & ID
     COALESCE(j.job_name, u.job_name_from_usage, p.pipeline_name) AS job_or_pipeline_name,
@@ -249,87 +278,90 @@ SELECT
     -- =========================================================================
     c.cluster_name,
     u.cluster_id,
-    c.cluster_source AS cluster_created_by,  -- JOB, UI, API
+    c.cluster_source AS cluster_created_by,
     c.cluster_owner,
     c.dbr_version AS databricks_runtime,
     
     -- =========================================================================
-    -- GOAL 5: HOW WAS IT TRIGGERED (Cron/Manual/Interactive/SQL)
+    -- GOAL 5: HOW WAS IT TRIGGERED (FIXED LOGIC)
     -- =========================================================================
     CASE
-      -- Interactive cluster usage (personal notebook)
+      -- Interactive cluster usage (personal notebook/session)
       WHEN u.billing_origin_product = 'ALL_PURPOSE' 
         THEN 'Manual - Personal Interactive Cluster'
       
-      -- SQL Warehouse queries
+      -- SQL Warehouse queries (always manual/ad-hoc)
       WHEN u.billing_origin_product = 'SQL' 
         THEN 'Manual - SQL Warehouse Query'
       
-      -- DLT Pipelines
-      WHEN u.billing_origin_product = 'DLT' AND p.is_serverless_pipeline = TRUE 
-        THEN 'Automated - DLT Pipeline (Serverless)'
+      -- DLT Pipelines (usually automated)
       WHEN u.billing_origin_product = 'DLT' 
         THEN 'Automated - DLT Pipeline'
       
-      -- Jobs with cron schedule
-      WHEN j.cron_schedule IS NOT NULL 
-        THEN 'Automated - Cron Scheduled Job'
-      WHEN j.trigger_type = 'CRON' 
+      -- JOBS: Check if we found the job in lakeflow.jobs
+      -- If job found and has cron schedule
+      WHEN u.billing_origin_product = 'JOBS' AND j.cron_schedule IS NOT NULL 
         THEN 'Automated - Cron Scheduled Job'
       
-      -- Jobs with other trigger types
-      WHEN j.trigger_type = 'CONTINUOUS' 
+      -- If job found and trigger_type indicates schedule
+      WHEN u.billing_origin_product = 'JOBS' AND j.trigger_type = 'CRON' 
+        THEN 'Automated - Cron Scheduled Job'
+      WHEN u.billing_origin_product = 'JOBS' AND j.trigger_type = 'CONTINUOUS' 
         THEN 'Automated - Continuous Job'
-      WHEN j.trigger_type = 'FILE_ARRIVAL' 
+      WHEN u.billing_origin_product = 'JOBS' AND j.trigger_type = 'FILE_ARRIVAL' 
         THEN 'Automated - File Arrival Trigger'
-      WHEN j.trigger_type IS NOT NULL 
+      WHEN u.billing_origin_product = 'JOBS' AND j.trigger_type IS NOT NULL 
         THEN CONCAT('Automated - ', j.trigger_type)
       
-      -- Jobs without schedule (manual or API triggered)
-      WHEN u.job_id IS NOT NULL AND j.cron_schedule IS NULL 
+      -- If job found but no schedule (manual/API triggered)
+      WHEN u.billing_origin_product = 'JOBS' AND j.job_id_str IS NOT NULL AND j.has_schedule = FALSE
         THEN 'Manual - Job Run (API/UI Triggered)'
       
-      -- Serverless job compute
-      WHEN u.is_serverless = 'true' AND u.job_id IS NOT NULL 
-        THEN 'Manual - Serverless Job Compute'
+      -- If job NOT found in lakeflow.jobs (deleted job or data issue)
+      WHEN u.billing_origin_product = 'JOBS' AND j.job_id_str IS NULL 
+        THEN 'Unknown - Job Not Found in Catalog (may be deleted)'
       
       ELSE 'Unknown'
     END AS how_was_it_triggered,
     
+    -- Cron schedule details (will be NULL if job not found or no schedule)
     j.cron_schedule,
     j.schedule_timezone,
+    
+    -- Debug: Was the job found in lakeflow.jobs?
+    CASE 
+      WHEN u.billing_origin_product != 'JOBS' THEN 'N/A - Not a Job'
+      WHEN j.job_id_str IS NOT NULL THEN 'Yes - Job Found'
+      ELSE 'No - Job Not Found in system.lakeflow.jobs'
+    END AS job_metadata_found,
     
     -- =========================================================================
     -- GOAL 6: NODE, WAREHOUSE, AND CLUSTER SIZE DETAILS
     -- =========================================================================
     
-    -- Node Details
+    -- Node Details (from usage_metadata)
     u.node_type AS node_type_used,
     node_specs.core_count AS node_cores,
     node_specs.memory_gb AS node_memory_gb,
     
-    -- Cluster Size Details (for classic compute)
+    -- Cluster Size Details
     c.driver_node_type,
     driver_specs.core_count AS driver_cores,
     driver_specs.memory_gb AS driver_memory_gb,
     c.worker_node_type,
     worker_specs.core_count AS worker_cores,
     worker_specs.memory_gb AS worker_memory_gb,
-    
-    CASE 
-      WHEN c.worker_count IS NOT NULL THEN c.worker_count
-      ELSE NULL
-    END AS fixed_worker_count,
-    
+    c.worker_count AS fixed_worker_count,
     CASE 
       WHEN c.min_autoscale_workers IS NOT NULL 
         THEN CONCAT(c.min_autoscale_workers, ' to ', c.max_autoscale_workers)
       ELSE NULL
     END AS autoscale_worker_range,
     
-    -- Total Cluster Capacity
+    -- Full cluster description
     CASE 
-      WHEN u.is_serverless = 'true' THEN 'Serverless (auto-scaled)'
+      WHEN u.is_serverless = 'true' THEN 'Serverless (auto-scaled by Databricks)'
+      WHEN c.cluster_id IS NULL THEN 'Cluster details not found'
       WHEN c.worker_count IS NOT NULL THEN 
         CONCAT(
           'Fixed: ', c.worker_count, ' workers | ',
@@ -345,6 +377,7 @@ SELECT
       ELSE 'Unknown Configuration'
     END AS cluster_size_details,
     
+    -- Total capacity
     COALESCE(driver_specs.core_count, 0) + 
       (COALESCE(c.worker_count, c.max_autoscale_workers, 0) * COALESCE(worker_specs.core_count, 0)) 
       AS total_max_cores,
@@ -353,25 +386,29 @@ SELECT
       (COALESCE(c.worker_count, c.max_autoscale_workers, 0) * COALESCE(worker_specs.memory_gb, 0)) 
       AS total_max_memory_gb,
     
-    -- Instance Pool Details
+    -- Instance Pool
     u.instance_pool_id,
     CASE 
       WHEN u.instance_pool_id IS NOT NULL THEN 'Yes - Using Instance Pool'
-      ELSE 'No - On-Demand/Serverless'
+      ELSE 'No - On-Demand or Serverless'
     END AS uses_instance_pool,
     
-    -- SQL Warehouse Details
+    -- =========================================================================
+    -- SQL WAREHOUSE DETAILS (Only populated for SQL usage)
+    -- For JOBS/ALL_PURPOSE/DLT these will be NULL - this is expected!
+    -- =========================================================================
     u.warehouse_id,
     wh.warehouse_name,
-    wh.warehouse_type AS warehouse_type,  -- SERVERLESS, PRO, CLASSIC
-    wh.warehouse_size AS warehouse_size,  -- SMALL, MEDIUM, LARGE, etc.
+    wh.warehouse_type,
+    wh.warehouse_size,
     CASE 
-      WHEN wh.warehouse_id IS NOT NULL THEN
-        CONCAT(
-          'Type: ', COALESCE(wh.warehouse_type, 'N/A'), ' | ',
-          'Size: ', COALESCE(wh.warehouse_size, 'N/A')
-        )
-      ELSE NULL
+      WHEN u.billing_origin_product != 'SQL' 
+        THEN 'N/A - Not SQL Warehouse Usage'
+      WHEN u.warehouse_id IS NULL 
+        THEN 'Warehouse ID not captured in billing'
+      WHEN wh.warehouse_id IS NULL 
+        THEN 'Warehouse not found in system.compute.warehouses'
+      ELSE CONCAT('Type: ', COALESCE(wh.warehouse_type, 'N/A'), ' | Size: ', COALESCE(wh.warehouse_size, 'N/A'))
     END AS warehouse_details,
     
     -- DLT Pipeline Details
@@ -380,10 +417,8 @@ SELECT
     p.pipeline_creator,
     
     -- =========================================================================
-    -- ADDITIONAL CONTEXT
+    -- ENTITY URL
     -- =========================================================================
-    
-    -- Entity URL (clickable link for dashboards)
     CASE 
       WHEN u.job_id IS NOT NULL THEN 
         CONCAT('<a href="', w.workspace_url, '/jobs/', u.job_id, '" target="_blank">', 
@@ -423,7 +458,8 @@ SELECT
     w.workspace_name,
     
     -- SKU
-    u.sku_name
+    u.sku_name,
+    u.billing_origin_product
 
 FROM usage_final u
 
@@ -431,12 +467,14 @@ FROM usage_final u
 LEFT JOIN workspace_info w 
   ON u.workspace_id = w.workspace_id
 
+-- Jobs join: Use STRING comparison (job_id in usage is STRING)
 LEFT JOIN most_recent_jobs j
   ON u.job_id IS NOT NULL
-  AND u.job_id = CAST(j.job_id AS STRING)
+  AND u.job_id = j.job_id_str
 
 LEFT JOIN most_recent_clusters c 
-  ON u.cluster_id = c.cluster_id
+  ON u.cluster_id IS NOT NULL
+  AND u.cluster_id = c.cluster_id
 
 LEFT JOIN node_specs 
   ON u.node_type = node_specs.node_type
@@ -447,8 +485,10 @@ LEFT JOIN node_specs driver_specs
 LEFT JOIN node_specs worker_specs 
   ON c.worker_node_type = worker_specs.node_type
 
+-- Warehouse join: Only for SQL usage
 LEFT JOIN warehouse_info wh
-  ON u.warehouse_id IS NOT NULL
+  ON u.billing_origin_product = 'SQL'
+  AND u.warehouse_id IS NOT NULL
   AND u.warehouse_id = wh.warehouse_id
 
 LEFT JOIN most_recent_pipelines p

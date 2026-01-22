@@ -101,8 +101,9 @@ def export_to_csv_single(df, file_path):
     
     # If saved to FileStore, provide download URL
     if "/dbfs/FileStore/" in file_path:
-        relative_path = file_path.replace("/dbfs/FileStore/", "")
-        print(f"\nDownload URL: https://<your-workspace>.azuredatabricks.net/files/{relative_path}")
+        download_url = get_download_link(file_path)
+        if download_url:
+            print(f"\nDownload URL: {download_url}")
     
     return file_path
 
@@ -145,8 +146,9 @@ def export_to_excel(df, file_path, sheet_name="Billing Data"):
         
         # If saved to FileStore, provide download URL
         if "/dbfs/FileStore/" in file_path:
-            relative_path = file_path.replace("/dbfs/FileStore/", "")
-            print(f"\nDownload URL: https://<your-workspace>.azuredatabricks.net/files/{relative_path}")
+            download_url = get_download_link(file_path)
+            if download_url:
+                print(f"\nDownload URL: {download_url}")
         
         return file_path
     except ImportError:
@@ -220,6 +222,46 @@ def export_to_adls(df, storage_account, container, file_path, file_format="csv")
     return adls_path
 
 
+def get_workspace_url():
+    """
+    Get the current Databricks workspace URL.
+    
+    Returns:
+        str: Workspace URL (e.g., "adb-1234567890.0.azuredatabricks.net")
+    """
+    # Try multiple methods to get the workspace URL
+    try:
+        # Method 1: From Spark config
+        workspace_url = spark.conf.get("spark.databricks.workspaceUrl")
+        if workspace_url:
+            return workspace_url
+    except:
+        pass
+    
+    try:
+        # Method 2: From notebook context
+        ctx = dbutils.notebook.entry_point.getDbutils().notebook().getContext()
+        browser_host = ctx.browserHostName().get()
+        if browser_host:
+            return browser_host
+    except:
+        pass
+    
+    try:
+        # Method 3: From API URL in context
+        ctx = dbutils.notebook.entry_point.getDbutils().notebook().getContext()
+        api_url = ctx.apiUrl().get()
+        if api_url:
+            # Extract hostname from https://adb-xxx.azuredatabricks.net
+            return api_url.replace("https://", "").rstrip("/")
+    except:
+        pass
+    
+    # Fallback: Use the known workspace URL
+    # Update this if your workspace URL is different
+    return "adb-5244115429641560.0.azuredatabricks.net"
+
+
 def get_download_link(dbfs_path):
     """
     Generate a downloadable URL for a file in DBFS FileStore.
@@ -238,12 +280,42 @@ def get_download_link(dbfs_path):
         return None
     
     relative_path = dbfs_path.replace("/dbfs/FileStore/", "")
-    # Get workspace URL from context
+    workspace_url = get_workspace_url()
+    
+    return f"https://{workspace_url}/files/{relative_path}"
+
+
+def verify_file_exists(file_path):
+    """
+    Verify that a file exists in DBFS.
+    
+    Args:
+        file_path (str): Path to file (e.g., "/dbfs/FileStore/exports/file.csv")
+    
+    Returns:
+        bool: True if file exists, False otherwise
+    """
     try:
-        workspace_url = spark.conf.get("spark.databricks.workspaceUrl")
-        return f"https://{workspace_url}/files/{relative_path}"
+        # Check using Python os
+        if os.path.exists(file_path):
+            file_size = os.path.getsize(file_path)
+            print(f"File verified: {file_path} ({file_size:,} bytes)")
+            return True
     except:
-        return f"https://<your-workspace>.azuredatabricks.net/files/{relative_path}"
+        pass
+    
+    try:
+        # Check using dbutils
+        dbfs_path = file_path.replace("/dbfs/", "dbfs:/")
+        files = dbutils.fs.ls(os.path.dirname(dbfs_path))
+        for f in files:
+            if f.path.endswith(os.path.basename(file_path)):
+                print(f"File verified: {f.path} ({f.size:,} bytes)")
+                return True
+    except Exception as e:
+        print(f"Warning: Could not verify file: {e}")
+    
+    return False
 
 
 def trigger_auto_download(file_path, file_format="csv"):
@@ -258,12 +330,21 @@ def trigger_auto_download(file_path, file_format="csv"):
         This uses JavaScript to automatically trigger a download.
         The file must be in /dbfs/FileStore/ for this to work.
     """
+    # Verify file exists
+    verify_file_exists(file_path)
+    
     # Get the download URL
     download_url = get_download_link(file_path)
     
     if download_url is None:
         print("Cannot trigger auto-download: file not in FileStore")
         return
+    
+    # Print the full download URL clearly
+    print(f"\n{'='*60}")
+    print("FULL DOWNLOAD URL (copy this if auto-download fails):")
+    print(download_url)
+    print('='*60 + "\n")
     
     # Extract filename from path
     filename = os.path.basename(file_path)
@@ -328,6 +409,16 @@ def trigger_auto_download(file_path, file_format="csv"):
             <div class="file-info">
                 <strong>File:</strong> {filename}<br>
                 <strong>Format:</strong> {file_format.upper()}
+            </div>
+            <div style="margin-top: 15px; padding: 10px; background: rgba(255,255,255,0.2); border-radius: 5px; word-break: break-all;">
+                <strong>Full URL:</strong><br>
+                <input type="text" value="{download_url}" id="urlBox" readonly 
+                       style="width: 100%; padding: 8px; border: none; border-radius: 3px; margin-top: 5px; font-size: 12px;"
+                       onclick="this.select();">
+                <button onclick="navigator.clipboard.writeText('{download_url}'); this.innerHTML='Copied!';" 
+                        style="margin-top: 5px; padding: 5px 15px; background: #667eea; color: white; border: none; border-radius: 3px; cursor: pointer;">
+                    Copy URL
+                </button>
             </div>
         </div>
         
@@ -401,7 +492,7 @@ def download_chunk_data(external_link, headers):
     row_count = external_link.get('row_count', 'unknown')
     
     print(f"  Expected rows in chunk: {row_count}")
-    print(f"  Downloading from URL: {link_url[:100]}..." if len(str(link_url)) > 100 else f"  Downloading from URL: {link_url}")
+    print(f"  Downloading from URL: {link_url}")
     
     # Build request headers from the external link's headers
     request_headers = {}

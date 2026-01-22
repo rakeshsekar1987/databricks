@@ -349,7 +349,22 @@ def trigger_auto_download(file_path, file_format="csv"):
     # Extract filename from path
     filename = os.path.basename(file_path)
     
-    # Create HTML with JavaScript for auto-download
+    # Determine file extension and MIME type
+    if file_format.lower() == "csv":
+        mime_type = "text/csv"
+        file_ext = ".csv"
+    elif file_format.lower() == "excel":
+        mime_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        file_ext = ".xlsx"
+    else:
+        mime_type = "application/octet-stream"
+        file_ext = ""
+    
+    # Ensure filename has correct extension
+    if not filename.endswith(file_ext) and file_ext:
+        filename = filename + file_ext
+    
+    # Create HTML with JavaScript for auto-download as CSV file
     html_content = f"""
     <html>
     <head>
@@ -382,6 +397,7 @@ def trigger_auto_download(file_path, file_format="csv"):
                 font-size: 16px;
                 margin: 10px 0;
                 transition: transform 0.2s, box-shadow 0.2s;
+                cursor: pointer;
             }}
             .download-link:hover {{
                 transform: scale(1.05);
@@ -396,51 +412,99 @@ def trigger_auto_download(file_path, file_format="csv"):
                 margin-top: 10px;
                 font-size: 14px;
             }}
+            .url-box {{
+                margin-top: 15px;
+                padding: 10px;
+                background: rgba(255,255,255,0.2);
+                border-radius: 5px;
+                word-break: break-all;
+            }}
         </style>
     </head>
     <body>
         <div class="download-container">
             <div class="download-icon">📥</div>
-            <div class="download-title">Export Complete!</div>
-            <div class="status" id="status">Starting download automatically...</div>
-            <a href="{download_url}" class="download-link" id="downloadLink" download="{filename}">
-                Click here if download doesn't start
-            </a>
+            <div class="download-title">Export Complete - {file_format.upper()} File Ready!</div>
+            <div class="status" id="status">⏳ Preparing {file_format.upper()} download...</div>
+            
+            <button class="download-link" id="downloadBtn" onclick="forceDownload()">
+                ⬇️ Download {file_format.upper()} File
+            </button>
+            
             <div class="file-info">
                 <strong>File:</strong> {filename}<br>
-                <strong>Format:</strong> {file_format.upper()}
+                <strong>Format:</strong> {file_format.upper()}<br>
+                <strong>Type:</strong> {mime_type}
             </div>
-            <div style="margin-top: 15px; padding: 10px; background: rgba(255,255,255,0.2); border-radius: 5px; word-break: break-all;">
-                <strong>Full URL:</strong><br>
+            
+            <div class="url-box">
+                <strong>Direct Download URL:</strong><br>
                 <input type="text" value="{download_url}" id="urlBox" readonly 
-                       style="width: 100%; padding: 8px; border: none; border-radius: 3px; margin-top: 5px; font-size: 12px;"
+                       style="width: 100%; padding: 8px; border: none; border-radius: 3px; margin-top: 5px; font-size: 11px;"
                        onclick="this.select();">
-                <button onclick="navigator.clipboard.writeText('{download_url}'); this.innerHTML='Copied!';" 
+                <br>
+                <button onclick="navigator.clipboard.writeText('{download_url}'); this.innerHTML='✅ Copied!';" 
                         style="margin-top: 5px; padding: 5px 15px; background: #667eea; color: white; border: none; border-radius: 3px; cursor: pointer;">
-                    Copy URL
+                    📋 Copy URL
                 </button>
+                <a href="{download_url}" download="{filename}" 
+                   style="margin-left: 10px; padding: 5px 15px; background: #28a745; color: white; border: none; border-radius: 3px; cursor: pointer; text-decoration: none; display: inline-block;">
+                    ⬇️ Direct Link
+                </a>
             </div>
         </div>
         
         <script>
-            // Auto-trigger download after a short delay
-            setTimeout(function() {{
-                var link = document.getElementById('downloadLink');
+            var fileUrl = '{download_url}';
+            var fileName = '{filename}';
+            var mimeType = '{mime_type}';
+            
+            function forceDownload() {{
                 var status = document.getElementById('status');
+                status.innerHTML = '⏳ Fetching file...';
                 
-                // Method 1: Create a hidden iframe to trigger download
-                var iframe = document.createElement('iframe');
-                iframe.style.display = 'none';
-                iframe.src = '{download_url}';
-                document.body.appendChild(iframe);
-                
-                // Update status
-                status.innerHTML = '✅ Download started! Check your browser downloads.';
-                
-                // Method 2: Also try window.open as backup (some browsers block iframe downloads)
-                // Uncomment if iframe method doesn't work:
-                // window.open('{download_url}', '_blank');
-            }}, 1500);
+                // Method: Fetch the file and force download as blob
+                fetch(fileUrl)
+                    .then(function(response) {{
+                        if (!response.ok) {{
+                            throw new Error('Network response was not ok');
+                        }}
+                        return response.blob();
+                    }})
+                    .then(function(blob) {{
+                        // Create a blob with the correct MIME type
+                        var csvBlob = new Blob([blob], {{ type: mimeType }});
+                        
+                        // Create download link
+                        var downloadUrl = window.URL.createObjectURL(csvBlob);
+                        var a = document.createElement('a');
+                        a.style.display = 'none';
+                        a.href = downloadUrl;
+                        a.download = fileName;
+                        
+                        // Trigger download
+                        document.body.appendChild(a);
+                        a.click();
+                        
+                        // Cleanup
+                        window.URL.revokeObjectURL(downloadUrl);
+                        document.body.removeChild(a);
+                        
+                        status.innerHTML = '✅ Download started! Check your browser downloads folder.';
+                    }})
+                    .catch(function(error) {{
+                        console.error('Download error:', error);
+                        status.innerHTML = '⚠️ Auto-download failed. Please use the Direct Link button below.';
+                        
+                        // Fallback: try opening in new tab
+                        window.open(fileUrl, '_blank');
+                    }});
+            }}
+            
+            // Auto-trigger download after page loads
+            setTimeout(function() {{
+                forceDownload();
+            }}, 1000);
         </script>
     </body>
     </html>

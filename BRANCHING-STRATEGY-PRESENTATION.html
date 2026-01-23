@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Enterprise Branching & Release Strategy</title>
+    <title>Complete Branching & Release Strategy</title>
     <style>
         :root {
             --primary: #2563eb;
@@ -12,14 +12,19 @@
             --warning: #f59e0b;
             --danger: #ef4444;
             --info: #06b6d4;
-            --dark: #1e293b;
+            --pink: #ec4899;
+            --dark: #0f172a;
+            --darker: #020617;
             --light: #f1f5f9;
+            
+            /* Branch colors */
+            --master: #10b981;
             --develop: #3b82f6;
             --release: #8b5cf6;
-            --master: #10b981;
             --feature: #06b6d4;
             --hotfix: #ef4444;
             --advance: #f59e0b;
+            --bugfix: #ec4899;
         }
 
         * {
@@ -29,38 +34,53 @@
         }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: var(--darker);
             color: #e2e8f0;
-            min-height: 100vh;
+            line-height: 1.6;
         }
 
+        /* Slide Container */
         .slide {
             min-height: 100vh;
-            padding: 40px;
+            padding: 30px 50px;
             display: flex;
             flex-direction: column;
-            border-bottom: 2px solid rgba(255,255,255,0.1);
+            position: relative;
+            background: linear-gradient(180deg, var(--darker) 0%, var(--dark) 100%);
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .slide-number {
+            position: absolute;
+            top: 20px;
+            right: 30px;
+            background: rgba(255,255,255,0.1);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            backdrop-filter: blur(10px);
         }
 
         .slide-header {
             text-align: center;
-            margin-bottom: 40px;
+            margin-bottom: 30px;
         }
 
         .slide-header h1 {
-            font-size: 2.5rem;
-            background: linear-gradient(90deg, var(--primary), var(--secondary));
+            font-size: 2.8rem;
+            background: linear-gradient(135deg, var(--primary), var(--secondary), var(--pink));
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
             margin-bottom: 10px;
+            font-weight: 700;
         }
 
         .slide-header h2 {
-            font-size: 1.8rem;
-            color: var(--info);
-            margin-bottom: 10px;
+            font-size: 2rem;
+            color: #fff;
+            margin-bottom: 8px;
         }
 
         .slide-header p {
@@ -68,157 +88,369 @@
             font-size: 1.1rem;
         }
 
-        .slide-number {
-            position: absolute;
-            top: 20px;
-            right: 40px;
-            background: rgba(255,255,255,0.1);
-            padding: 8px 16px;
+        /* Enhanced Branch Diagram */
+        .branch-diagram-container {
+            background: linear-gradient(135deg, rgba(15,23,42,0.9), rgba(30,41,59,0.9));
+            border: 1px solid rgba(255,255,255,0.1);
             border-radius: 20px;
-            font-size: 0.9rem;
-        }
-
-        /* Branch Diagram Styles */
-        .branch-diagram {
-            background: rgba(0,0,0,0.3);
-            border-radius: 16px;
-            padding: 30px;
+            padding: 40px;
             margin: 20px 0;
             overflow-x: auto;
+            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
         }
 
-        .branch-container {
+        .branch-diagram {
+            min-width: 1400px;
+            position: relative;
+        }
+
+        /* SVG Branch Visualization */
+        .branch-svg {
+            width: 100%;
+            height: auto;
+        }
+
+        /* Timeline Header */
+        .timeline-header {
             display: flex;
-            flex-direction: column;
-            gap: 20px;
-            min-width: 1000px;
+            justify-content: space-between;
+            padding: 0 120px;
+            margin-bottom: 20px;
+            position: relative;
         }
 
+        .timeline-header::after {
+            content: '';
+            position: absolute;
+            bottom: -10px;
+            left: 120px;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, rgba(255,255,255,0.3), rgba(255,255,255,0.1));
+        }
+
+        .timeline-week {
+            text-align: center;
+            padding: 10px 20px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 8px;
+            font-size: 0.85rem;
+            color: #94a3b8;
+        }
+
+        .timeline-week.active {
+            background: var(--primary);
+            color: white;
+        }
+
+        /* Branch Row */
         .branch-row {
             display: flex;
             align-items: center;
-            gap: 10px;
+            margin: 15px 0;
             position: relative;
         }
 
         .branch-label {
             width: 120px;
-            padding: 10px 15px;
+            flex-shrink: 0;
+            padding: 12px 15px;
             border-radius: 8px;
             font-weight: 600;
             text-align: center;
-            font-size: 0.85rem;
-            flex-shrink: 0;
+            font-size: 0.8rem;
+            z-index: 10;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+
+        .branch-track {
+            flex: 1;
+            height: 50px;
+            position: relative;
+            margin-left: 10px;
         }
 
         .branch-line {
-            flex: 1;
+            position: absolute;
             height: 8px;
             border-radius: 4px;
-            position: relative;
-        }
-
-        .branch-master .branch-label { background: var(--master); }
-        .branch-master .branch-line { background: linear-gradient(90deg, var(--master), #059669); }
-
-        .branch-develop .branch-label { background: var(--develop); }
-        .branch-develop .branch-line { background: linear-gradient(90deg, var(--develop), #1d4ed8); }
-
-        .branch-release .branch-label { background: var(--release); }
-        .branch-release .branch-line { background: linear-gradient(90deg, var(--release), #6d28d9); }
-
-        .branch-feature .branch-label { background: var(--feature); }
-        .branch-feature .branch-line { background: linear-gradient(90deg, var(--feature), #0891b2); height: 6px; }
-
-        .branch-hotfix .branch-label { background: var(--hotfix); }
-        .branch-hotfix .branch-line { background: linear-gradient(90deg, var(--hotfix), #dc2626); }
-
-        .branch-advance .branch-label { background: var(--advance); }
-        .branch-advance .branch-line { background: linear-gradient(90deg, var(--advance), #d97706); }
-
-        .commit {
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-            background: white;
-            position: absolute;
             top: 50%;
             transform: translateY(-50%);
+            box-shadow: 0 0 20px rgba(0,0,0,0.3);
+        }
+
+        /* Branch Colors */
+        .branch-master .branch-label { background: linear-gradient(135deg, var(--master), #059669); }
+        .branch-master .branch-line { background: linear-gradient(90deg, var(--master), #059669); }
+
+        .branch-develop .branch-label { background: linear-gradient(135deg, var(--develop), #1d4ed8); }
+        .branch-develop .branch-line { background: linear-gradient(90deg, var(--develop), #2563eb, var(--develop)); }
+
+        .branch-release .branch-label { background: linear-gradient(135deg, var(--release), #6d28d9); }
+        .branch-release .branch-line { background: linear-gradient(90deg, var(--release), #7c3aed); }
+
+        .branch-feature .branch-label { background: linear-gradient(135deg, var(--feature), #0891b2); }
+        .branch-feature .branch-line { background: linear-gradient(90deg, var(--feature), #06b6d4); height: 6px; }
+
+        .branch-hotfix .branch-label { background: linear-gradient(135deg, var(--hotfix), #dc2626); }
+        .branch-hotfix .branch-line { background: linear-gradient(90deg, var(--hotfix), #ef4444); }
+
+        .branch-advance .branch-label { background: linear-gradient(135deg, var(--advance), #d97706); }
+        .branch-advance .branch-line { background: linear-gradient(90deg, var(--advance), #f59e0b); }
+
+        .branch-bugfix .branch-label { background: linear-gradient(135deg, var(--bugfix), #db2777); }
+        .branch-bugfix .branch-line { background: linear-gradient(90deg, var(--bugfix), #ec4899); height: 6px; }
+
+        /* Commits */
+        .commit {
+            position: absolute;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: white;
+            top: 50%;
+            transform: translate(-50%, -50%);
             border: 3px solid currentColor;
+            z-index: 5;
             cursor: pointer;
-            transition: transform 0.2s;
+            transition: all 0.2s;
         }
 
         .commit:hover {
-            transform: translateY(-50%) scale(1.3);
+            transform: translate(-50%, -50%) scale(1.4);
+            box-shadow: 0 0 20px currentColor;
         }
 
-        .commit-label {
+        .commit.merge {
+            width: 24px;
+            height: 24px;
+            background: currentColor;
+        }
+
+        .commit.merge::after {
+            content: '↓';
             position: absolute;
-            top: -30px;
+            top: 50%;
             left: 50%;
-            transform: translateX(-50%);
-            background: rgba(0,0,0,0.8);
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 0.7rem;
-            white-space: nowrap;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 14px;
+            font-weight: bold;
         }
 
+        /* Tags */
         .tag {
             position: absolute;
             top: -35px;
+            left: 50%;
+            transform: translateX(-50%);
             background: var(--success);
-            padding: 4px 10px;
-            border-radius: 4px;
-            font-size: 0.75rem;
+            padding: 4px 12px;
+            border-radius: 6px;
+            font-size: 0.7rem;
             font-weight: 600;
+            white-space: nowrap;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
         }
 
         .tag::after {
             content: '';
             position: absolute;
-            bottom: -5px;
+            bottom: -6px;
             left: 50%;
             transform: translateX(-50%);
-            border-left: 5px solid transparent;
-            border-right: 5px solid transparent;
-            border-top: 5px solid var(--success);
+            border-left: 6px solid transparent;
+            border-right: 6px solid transparent;
+            border-top: 6px solid var(--success);
         }
 
+        .tag.rc { background: var(--warning); color: #000; }
+        .tag.rc::after { border-top-color: var(--warning); }
+
+        /* Cut-off Markers */
+        .cutoff {
+            position: absolute;
+            top: -60px;
+            bottom: -60px;
+            width: 3px;
+            background: linear-gradient(180deg, transparent, var(--warning), var(--warning), transparent);
+            z-index: 20;
+        }
+
+        .cutoff-label {
+            position: absolute;
+            top: -80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--warning);
+            color: #000;
+            padding: 6px 14px;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            white-space: nowrap;
+            box-shadow: 0 4px 15px rgba(245,158,11,0.4);
+        }
+
+        /* Merge Arrows */
         .merge-arrow {
             position: absolute;
-            width: 2px;
-            background: rgba(255,255,255,0.5);
+            z-index: 15;
+        }
+
+        .merge-arrow svg {
+            overflow: visible;
+        }
+
+        .merge-arrow path {
+            fill: none;
+            stroke-width: 2;
+            stroke-dasharray: 5,3;
+        }
+
+        .merge-arrow.up path { stroke: var(--success); }
+        .merge-arrow.down path { stroke: var(--release); }
+        .merge-arrow.advance path { stroke: var(--advance); }
+
+        /* Environment Badges */
+        .env-badge {
+            position: absolute;
+            bottom: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 3px 10px;
+            border-radius: 4px;
+            font-size: 0.65rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .env-badge.dev { background: var(--develop); }
+        .env-badge.qa { background: var(--release); }
+        .env-badge.uat { background: var(--warning); color: #000; }
+        .env-badge.prod { background: var(--success); }
+
+        /* Legend */
+        .legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            padding: 20px 25px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 12px;
+            margin: 20px 0;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.85rem;
+        }
+
+        .legend-color {
+            width: 30px;
+            height: 8px;
+            border-radius: 4px;
+        }
+
+        .legend-symbol {
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Cards Grid */
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        .card {
+            background: linear-gradient(135deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px;
+            padding: 25px;
+            transition: all 0.3s;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+            border-color: rgba(255,255,255,0.2);
+        }
+
+        .card h3 {
+            font-size: 1.1rem;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .card p {
+            color: #94a3b8;
+            font-size: 0.9rem;
+            line-height: 1.7;
+        }
+
+        .card ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .card li {
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            font-size: 0.9rem;
+            color: #cbd5e1;
+        }
+
+        .card li:last-child {
+            border-bottom: none;
+        }
+
+        .card li::before {
+            content: '→';
+            margin-right: 10px;
+            color: var(--primary);
         }
 
         /* Environment Flow */
         .env-flow {
             display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 20px;
-            flex-wrap: wrap;
+            justify-content: center;
+            align-items: stretch;
+            gap: 0;
             margin: 30px 0;
+            flex-wrap: wrap;
         }
 
         .env-box {
             flex: 1;
-            min-width: 150px;
+            min-width: 160px;
+            max-width: 200px;
             padding: 25px 20px;
-            border-radius: 12px;
             text-align: center;
             position: relative;
+            border-radius: 0;
         }
 
+        .env-box:first-child { border-radius: 12px 0 0 12px; }
+        .env-box:last-child { border-radius: 0 12px 12px 0; }
+
         .env-box h3 {
-            font-size: 1.1rem;
-            margin-bottom: 10px;
+            font-size: 1.2rem;
+            margin-bottom: 8px;
         }
 
         .env-box p {
-            font-size: 0.85rem;
-            opacity: 0.8;
+            font-size: 0.8rem;
+            opacity: 0.9;
         }
 
         .env-box.dev { background: linear-gradient(135deg, #3b82f6, #1d4ed8); }
@@ -228,132 +460,28 @@
         .env-box.prod { background: linear-gradient(135deg, #10b981, #059669); }
 
         .env-arrow {
-            font-size: 2rem;
-            color: rgba(255,255,255,0.5);
-        }
-
-        .env-badge {
-            position: absolute;
-            top: -10px;
-            right: -10px;
-            background: rgba(0,0,0,0.5);
-            padding: 4px 10px;
-            border-radius: 12px;
-            font-size: 0.7rem;
-        }
-
-        /* Timeline */
-        .timeline {
-            display: flex;
-            justify-content: space-between;
-            position: relative;
-            padding: 40px 0;
-            margin: 30px 0;
-        }
-
-        .timeline::before {
-            content: '';
-            position: absolute;
-            top: 50%;
-            left: 0;
-            right: 0;
-            height: 4px;
-            background: linear-gradient(90deg, var(--develop), var(--release), var(--master));
-            border-radius: 2px;
-        }
-
-        .timeline-item {
-            position: relative;
-            text-align: center;
-            z-index: 1;
-        }
-
-        .timeline-dot {
-            width: 30px;
-            height: 30px;
-            border-radius: 50%;
-            background: white;
-            margin: 0 auto 15px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            color: var(--dark);
-            box-shadow: 0 0 0 4px rgba(255,255,255,0.3);
-        }
-
-        .timeline-content {
-            background: rgba(255,255,255,0.1);
-            padding: 15px;
-            border-radius: 8px;
-            min-width: 120px;
-        }
-
-        .timeline-content h4 {
-            font-size: 0.9rem;
-            margin-bottom: 5px;
-        }
-
-        .timeline-content p {
-            font-size: 0.75rem;
-            opacity: 0.7;
-        }
-
-        /* Cards Grid */
-        .cards-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 20px;
-            margin: 30px 0;
-        }
-
-        .card {
-            background: rgba(255,255,255,0.05);
-            border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 12px;
-            padding: 25px;
-            transition: transform 0.3s, box-shadow 0.3s;
-        }
-
-        .card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
-        }
-
-        .card-icon {
-            width: 50px;
-            height: 50px;
-            border-radius: 12px;
             display: flex;
             align-items: center;
             justify-content: center;
             font-size: 1.5rem;
-            margin-bottom: 15px;
+            color: rgba(255,255,255,0.3);
+            min-width: 40px;
         }
 
-        .card h3 {
-            font-size: 1.1rem;
-            margin-bottom: 10px;
+        .env-type {
+            position: absolute;
+            top: -12px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.8);
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
         }
 
-        .card p {
-            font-size: 0.9rem;
-            opacity: 0.7;
-            line-height: 1.6;
-        }
-
-        .card ul {
-            margin-top: 15px;
-            padding-left: 20px;
-        }
-
-        .card li {
-            font-size: 0.85rem;
-            margin-bottom: 8px;
-            opacity: 0.8;
-        }
-
-        /* Table Styles */
+        /* Table */
         .styled-table {
             width: 100%;
             border-collapse: collapse;
@@ -367,24 +495,23 @@
         .styled-table td {
             padding: 15px 20px;
             text-align: left;
-        }
-
-        .styled-table th {
-            background: rgba(255,255,255,0.1);
-            font-weight: 600;
-            text-transform: uppercase;
-            font-size: 0.8rem;
-            letter-spacing: 1px;
-        }
-
-        .styled-table tr {
             border-bottom: 1px solid rgba(255,255,255,0.05);
         }
 
-        .styled-table tr:hover {
+        .styled-table th {
             background: rgba(255,255,255,0.05);
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 1px;
+            color: #94a3b8;
         }
 
+        .styled-table tr:hover {
+            background: rgba(255,255,255,0.02);
+        }
+
+        /* Badge */
         .badge {
             display: inline-block;
             padding: 4px 12px;
@@ -398,195 +525,13 @@
         .badge-warning { background: var(--warning); color: #000; }
         .badge-danger { background: var(--danger); }
         .badge-info { background: var(--info); }
-
-        /* JFrog Flow */
-        .jfrog-flow {
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
-            margin: 30px 0;
-        }
-
-        .jfrog-row {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-        }
-
-        .jfrog-repo {
-            padding: 20px;
-            border-radius: 12px;
-            min-width: 200px;
-            text-align: center;
-        }
-
-        .jfrog-repo.dev { background: linear-gradient(135deg, #3b82f6, #1d4ed8); }
-        .jfrog-repo.rc { background: linear-gradient(135deg, #8b5cf6, #6d28d9); }
-        .jfrog-repo.release { background: linear-gradient(135deg, #10b981, #059669); }
-
-        .jfrog-arrow {
-            font-size: 1.5rem;
-            color: var(--warning);
-        }
-
-        .jfrog-artifacts {
-            background: rgba(0,0,0,0.3);
-            padding: 15px;
-            border-radius: 8px;
-            font-family: monospace;
-            font-size: 0.85rem;
-        }
-
-        /* Upgrade Path */
-        .upgrade-path {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin: 30px 0;
-            flex-wrap: wrap;
-            gap: 10px;
-        }
-
-        .version-box {
-            padding: 20px 30px;
-            border-radius: 12px;
-            text-align: center;
-            background: rgba(255,255,255,0.1);
-            border: 2px solid rgba(255,255,255,0.2);
-        }
-
-        .version-box.current {
-            border-color: var(--danger);
-            background: rgba(239, 68, 68, 0.2);
-        }
-
-        .version-box.target {
-            border-color: var(--success);
-            background: rgba(16, 185, 129, 0.2);
-        }
-
-        .version-box h3 {
-            font-size: 1.5rem;
-            margin-bottom: 5px;
-        }
-
-        .version-box p {
-            font-size: 0.8rem;
-            opacity: 0.7;
-        }
-
-        .upgrade-arrow-container {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-
-        .upgrade-arrow {
-            font-size: 2rem;
-            color: var(--warning);
-        }
-
-        .sprint-label {
-            font-size: 0.7rem;
-            background: var(--warning);
-            color: #000;
-            padding: 2px 8px;
-            border-radius: 10px;
-            margin-top: 5px;
-        }
-
-        /* Animation */
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
-
-        .pulse {
-            animation: pulse 2s infinite;
-        }
-
-        /* Navigation */
-        .nav {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            display: flex;
-            gap: 10px;
-            z-index: 1000;
-        }
-
-        .nav-btn {
-            padding: 12px 20px;
-            border: none;
-            border-radius: 8px;
-            background: var(--primary);
-            color: white;
-            cursor: pointer;
-            font-size: 1rem;
-            transition: background 0.3s;
-        }
-
-        .nav-btn:hover {
-            background: #1d4ed8;
-        }
-
-        /* Code Block */
-        .code-block {
-            background: #0d1117;
-            border-radius: 8px;
-            padding: 20px;
-            font-family: 'Consolas', monospace;
-            font-size: 0.85rem;
-            overflow-x: auto;
-            margin: 20px 0;
-        }
-
-        .code-block .comment { color: #8b949e; }
-        .code-block .keyword { color: #ff7b72; }
-        .code-block .string { color: #a5d6ff; }
-        .code-block .branch { color: #7ee787; }
-
-        /* Legend */
-        .legend {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 20px;
-            padding: 20px;
-            background: rgba(0,0,0,0.2);
-            border-radius: 12px;
-            margin: 20px 0;
-        }
-
-        .legend-item {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .legend-color {
-            width: 30px;
-            height: 10px;
-            border-radius: 5px;
-        }
-
-        /* Two Column Layout */
-        .two-columns {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 30px;
-            margin: 30px 0;
-        }
-
-        @media (max-width: 768px) {
-            .two-columns {
-                grid-template-columns: 1fr;
-            }
-        }
+        .badge-purple { background: var(--release); }
+        .badge-pink { background: var(--pink); }
 
         /* Section Divider */
         .section-divider {
             text-align: center;
-            margin: 40px 0 20px;
+            margin: 30px 0 20px;
             position: relative;
         }
 
@@ -597,861 +542,1191 @@
             top: 50%;
             width: 100%;
             height: 1px;
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
         }
 
         .section-divider span {
             background: var(--dark);
-            padding: 0 20px;
+            padding: 0 25px;
             position: relative;
             color: var(--info);
             font-weight: 600;
+            font-size: 1rem;
         }
 
-        /* Print Styles */
+        /* Code Block */
+        .code-block {
+            background: #0d1117;
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 20px 25px;
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            font-size: 0.85rem;
+            overflow-x: auto;
+            margin: 15px 0;
+        }
+
+        .code-comment { color: #8b949e; }
+        .code-keyword { color: #ff7b72; }
+        .code-string { color: #a5d6ff; }
+        .code-branch { color: #7ee787; }
+
+        /* Two Columns */
+        .two-columns {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 25px;
+        }
+
+        @media (max-width: 900px) {
+            .two-columns { grid-template-columns: 1fr; }
+        }
+
+        /* Process Flow */
+        .process-flow {
+            display: flex;
+            align-items: flex-start;
+            gap: 20px;
+            margin: 30px 0;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .process-step {
+            flex: 1;
+            min-width: 200px;
+            max-width: 250px;
+            text-align: center;
+        }
+
+        .process-icon {
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.8rem;
+            margin: 0 auto 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+
+        .process-step h4 {
+            margin-bottom: 8px;
+        }
+
+        .process-step p {
+            font-size: 0.85rem;
+            color: #94a3b8;
+        }
+
+        .process-arrow {
+            display: flex;
+            align-items: center;
+            font-size: 2rem;
+            color: rgba(255,255,255,0.3);
+            padding-top: 25px;
+        }
+
+        /* Navigation */
+        .nav {
+            position: fixed;
+            bottom: 25px;
+            right: 25px;
+            display: flex;
+            gap: 10px;
+            z-index: 1000;
+        }
+
+        .nav-btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 10px;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 600;
+            transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(37,99,235,0.4);
+        }
+
+        .nav-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(37,99,235,0.5);
+        }
+
+        /* Print */
         @media print {
-            .slide {
-                page-break-after: always;
-            }
-            .nav {
-                display: none;
-            }
+            .slide { page-break-after: always; }
+            .nav { display: none; }
+        }
+
+        /* Animations */
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.7; transform: scale(1.05); }
+        }
+
+        .pulse { animation: pulse 2s infinite; }
+
+        @keyframes flow {
+            0% { stroke-dashoffset: 20; }
+            100% { stroke-dashoffset: 0; }
+        }
+
+        .flow-animate path {
+            animation: flow 1s linear infinite;
         }
     </style>
 </head>
 <body>
-    <!-- Slide 1: Title -->
+
+    <!-- ========================================
+         SLIDE 1: Title
+         ======================================== -->
     <section class="slide" id="slide1">
-        <span class="slide-number">1 / 12</span>
+        <span class="slide-number">1 / 10</span>
         <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;">
-            <h1 style="font-size: 3.5rem; margin-bottom: 20px; background: linear-gradient(90deg, #3b82f6, #8b5cf6, #10b981); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
-                Enterprise Branching &<br>Release Strategy
+            <h1 style="font-size: 3.5rem; margin-bottom: 15px; background: linear-gradient(135deg, #3b82f6, #8b5cf6, #ec4899, #10b981); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
+                Complete Branching &<br>Release Strategy
             </h1>
-            <p style="font-size: 1.5rem; color: #94a3b8; margin-bottom: 40px;">
-                Microservices | Modular Codebase | CI/CD Best Practices
+            <p style="font-size: 1.4rem; color: #94a3b8; margin-bottom: 40px; max-width: 800px;">
+                Enterprise Microservices | Modular Codebase | Multi-Release Pipeline
             </p>
-            <div style="display: flex; gap: 20px; flex-wrap: wrap; justify-content: center;">
-                <div class="badge badge-primary" style="font-size: 1rem; padding: 10px 20px;">100+ Developers</div>
-                <div class="badge badge-success" style="font-size: 1rem; padding: 10px 20px;">Multi-Environment</div>
-                <div class="badge badge-warning" style="font-size: 1rem; padding: 10px 20px;">JFrog Artifactory</div>
-                <div class="badge badge-info" style="font-size: 1rem; padding: 10px 20px;">GitOps</div>
+            <div style="display: flex; gap: 15px; flex-wrap: wrap; justify-content: center; margin-bottom: 50px;">
+                <span class="badge badge-primary" style="font-size: 1rem; padding: 12px 24px;">100+ Developers</span>
+                <span class="badge badge-purple" style="font-size: 1rem; padding: 12px 24px;">Multi-Environment</span>
+                <span class="badge badge-warning" style="font-size: 1rem; padding: 12px 24px;">Advance Releases</span>
+                <span class="badge badge-success" style="font-size: 1rem; padding: 12px 24px;">JFrog Artifactory</span>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 20px; max-width: 900px;">
+                <div style="text-align: center;">
+                    <div style="font-size: 2.5rem; color: var(--develop);">🔷</div>
+                    <div style="font-size: 0.8rem; color: #94a3b8;">develop</div>
+                </div>
+                <div style="text-align: center;">
+                    <div style="font-size: 2.5rem; color: var(--advance);">🔶</div>
+                    <div style="font-size: 0.8rem; color: #94a3b8;">advance</div>
+                </div>
+                <div style="text-align: center;">
+                    <div style="font-size: 2.5rem; color: var(--release);">🟣</div>
+                    <div style="font-size: 0.8rem; color: #94a3b8;">release</div>
+                </div>
+                <div style="text-align: center;">
+                    <div style="font-size: 2.5rem; color: var(--master);">🟢</div>
+                    <div style="font-size: 0.8rem; color: #94a3b8;">master</div>
+                </div>
+                <div style="text-align: center;">
+                    <div style="font-size: 2.5rem; color: var(--hotfix);">🔴</div>
+                    <div style="font-size: 0.8rem; color: #94a3b8;">hotfix</div>
+                </div>
             </div>
         </div>
     </section>
 
-    <!-- Slide 2: Branch Overview -->
+    <!-- ========================================
+         SLIDE 2: Complete Branch Flow Diagram
+         ======================================== -->
     <section class="slide" id="slide2">
-        <span class="slide-number">2 / 12</span>
+        <span class="slide-number">2 / 10</span>
         <div class="slide-header">
-            <h2>Branch Structure Overview</h2>
-            <p>Core branches and their purposes in our workflow</p>
+            <h2>Complete Branching Flow</h2>
+            <p>Full release cycle with dev cut-off, advance branch, and release pipelines</p>
+        </div>
+
+        <div class="branch-diagram-container">
+            <svg class="branch-diagram" viewBox="0 0 1400 600" xmlns="http://www.w3.org/2000/svg">
+                <!-- Timeline markers -->
+                <text x="180" y="30" fill="#64748b" font-size="12" text-anchor="middle">Sprint 1</text>
+                <text x="380" y="30" fill="#64748b" font-size="12" text-anchor="middle">Sprint 2</text>
+                <text x="580" y="30" fill="#64748b" font-size="12" text-anchor="middle">Sprint 3</text>
+                <text x="780" y="30" fill="#64748b" font-size="12" text-anchor="middle">Sprint 4</text>
+                <text x="980" y="30" fill="#64748b" font-size="12" text-anchor="middle">Sprint 5</text>
+                <text x="1180" y="30" fill="#64748b" font-size="12" text-anchor="middle">Sprint 6</text>
+                
+                <!-- Timeline line -->
+                <line x1="120" y1="45" x2="1350" y2="45" stroke="#334155" stroke-width="1" stroke-dasharray="5,5"/>
+                
+                <!-- DEV CUT-OFF Lines -->
+                <line x1="350" y1="50" x2="350" y2="550" stroke="#f59e0b" stroke-width="2" stroke-dasharray="8,4"/>
+                <rect x="310" y="55" width="80" height="25" rx="4" fill="#f59e0b"/>
+                <text x="350" y="72" fill="#000" font-size="10" font-weight="bold" text-anchor="middle">DEV CUT-OFF</text>
+                <text x="350" y="90" fill="#f59e0b" font-size="9" text-anchor="middle">Release 2.5</text>
+                
+                <line x1="750" y1="50" x2="750" y2="550" stroke="#f59e0b" stroke-width="2" stroke-dasharray="8,4"/>
+                <rect x="710" y="55" width="80" height="25" rx="4" fill="#f59e0b"/>
+                <text x="750" y="72" fill="#000" font-size="10" font-weight="bold" text-anchor="middle">DEV CUT-OFF</text>
+                <text x="750" y="90" fill="#f59e0b" font-size="9" text-anchor="middle">Release 2.6</text>
+                
+                <line x1="1150" y1="50" x2="1150" y2="550" stroke="#f59e0b" stroke-width="2" stroke-dasharray="8,4"/>
+                <rect x="1110" y="55" width="80" height="25" rx="4" fill="#f59e0b"/>
+                <text x="1150" y="72" fill="#000" font-size="10" font-weight="bold" text-anchor="middle">DEV CUT-OFF</text>
+                <text x="1150" y="90" fill="#f59e0b" font-size="9" text-anchor="middle">Release 3.0</text>
+
+                <!-- MASTER BRANCH -->
+                <rect x="10" y="110" width="100" height="30" rx="6" fill="url(#masterGrad)"/>
+                <text x="60" y="130" fill="white" font-size="11" font-weight="bold" text-anchor="middle">master</text>
+                <line x1="120" y1="125" x2="1350" y2="125" stroke="#10b981" stroke-width="6" stroke-linecap="round"/>
+                
+                <!-- Master commits/tags -->
+                <circle cx="550" cy="125" r="12" fill="#10b981" stroke="white" stroke-width="3"/>
+                <rect x="510" y="95" width="80" height="20" rx="4" fill="#10b981"/>
+                <text x="550" y="109" fill="white" font-size="9" font-weight="bold" text-anchor="middle">v2.5.0</text>
+                
+                <circle cx="950" cy="125" r="12" fill="#10b981" stroke="white" stroke-width="3"/>
+                <rect x="910" y="95" width="80" height="20" rx="4" fill="#10b981"/>
+                <text x="950" y="109" fill="white" font-size="9" font-weight="bold" text-anchor="middle">v2.6.0</text>
+                
+                <circle cx="1300" cy="125" r="10" fill="white" stroke="#10b981" stroke-width="3"/>
+
+                <!-- HOTFIX BRANCH -->
+                <rect x="10" y="170" width="100" height="30" rx="6" fill="url(#hotfixGrad)"/>
+                <text x="60" y="190" fill="white" font-size="11" font-weight="bold" text-anchor="middle">hotfix/*</text>
+                
+                <!-- Hotfix line segment -->
+                <path d="M 550 125 Q 550 180 580 185 L 680 185 Q 700 185 700 160" stroke="#ef4444" stroke-width="4" fill="none"/>
+                <circle cx="620" cy="185" r="8" fill="white" stroke="#ef4444" stroke-width="3"/>
+                <text x="620" y="210" fill="#ef4444" font-size="9" text-anchor="middle">PROD-fix</text>
+                <path d="M 700 160 L 700 140" stroke="#ef4444" stroke-width="2" stroke-dasharray="4,2"/>
+                <polygon points="700,135 695,145 705,145" fill="#ef4444"/>
+
+                <!-- RELEASE BRANCHES -->
+                <rect x="10" y="230" width="100" height="30" rx="6" fill="url(#releaseGrad)"/>
+                <text x="60" y="250" fill="white" font-size="11" font-weight="bold" text-anchor="middle">release/*</text>
+                
+                <!-- Release 2.5 -->
+                <path d="M 350 320 Q 360 260 380 250 L 540 250" stroke="#8b5cf6" stroke-width="5" fill="none" stroke-linecap="round"/>
+                <circle cx="400" cy="250" r="8" fill="white" stroke="#8b5cf6" stroke-width="3"/>
+                <circle cx="450" cy="250" r="8" fill="white" stroke="#8b5cf6" stroke-width="3"/>
+                <circle cx="500" cy="250" r="8" fill="white" stroke="#8b5cf6" stroke-width="3"/>
+                <circle cx="540" cy="250" r="10" fill="#8b5cf6" stroke="white" stroke-width="3"/>
+                <text x="450" y="275" fill="#a78bfa" font-size="10" text-anchor="middle">release/2.5.0</text>
+                <rect x="385" y="220" width="30" height="18" rx="3" fill="#f59e0b"/>
+                <text x="400" y="233" fill="#000" font-size="8" font-weight="bold" text-anchor="middle">RC1</text>
+                <rect x="435" y="220" width="30" height="18" rx="3" fill="#f59e0b"/>
+                <text x="450" y="233" fill="#000" font-size="8" font-weight="bold" text-anchor="middle">RC2</text>
+                
+                <!-- Merge to master -->
+                <path d="M 540 250 Q 545 180 550 135" stroke="#10b981" stroke-width="2" stroke-dasharray="5,3"/>
+                <polygon points="550,140 545,155 555,155" fill="#10b981"/>
+
+                <!-- Release 2.6 -->
+                <path d="M 750 320 Q 760 260 780 250 L 940 250" stroke="#8b5cf6" stroke-width="5" fill="none" stroke-linecap="round"/>
+                <circle cx="820" cy="250" r="8" fill="white" stroke="#8b5cf6" stroke-width="3"/>
+                <circle cx="880" cy="250" r="8" fill="white" stroke="#8b5cf6" stroke-width="3"/>
+                <circle cx="940" cy="250" r="10" fill="#8b5cf6" stroke="white" stroke-width="3"/>
+                <text x="860" y="275" fill="#a78bfa" font-size="10" text-anchor="middle">release/2.6.0</text>
+                
+                <!-- Merge to master -->
+                <path d="M 940 250 Q 945 180 950 135" stroke="#10b981" stroke-width="2" stroke-dasharray="5,3"/>
+                <polygon points="950,140 945,155 955,155" fill="#10b981"/>
+
+                <!-- Release 3.0 -->
+                <path d="M 1150 320 Q 1160 260 1180 250 L 1300 250" stroke="#8b5cf6" stroke-width="5" fill="none" stroke-linecap="round"/>
+                <circle cx="1220" cy="250" r="8" fill="white" stroke="#8b5cf6" stroke-width="3"/>
+                <circle cx="1270" cy="250" r="8" fill="white" stroke="#8b5cf6" stroke-width="3"/>
+                <text x="1240" y="275" fill="#a78bfa" font-size="10" text-anchor="middle">release/3.0.0</text>
+
+                <!-- DEVELOP BRANCH -->
+                <rect x="10" y="305" width="100" height="30" rx="6" fill="url(#developGrad)"/>
+                <text x="60" y="325" fill="white" font-size="11" font-weight="bold" text-anchor="middle">develop</text>
+                <line x1="120" y1="320" x2="1350" y2="320" stroke="#3b82f6" stroke-width="6" stroke-linecap="round"/>
+                
+                <!-- Develop commits -->
+                <circle cx="180" cy="320" r="7" fill="white" stroke="#3b82f6" stroke-width="2"/>
+                <circle cx="240" cy="320" r="7" fill="white" stroke="#3b82f6" stroke-width="2"/>
+                <circle cx="300" cy="320" r="7" fill="white" stroke="#3b82f6" stroke-width="2"/>
+                <circle cx="450" cy="320" r="7" fill="white" stroke="#3b82f6" stroke-width="2"/>
+                <circle cx="520" cy="320" r="7" fill="white" stroke="#3b82f6" stroke-width="2"/>
+                <circle cx="600" cy="320" r="7" fill="white" stroke="#3b82f6" stroke-width="2"/>
+                <circle cx="680" cy="320" r="7" fill="white" stroke="#3b82f6" stroke-width="2"/>
+                <circle cx="850" cy="320" r="7" fill="white" stroke="#3b82f6" stroke-width="2"/>
+                <circle cx="950" cy="320" r="7" fill="white" stroke="#3b82f6" stroke-width="2"/>
+                <circle cx="1050" cy="320" r="7" fill="white" stroke="#3b82f6" stroke-width="2"/>
+                <circle cx="1250" cy="320" r="7" fill="white" stroke="#3b82f6" stroke-width="2"/>
+
+                <!-- Advance merge to develop -->
+                <circle cx="1100" cy="320" r="10" fill="#f59e0b" stroke="white" stroke-width="3"/>
+                <text x="1100" y="355" fill="#f59e0b" font-size="9" text-anchor="middle">Merge 3.0</text>
+
+                <!-- ADVANCE BRANCH -->
+                <rect x="10" y="380" width="100" height="30" rx="6" fill="url(#advanceGrad)"/>
+                <text x="60" y="400" fill="white" font-size="11" font-weight="bold" text-anchor="middle">advance/3.0</text>
+                
+                <!-- Advance branch line -->
+                <path d="M 300 320 Q 320 380 350 395 L 1080 395" stroke="#f59e0b" stroke-width="5" fill="none" stroke-linecap="round"/>
+                <circle cx="420" cy="395" r="7" fill="white" stroke="#f59e0b" stroke-width="2"/>
+                <circle cx="520" cy="395" r="7" fill="white" stroke="#f59e0b" stroke-width="2"/>
+                <circle cx="650" cy="395" r="7" fill="white" stroke="#f59e0b" stroke-width="2"/>
+                <circle cx="780" cy="395" r="7" fill="white" stroke="#f59e0b" stroke-width="2"/>
+                <circle cx="900" cy="395" r="7" fill="white" stroke="#f59e0b" stroke-width="2"/>
+                <circle cx="1000" cy="395" r="7" fill="white" stroke="#f59e0b" stroke-width="2"/>
+                <circle cx="1080" cy="395" r="10" fill="#f59e0b" stroke="white" stroke-width="3"/>
+                
+                <!-- Merge arrow from advance to develop -->
+                <path d="M 1080 395 Q 1090 350 1100 330" stroke="#f59e0b" stroke-width="2" stroke-dasharray="5,3"/>
+                <polygon points="1100,335 1095,350 1105,350" fill="#f59e0b"/>
+                
+                <text x="700" y="420" fill="#fbbf24" font-size="10" text-anchor="middle">Future Release 3.0 Features (developed in parallel)</text>
+
+                <!-- FEATURE BRANCHES -->
+                <rect x="10" y="455" width="100" height="30" rx="6" fill="url(#featureGrad)"/>
+                <text x="60" y="475" fill="white" font-size="11" font-weight="bold" text-anchor="middle">feature/*</text>
+                
+                <!-- Feature branches for current release -->
+                <path d="M 160 320 Q 165 430 180 470 L 220 470" stroke="#06b6d4" stroke-width="4" fill="none" stroke-linecap="round"/>
+                <circle cx="200" cy="470" r="6" fill="white" stroke="#06b6d4" stroke-width="2"/>
+                <path d="M 220 470 Q 235 430 240 330" stroke="#06b6d4" stroke-width="2" stroke-dasharray="4,2"/>
+                <text x="190" y="495" fill="#22d3ee" font-size="8" text-anchor="middle">FE-1234</text>
+                
+                <path d="M 200 320 Q 205 410 220 450 L 280 450" stroke="#06b6d4" stroke-width="4" fill="none" stroke-linecap="round"/>
+                <circle cx="250" cy="450" r="6" fill="white" stroke="#06b6d4" stroke-width="2"/>
+                <path d="M 280 450 Q 295 400 300 330" stroke="#06b6d4" stroke-width="2" stroke-dasharray="4,2"/>
+                <text x="250" y="475" fill="#22d3ee" font-size="8" text-anchor="middle">BE-5678</text>
+                
+                <path d="M 420 320 Q 425 410 440 450 L 500 450" stroke="#06b6d4" stroke-width="4" fill="none" stroke-linecap="round"/>
+                <circle cx="470" cy="450" r="6" fill="white" stroke="#06b6d4" stroke-width="2"/>
+                <path d="M 500 450 Q 510 400 520 330" stroke="#06b6d4" stroke-width="2" stroke-dasharray="4,2"/>
+                <text x="470" y="475" fill="#22d3ee" font-size="8" text-anchor="middle">FE-9012</text>
+                
+                <path d="M 560 320 Q 565 400 580 440 L 660 440" stroke="#06b6d4" stroke-width="4" fill="none" stroke-linecap="round"/>
+                <circle cx="620" cy="440" r="6" fill="white" stroke="#06b6d4" stroke-width="2"/>
+                <path d="M 660 440 Q 675 390 680 330" stroke="#06b6d4" stroke-width="2" stroke-dasharray="4,2"/>
+                <text x="620" y="465" fill="#22d3ee" font-size="8" text-anchor="middle">BE-3456</text>
+
+                <!-- ADV Feature branches -->
+                <path d="M 480 395 Q 485 460 500 490 L 560 490" stroke="#22d3ee" stroke-width="3" fill="none" stroke-linecap="round"/>
+                <circle cx="530" cy="490" r="5" fill="white" stroke="#22d3ee" stroke-width="2"/>
+                <path d="M 560 490 Q 570 450 580 400" stroke="#22d3ee" stroke-width="2" stroke-dasharray="3,2"/>
+                <text x="530" y="515" fill="#22d3ee" font-size="7" text-anchor="middle">ADV-3.0-001</text>
+                
+                <path d="M 700 395 Q 705 450 720 480 L 780 480" stroke="#22d3ee" stroke-width="3" fill="none" stroke-linecap="round"/>
+                <circle cx="750" cy="480" r="5" fill="white" stroke="#22d3ee" stroke-width="2"/>
+                <path d="M 780 480 Q 790 440 800 400" stroke="#22d3ee" stroke-width="2" stroke-dasharray="3,2"/>
+                <text x="750" y="505" fill="#22d3ee" font-size="7" text-anchor="middle">ADV-3.0-002</text>
+
+                <!-- BUGFIX on Release -->
+                <rect x="10" y="530" width="100" height="30" rx="6" fill="url(#bugfixGrad)"/>
+                <text x="60" y="550" fill="white" font-size="11" font-weight="bold" text-anchor="middle">bugfix/*</text>
+                
+                <path d="M 410 250 Q 415 510 430 540 L 480 540" stroke="#ec4899" stroke-width="3" fill="none" stroke-linecap="round"/>
+                <circle cx="455" cy="540" r="5" fill="white" stroke="#ec4899" stroke-width="2"/>
+                <path d="M 480 540 Q 490 380 500 260" stroke="#ec4899" stroke-width="2" stroke-dasharray="3,2"/>
+                <text x="455" y="565" fill="#f472b6" font-size="7" text-anchor="middle">QA-fix</text>
+
+                <!-- Gradients -->
+                <defs>
+                    <linearGradient id="masterGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" style="stop-color:#10b981"/>
+                        <stop offset="100%" style="stop-color:#059669"/>
+                    </linearGradient>
+                    <linearGradient id="developGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" style="stop-color:#3b82f6"/>
+                        <stop offset="100%" style="stop-color:#1d4ed8"/>
+                    </linearGradient>
+                    <linearGradient id="releaseGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" style="stop-color:#8b5cf6"/>
+                        <stop offset="100%" style="stop-color:#6d28d9"/>
+                    </linearGradient>
+                    <linearGradient id="featureGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" style="stop-color:#06b6d4"/>
+                        <stop offset="100%" style="stop-color:#0891b2"/>
+                    </linearGradient>
+                    <linearGradient id="advanceGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" style="stop-color:#f59e0b"/>
+                        <stop offset="100%" style="stop-color:#d97706"/>
+                    </linearGradient>
+                    <linearGradient id="hotfixGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" style="stop-color:#ef4444"/>
+                        <stop offset="100%" style="stop-color:#dc2626"/>
+                    </linearGradient>
+                    <linearGradient id="bugfixGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" style="stop-color:#ec4899"/>
+                        <stop offset="100%" style="stop-color:#db2777"/>
+                    </linearGradient>
+                </defs>
+            </svg>
         </div>
 
         <div class="legend">
             <div class="legend-item">
-                <div class="legend-color" style="background: var(--master);"></div>
+                <div class="legend-color" style="background: linear-gradient(90deg, #10b981, #059669);"></div>
                 <span>master (Production)</span>
             </div>
             <div class="legend-item">
-                <div class="legend-color" style="background: var(--develop);"></div>
+                <div class="legend-color" style="background: linear-gradient(90deg, #3b82f6, #1d4ed8);"></div>
                 <span>develop (Integration)</span>
             </div>
             <div class="legend-item">
-                <div class="legend-color" style="background: var(--release);"></div>
+                <div class="legend-color" style="background: linear-gradient(90deg, #8b5cf6, #6d28d9);"></div>
                 <span>release/* (Candidates)</span>
             </div>
             <div class="legend-item">
-                <div class="legend-color" style="background: var(--feature);"></div>
-                <span>feature/* (Development)</span>
-            </div>
-            <div class="legend-item">
-                <div class="legend-color" style="background: var(--advance);"></div>
+                <div class="legend-color" style="background: linear-gradient(90deg, #f59e0b, #d97706);"></div>
                 <span>advance/* (Future Release)</span>
             </div>
             <div class="legend-item">
-                <div class="legend-color" style="background: var(--hotfix);"></div>
+                <div class="legend-color" style="background: linear-gradient(90deg, #06b6d4, #0891b2);"></div>
+                <span>feature/* (Development)</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: linear-gradient(90deg, #ef4444, #dc2626);"></div>
                 <span>hotfix/* (Emergency)</span>
             </div>
-        </div>
-
-        <div class="branch-diagram">
-            <div class="branch-container">
-                <!-- Master Branch -->
-                <div class="branch-row branch-master">
-                    <div class="branch-label">master</div>
-                    <div class="branch-line">
-                        <div class="commit" style="left: 20%; color: var(--master);">
-                            <span class="tag">v2.4.0</span>
-                        </div>
-                        <div class="commit" style="left: 50%; color: var(--master);">
-                            <span class="tag">v2.5.0</span>
-                        </div>
-                        <div class="commit" style="left: 80%; color: var(--master);">
-                            <span class="tag">v2.6.0</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Hotfix Branch -->
-                <div class="branch-row branch-hotfix">
-                    <div class="branch-label">hotfix/*</div>
-                    <div class="branch-line" style="width: 15%; margin-left: 15%;">
-                        <div class="commit" style="left: 50%; color: var(--hotfix);">
-                            <span class="commit-label">Critical Fix</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Release Branch -->
-                <div class="branch-row branch-release">
-                    <div class="branch-label">release/*</div>
-                    <div class="branch-line" style="width: 25%; margin-left: 30%;">
-                        <div class="commit" style="left: 20%; color: var(--release);">
-                            <span class="commit-label">RC1</span>
-                        </div>
-                        <div class="commit" style="left: 60%; color: var(--release);">
-                            <span class="commit-label">RC2</span>
-                        </div>
-                        <div class="commit" style="left: 90%; color: var(--release);">
-                            <span class="commit-label">Final</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Develop Branch -->
-                <div class="branch-row branch-develop">
-                    <div class="branch-label">develop</div>
-                    <div class="branch-line">
-                        <div class="commit" style="left: 10%; color: var(--develop);"></div>
-                        <div class="commit" style="left: 25%; color: var(--develop);"></div>
-                        <div class="commit" style="left: 40%; color: var(--develop);"></div>
-                        <div class="commit" style="left: 55%; color: var(--develop);"></div>
-                        <div class="commit" style="left: 70%; color: var(--develop);"></div>
-                        <div class="commit" style="left: 85%; color: var(--develop);"></div>
-                    </div>
-                </div>
-
-                <!-- Advance Branch -->
-                <div class="branch-row branch-advance">
-                    <div class="branch-label">advance/3.0</div>
-                    <div class="branch-line" style="width: 50%; margin-left: 35%;">
-                        <div class="commit" style="left: 20%; color: var(--advance);">
-                            <span class="commit-label">Future Feature</span>
-                        </div>
-                        <div class="commit" style="left: 50%; color: var(--advance);"></div>
-                        <div class="commit" style="left: 80%; color: var(--advance);"></div>
-                    </div>
-                </div>
-
-                <!-- Feature Branches -->
-                <div class="branch-row branch-feature">
-                    <div class="branch-label">feature/*</div>
-                    <div class="branch-line" style="width: 12%; margin-left: 5%;">
-                        <span class="commit-label" style="left: 0; top: -25px;">FE-1234</span>
-                    </div>
-                    <div class="branch-line" style="width: 10%; margin-left: 5%;">
-                        <span class="commit-label" style="left: 0; top: -25px;">BE-5678</span>
-                    </div>
-                    <div class="branch-line" style="width: 15%; margin-left: 5%;">
-                        <span class="commit-label" style="left: 0; top: -25px;">FE-9012</span>
-                    </div>
-                    <div class="branch-line" style="width: 10%; margin-left: 5%;">
-                        <span class="commit-label" style="left: 0; top: -25px;">BE-3456</span>
-                    </div>
-                </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: linear-gradient(90deg, #ec4899, #db2777);"></div>
+                <span>bugfix/* (QA Fixes)</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-symbol" style="width: 3px; height: 40px; background: linear-gradient(180deg, transparent, #f59e0b, transparent);"></div>
+                <span>Dev Cut-off</span>
             </div>
         </div>
-
-        <table class="styled-table">
-            <thead>
-                <tr>
-                    <th>Branch</th>
-                    <th>Purpose</th>
-                    <th>Created From</th>
-                    <th>Merges To</th>
-                    <th>Lifespan</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td><span class="badge badge-success">master</span></td>
-                    <td>Production-ready code</td>
-                    <td>-</td>
-                    <td>-</td>
-                    <td>Permanent</td>
-                </tr>
-                <tr>
-                    <td><span class="badge badge-primary">develop</span></td>
-                    <td>Integration branch</td>
-                    <td>-</td>
-                    <td>-</td>
-                    <td>Permanent</td>
-                </tr>
-                <tr>
-                    <td><span class="badge" style="background: var(--release);">release/*</span></td>
-                    <td>Release candidates</td>
-                    <td>develop</td>
-                    <td>master, develop</td>
-                    <td>1-2 weeks</td>
-                </tr>
-                <tr>
-                    <td><span class="badge badge-info">feature/*</span></td>
-                    <td>New features</td>
-                    <td>develop</td>
-                    <td>develop</td>
-                    <td>1-3 days</td>
-                </tr>
-                <tr>
-                    <td><span class="badge badge-warning">advance/*</span></td>
-                    <td>Future release work</td>
-                    <td>develop</td>
-                    <td>develop</td>
-                    <td>Until release ships</td>
-                </tr>
-                <tr>
-                    <td><span class="badge badge-danger">hotfix/*</span></td>
-                    <td>Emergency fixes</td>
-                    <td>master</td>
-                    <td>master, develop</td>
-                    <td>Hours</td>
-                </tr>
-            </tbody>
-        </table>
     </section>
 
-    <!-- Slide 3: Environment Promotion -->
+    <!-- ========================================
+         SLIDE 3: Release Pipeline Detail
+         ======================================== -->
     <section class="slide" id="slide3">
-        <span class="slide-number">3 / 12</span>
+        <span class="slide-number">3 / 10</span>
         <div class="slide-header">
-            <h2>Environment Promotion Flow</h2>
-            <p>Dev → QA → UAT → Pre-Prod → Production</p>
+            <h2>Release Pipeline Detail</h2>
+            <p>From Dev Cut-off to Production Deployment</p>
         </div>
 
-        <div class="env-flow">
-            <div class="env-box dev">
-                <span class="env-badge">Auto Deploy</span>
-                <h3>DEV</h3>
-                <p>develop branch</p>
-                <p style="margin-top: 10px; font-size: 0.75rem;">Smoke Tests</p>
-            </div>
-            <div class="env-arrow">→</div>
-            <div class="env-box qa">
-                <span class="env-badge">Auto Deploy</span>
-                <h3>QA-REG</h3>
-                <p>release/* branch</p>
-                <p style="margin-top: 10px; font-size: 0.75rem;">Regression Tests</p>
-            </div>
-            <div class="env-arrow">→</div>
-            <div class="env-box uat">
-                <span class="env-badge">Manual Gate</span>
-                <h3>UAT</h3>
-                <p>release/* + tag</p>
-                <p style="margin-top: 10px; font-size: 0.75rem;">User Acceptance</p>
-            </div>
-            <div class="env-arrow">→</div>
-            <div class="env-box preprod">
-                <span class="env-badge">Manual Gate</span>
-                <h3>PRE-PROD</h3>
-                <p>release/* + tag</p>
-                <p style="margin-top: 10px; font-size: 0.75rem;">Performance Test</p>
-            </div>
-            <div class="env-arrow">→</div>
-            <div class="env-box prod">
-                <span class="env-badge">Manual Gate</span>
-                <h3>PRODUCTION</h3>
-                <p>master branch</p>
-                <p style="margin-top: 10px; font-size: 0.75rem;">Canary Deploy</p>
-            </div>
+        <div class="branch-diagram-container">
+            <svg class="branch-diagram" viewBox="0 0 1400 450" xmlns="http://www.w3.org/2000/svg">
+                <!-- Timeline -->
+                <text x="200" y="30" fill="#64748b" font-size="11" text-anchor="middle">Day 1</text>
+                <text x="350" y="30" fill="#64748b" font-size="11" text-anchor="middle">Day 2-3</text>
+                <text x="550" y="30" fill="#64748b" font-size="11" text-anchor="middle">Day 4-5</text>
+                <text x="750" y="30" fill="#64748b" font-size="11" text-anchor="middle">Day 6-7</text>
+                <text x="950" y="30" fill="#64748b" font-size="11" text-anchor="middle">Day 8-9</text>
+                <text x="1150" y="30" fill="#64748b" font-size="11" text-anchor="middle">Day 10</text>
+                <text x="1300" y="30" fill="#64748b" font-size="11" text-anchor="middle">Day 11+</text>
+
+                <!-- Dev Cut-off marker -->
+                <line x1="200" y1="45" x2="200" y2="420" stroke="#f59e0b" stroke-width="3" stroke-dasharray="8,4"/>
+                <rect x="155" y="50" width="90" height="28" rx="5" fill="#f59e0b"/>
+                <text x="200" y="69" fill="#000" font-size="11" font-weight="bold" text-anchor="middle">DEV CUT-OFF</text>
+
+                <!-- Develop branch -->
+                <rect x="20" y="100" width="90" height="28" rx="6" fill="url(#developGrad)"/>
+                <text x="65" y="119" fill="white" font-size="10" font-weight="bold" text-anchor="middle">develop</text>
+                <line x1="120" y1="114" x2="1350" y2="114" stroke="#3b82f6" stroke-width="6" stroke-linecap="round"/>
+                
+                <!-- Commits on develop -->
+                <circle cx="150" cy="114" r="6" fill="white" stroke="#3b82f6" stroke-width="2"/>
+                <circle cx="180" cy="114" r="6" fill="white" stroke="#3b82f6" stroke-width="2"/>
+                <circle cx="250" cy="114" r="6" fill="white" stroke="#3b82f6" stroke-width="2"/>
+                <circle cx="400" cy="114" r="6" fill="white" stroke="#3b82f6" stroke-width="2"/>
+                <circle cx="600" cy="114" r="6" fill="white" stroke="#3b82f6" stroke-width="2"/>
+                <circle cx="900" cy="114" r="6" fill="white" stroke="#3b82f6" stroke-width="2"/>
+                <circle cx="1200" cy="114" r="6" fill="white" stroke="#3b82f6" stroke-width="2"/>
+                <text x="280" y="100" fill="#60a5fa" font-size="9">Next sprint features continue...</text>
+
+                <!-- Release branch creation -->
+                <path d="M 200 114 Q 220 160 250 180 L 1100 180" stroke="#8b5cf6" stroke-width="5" fill="none" stroke-linecap="round"/>
+                
+                <!-- Release branch label -->
+                <rect x="20" y="165" width="90" height="28" rx="6" fill="url(#releaseGrad)"/>
+                <text x="65" y="184" fill="white" font-size="10" font-weight="bold" text-anchor="middle">release/2.5</text>
+
+                <!-- Environment boxes on release -->
+                <!-- DEV -->
+                <rect x="240" y="155" width="80" height="50" rx="8" fill="#3b82f6"/>
+                <text x="280" y="175" fill="white" font-size="9" font-weight="bold" text-anchor="middle">DEV</text>
+                <text x="280" y="192" fill="rgba(255,255,255,0.8)" font-size="8" text-anchor="middle">Smoke Test</text>
+                <circle cx="280" cy="180" r="25" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="1" stroke-dasharray="3,3"/>
+
+                <!-- QA -->
+                <rect x="380" y="155" width="120" height="50" rx="8" fill="#8b5cf6"/>
+                <text x="440" y="175" fill="white" font-size="9" font-weight="bold" text-anchor="middle">QA REGRESSION</text>
+                <text x="440" y="192" fill="rgba(255,255,255,0.8)" font-size="8" text-anchor="middle">Full Test Suite</text>
+                
+                <!-- RC1 Tag -->
+                <rect x="520" y="135" width="35" height="18" rx="4" fill="#f59e0b"/>
+                <text x="537" y="148" fill="#000" font-size="8" font-weight="bold" text-anchor="middle">RC1</text>
+                <circle cx="537" cy="180" r="8" fill="white" stroke="#8b5cf6" stroke-width="2"/>
+
+                <!-- UAT -->
+                <rect x="580" y="155" width="120" height="50" rx="8" fill="#f59e0b"/>
+                <text x="640" y="175" fill="#000" font-size="9" font-weight="bold" text-anchor="middle">UAT</text>
+                <text x="640" y="192" fill="rgba(0,0,0,0.7)" font-size="8" text-anchor="middle">User Acceptance</text>
+                
+                <!-- RC2 Tag -->
+                <rect x="720" y="135" width="35" height="18" rx="4" fill="#f59e0b"/>
+                <text x="737" y="148" fill="#000" font-size="8" font-weight="bold" text-anchor="middle">RC2</text>
+                <circle cx="737" cy="180" r="8" fill="white" stroke="#8b5cf6" stroke-width="2"/>
+
+                <!-- PRE-PROD -->
+                <rect x="780" y="155" width="100" height="50" rx="8" fill="#06b6d4"/>
+                <text x="830" y="175" fill="white" font-size="9" font-weight="bold" text-anchor="middle">PRE-PROD</text>
+                <text x="830" y="192" fill="rgba(255,255,255,0.8)" font-size="8" text-anchor="middle">Perf Testing</text>
+                <circle cx="890" cy="180" r="8" fill="white" stroke="#8b5cf6" stroke-width="2"/>
+
+                <!-- PROD Merge -->
+                <rect x="920" y="155" width="80" height="50" rx="8" fill="#10b981"/>
+                <text x="960" y="175" fill="white" font-size="9" font-weight="bold" text-anchor="middle">MERGE</text>
+                <text x="960" y="192" fill="rgba(255,255,255,0.8)" font-size="8" text-anchor="middle">to master</text>
+                <circle cx="1000" cy="180" r="10" fill="#10b981" stroke="white" stroke-width="3"/>
+
+                <!-- Merge arrow to master -->
+                <path d="M 1000 180 Q 1050 140 1100 114" stroke="#10b981" stroke-width="3" stroke-dasharray="6,3"/>
+                <polygon points="1095,120 1105,125 1100,110" fill="#10b981"/>
+
+                <!-- CANARY/PROD -->
+                <rect x="1050" y="155" width="100" height="50" rx="8" fill="linear-gradient(135deg, #10b981, #059669)"/>
+                <text x="1100" y="175" fill="white" font-size="9" font-weight="bold" text-anchor="middle">PRODUCTION</text>
+                <text x="1100" y="192" fill="rgba(255,255,255,0.8)" font-size="8" text-anchor="middle">Canary Deploy</text>
+
+                <!-- Master branch -->
+                <rect x="20" y="240" width="90" height="28" rx="6" fill="url(#masterGrad)"/>
+                <text x="65" y="259" fill="white" font-size="10" font-weight="bold" text-anchor="middle">master</text>
+                <line x1="120" y1="254" x2="1350" y2="254" stroke="#10b981" stroke-width="6" stroke-linecap="round"/>
+                
+                <!-- Version tag -->
+                <circle cx="1100" cy="254" r="12" fill="#10b981" stroke="white" stroke-width="3"/>
+                <rect x="1060" y="275" width="80" height="22" rx="5" fill="#10b981"/>
+                <text x="1100" y="291" fill="white" font-size="10" font-weight="bold" text-anchor="middle">v2.5.0</text>
+
+                <!-- Bugfix branch -->
+                <rect x="20" y="320" width="90" height="28" rx="6" fill="url(#bugfixGrad)"/>
+                <text x="65" y="339" fill="white" font-size="10" font-weight="bold" text-anchor="middle">bugfix/*</text>
+                
+                <!-- Bugfix from QA -->
+                <path d="M 450 205 Q 460 280 480 335 L 560 335" stroke="#ec4899" stroke-width="4" fill="none" stroke-linecap="round"/>
+                <circle cx="520" cy="335" r="7" fill="white" stroke="#ec4899" stroke-width="2"/>
+                <text x="520" y="365" fill="#f472b6" font-size="9" text-anchor="middle">QA-BUG-001</text>
+                <!-- Merge back -->
+                <path d="M 560 335 Q 600 280 620 185" stroke="#ec4899" stroke-width="2" stroke-dasharray="4,2"/>
+                <polygon points="620,195 615,210 625,210" fill="#ec4899"/>
+
+                <!-- Bugfix from UAT -->
+                <path d="M 650 205 Q 660 280 680 335 L 760 335" stroke="#ec4899" stroke-width="4" fill="none" stroke-linecap="round"/>
+                <circle cx="720" cy="335" r="7" fill="white" stroke="#ec4899" stroke-width="2"/>
+                <text x="720" y="365" fill="#f472b6" font-size="9" text-anchor="middle">UAT-BUG-002</text>
+                <!-- Merge back -->
+                <path d="M 760 335 Q 800 280 820 185" stroke="#ec4899" stroke-width="2" stroke-dasharray="4,2"/>
+                <polygon points="820,195 815,210 825,210" fill="#ec4899"/>
+
+                <!-- Approval gates -->
+                <g transform="translate(540, 220)">
+                    <rect x="-20" y="-10" width="40" height="20" rx="10" fill="#22c55e"/>
+                    <text x="0" y="5" fill="white" font-size="8" font-weight="bold" text-anchor="middle">QA ✓</text>
+                </g>
+                <g transform="translate(740, 220)">
+                    <rect x="-20" y="-10" width="40" height="20" rx="10" fill="#22c55e"/>
+                    <text x="0" y="5" fill="white" font-size="8" font-weight="bold" text-anchor="middle">UAT ✓</text>
+                </g>
+                <g transform="translate(890, 220)">
+                    <rect x="-20" y="-10" width="40" height="20" rx="10" fill="#22c55e"/>
+                    <text x="0" y="5" fill="white" font-size="8" font-weight="bold" text-anchor="middle">PROD ✓</text>
+                </g>
+
+                <!-- Timeline arrows -->
+                <line x1="320" y1="180" x2="375" y2="180" stroke="rgba(255,255,255,0.3)" stroke-width="2" marker-end="url(#arrowhead)"/>
+                <line x1="500" y1="180" x2="575" y2="180" stroke="rgba(255,255,255,0.3)" stroke-width="2" marker-end="url(#arrowhead)"/>
+                <line x1="700" y1="180" x2="775" y2="180" stroke="rgba(255,255,255,0.3)" stroke-width="2" marker-end="url(#arrowhead)"/>
+                <line x1="880" y1="180" x2="915" y2="180" stroke="rgba(255,255,255,0.3)" stroke-width="2" marker-end="url(#arrowhead)"/>
+                <line x1="1000" y1="180" x2="1045" y2="180" stroke="rgba(255,255,255,0.3)" stroke-width="2" marker-end="url(#arrowhead)"/>
+
+                <defs>
+                    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                        <polygon points="0 0, 10 3.5, 0 7" fill="rgba(255,255,255,0.5)"/>
+                    </marker>
+                </defs>
+            </svg>
         </div>
 
-        <div class="section-divider"><span>Branch to Environment Mapping</span></div>
-
-        <div class="code-block">
-            <span class="comment"># Environment deployment triggers</span><br><br>
-            <span class="keyword">develop</span> → <span class="string">DEV</span> (auto-deploy on merge)<br>
-            <span class="keyword">release/*</span> → <span class="string">QA</span> (auto-deploy on branch creation)<br>
-            <span class="keyword">release/* + qa-tag</span> → <span class="string">UAT</span> (manual approval required)<br>
-            <span class="keyword">release/* + preprod-tag</span> → <span class="string">PRE-PROD</span> (tech lead approval)<br>
-            <span class="keyword">master + version-tag</span> → <span class="string">PRODUCTION</span> (release manager approval)<br>
-        </div>
-
-        <div class="cards-grid" style="margin-top: 30px;">
-            <div class="card">
-                <div class="card-icon" style="background: var(--develop);">🔄</div>
-                <h3>Continuous Integration</h3>
-                <p>Every merge to develop triggers build, test, and deploy to DEV environment.</p>
+        <div class="cards-grid" style="grid-template-columns: repeat(5, 1fr);">
+            <div class="card" style="text-align: center; border-top: 3px solid #3b82f6;">
+                <h3>1. Dev Cut-off</h3>
+                <p>Release branch created from develop</p>
             </div>
-            <div class="card">
-                <div class="card-icon" style="background: var(--release);">✅</div>
-                <h3>Quality Gates</h3>
-                <p>Each environment has specific quality gates that must pass before promotion.</p>
+            <div class="card" style="text-align: center; border-top: 3px solid #8b5cf6;">
+                <h3>2. QA Testing</h3>
+                <p>Regression + bug fixes (RC1, RC2)</p>
             </div>
-            <div class="card">
-                <div class="card-icon" style="background: var(--success);">🚀</div>
-                <h3>Staged Rollout</h3>
-                <p>Production uses canary deployment: 10% → 25% → 50% → 100%</p>
+            <div class="card" style="text-align: center; border-top: 3px solid #f59e0b;">
+                <h3>3. UAT</h3>
+                <p>User acceptance sign-off</p>
+            </div>
+            <div class="card" style="text-align: center; border-top: 3px solid #06b6d4;">
+                <h3>4. Pre-Prod</h3>
+                <p>Performance validation</p>
+            </div>
+            <div class="card" style="text-align: center; border-top: 3px solid #10b981;">
+                <h3>5. Production</h3>
+                <p>Canary → Full rollout</p>
             </div>
         </div>
     </section>
 
-    <!-- Slide 4: Release Cycle Timeline -->
+    <!-- ========================================
+         SLIDE 4: Advance Release Flow
+         ======================================== -->
     <section class="slide" id="slide4">
-        <span class="slide-number">4 / 12</span>
+        <span class="slide-number">4 / 10</span>
         <div class="slide-header">
-            <h2>Release Cycle Timeline</h2>
-            <p>2-Week Sprint Release Cadence</p>
+            <h2>Advance Release Strategy</h2>
+            <p>Working on Release 3.0 while 2.5 and 2.6 are in progress</p>
         </div>
 
-        <div class="timeline">
-            <div class="timeline-item">
-                <div class="timeline-dot" style="background: var(--develop);">1</div>
-                <div class="timeline-content">
-                    <h4>Sprint Start</h4>
-                    <p>Day 1-2</p>
-                    <p>Feature development begins</p>
-                </div>
-            </div>
-            <div class="timeline-item">
-                <div class="timeline-dot" style="background: var(--feature);">2</div>
-                <div class="timeline-content">
-                    <h4>Development</h4>
-                    <p>Day 3-8</p>
-                    <p>Features & bug fixes</p>
-                </div>
-            </div>
-            <div class="timeline-item">
-                <div class="timeline-dot" style="background: var(--warning);">3</div>
-                <div class="timeline-content">
-                    <h4>Dev Cut-off</h4>
-                    <p>Day 8</p>
-                    <p>Release branch created</p>
-                </div>
-            </div>
-            <div class="timeline-item">
-                <div class="timeline-dot" style="background: var(--release);">4</div>
-                <div class="timeline-content">
-                    <h4>QA Testing</h4>
-                    <p>Day 9-10</p>
-                    <p>Regression testing</p>
-                </div>
-            </div>
-            <div class="timeline-item">
-                <div class="timeline-dot" style="background: var(--info);">5</div>
-                <div class="timeline-content">
-                    <h4>UAT</h4>
-                    <p>Day 11-12</p>
-                    <p>User acceptance</p>
-                </div>
-            </div>
-            <div class="timeline-item">
-                <div class="timeline-dot" style="background: var(--success);">6</div>
-                <div class="timeline-content">
-                    <h4>Release</h4>
-                    <p>Day 14</p>
-                    <p>Production deploy</p>
-                </div>
-            </div>
+        <div class="branch-diagram-container">
+            <svg class="branch-diagram" viewBox="0 0 1400 400" xmlns="http://www.w3.org/2000/svg">
+                <!-- Timeline -->
+                <text x="200" y="25" fill="#f59e0b" font-size="10" font-weight="bold" text-anchor="middle">2.5 Cut-off</text>
+                <text x="500" y="25" fill="#10b981" font-size="10" font-weight="bold" text-anchor="middle">2.5 Release</text>
+                <text x="650" y="25" fill="#f59e0b" font-size="10" font-weight="bold" text-anchor="middle">2.6 Cut-off</text>
+                <text x="950" y="25" fill="#10b981" font-size="10" font-weight="bold" text-anchor="middle">2.6 Release</text>
+                <text x="1050" y="25" fill="#f59e0b" font-size="10" font-weight="bold" text-anchor="middle">3.0 Merge</text>
+                <text x="1200" y="25" fill="#f59e0b" font-size="10" font-weight="bold" text-anchor="middle">3.0 Cut-off</text>
+
+                <!-- Vertical markers -->
+                <line x1="200" y1="35" x2="200" y2="380" stroke="#f59e0b" stroke-width="2" stroke-dasharray="6,3"/>
+                <line x1="500" y1="35" x2="500" y2="380" stroke="#10b981" stroke-width="2" stroke-dasharray="6,3"/>
+                <line x1="650" y1="35" x2="650" y2="380" stroke="#f59e0b" stroke-width="2" stroke-dasharray="6,3"/>
+                <line x1="950" y1="35" x2="950" y2="380" stroke="#10b981" stroke-width="2" stroke-dasharray="6,3"/>
+                <line x1="1050" y1="35" x2="1050" y2="380" stroke="#f59e0b" stroke-width="2" stroke-dasharray="6,3"/>
+                <line x1="1200" y1="35" x2="1200" y2="380" stroke="#f59e0b" stroke-width="2" stroke-dasharray="6,3"/>
+
+                <!-- Master -->
+                <rect x="20" y="55" width="80" height="26" rx="5" fill="url(#masterGrad)"/>
+                <text x="60" y="73" fill="white" font-size="10" font-weight="bold" text-anchor="middle">master</text>
+                <line x1="110" y1="68" x2="1350" y2="68" stroke="#10b981" stroke-width="5" stroke-linecap="round"/>
+                <circle cx="500" cy="68" r="10" fill="#10b981" stroke="white" stroke-width="2"/>
+                <text x="500" y="55" fill="#10b981" font-size="9" text-anchor="middle">v2.5.0</text>
+                <circle cx="950" cy="68" r="10" fill="#10b981" stroke="white" stroke-width="2"/>
+                <text x="950" y="55" fill="#10b981" font-size="9" text-anchor="middle">v2.6.0</text>
+                <circle cx="1300" cy="68" r="8" fill="white" stroke="#10b981" stroke-width="2"/>
+                <text x="1300" y="55" fill="#10b981" font-size="9" text-anchor="middle">v3.0.0</text>
+
+                <!-- Release 2.5 -->
+                <path d="M 200 170 Q 210 120 230 105 L 480 105" stroke="#8b5cf6" stroke-width="4" fill="none" stroke-linecap="round"/>
+                <text x="350" y="125" fill="#a78bfa" font-size="9">release/2.5.0</text>
+                <circle cx="480" cy="105" r="8" fill="#8b5cf6" stroke="white" stroke-width="2"/>
+                <path d="M 480 105 Q 490 85 500 75" stroke="#10b981" stroke-width="2" stroke-dasharray="4,2"/>
+
+                <!-- Release 2.6 -->
+                <path d="M 650 170 Q 660 120 680 105 L 930 105" stroke="#8b5cf6" stroke-width="4" fill="none" stroke-linecap="round"/>
+                <text x="800" y="125" fill="#a78bfa" font-size="9">release/2.6.0</text>
+                <circle cx="930" cy="105" r="8" fill="#8b5cf6" stroke="white" stroke-width="2"/>
+                <path d="M 930 105 Q 940 85 950 75" stroke="#10b981" stroke-width="2" stroke-dasharray="4,2"/>
+
+                <!-- Release 3.0 -->
+                <path d="M 1200 170 Q 1210 120 1230 105 L 1300 105" stroke="#8b5cf6" stroke-width="4" fill="none" stroke-linecap="round"/>
+                <text x="1250" y="125" fill="#a78bfa" font-size="9">release/3.0.0</text>
+                <path d="M 1300 105 Q 1300 85 1300 75" stroke="#10b981" stroke-width="2" stroke-dasharray="4,2"/>
+
+                <!-- Develop -->
+                <rect x="20" y="155" width="80" height="26" rx="5" fill="url(#developGrad)"/>
+                <text x="60" y="173" fill="white" font-size="10" font-weight="bold" text-anchor="middle">develop</text>
+                <line x1="110" y1="168" x2="1350" y2="168" stroke="#3b82f6" stroke-width="5" stroke-linecap="round"/>
+                
+                <!-- Labels on develop -->
+                <text x="300" y="195" fill="#60a5fa" font-size="9">2.5 features</text>
+                <text x="550" y="195" fill="#60a5fa" font-size="9">2.6 features</text>
+                <text x="800" y="195" fill="#60a5fa" font-size="9">2.6 features</text>
+                <text x="1120" y="195" fill="#60a5fa" font-size="9">3.0 features (merged)</text>
+
+                <!-- Advance 3.0 merge point -->
+                <circle cx="1050" cy="168" r="10" fill="#f59e0b" stroke="white" stroke-width="2"/>
+                
+                <!-- Develop commits -->
+                <circle cx="150" cy="168" r="5" fill="white" stroke="#3b82f6" stroke-width="2"/>
+                <circle cx="250" cy="168" r="5" fill="white" stroke="#3b82f6" stroke-width="2"/>
+                <circle cx="350" cy="168" r="5" fill="white" stroke="#3b82f6" stroke-width="2"/>
+                <circle cx="450" cy="168" r="5" fill="white" stroke="#3b82f6" stroke-width="2"/>
+                <circle cx="550" cy="168" r="5" fill="white" stroke="#3b82f6" stroke-width="2"/>
+                <circle cx="700" cy="168" r="5" fill="white" stroke="#3b82f6" stroke-width="2"/>
+                <circle cx="850" cy="168" r="5" fill="white" stroke="#3b82f6" stroke-width="2"/>
+                <circle cx="1150" cy="168" r="5" fill="white" stroke="#3b82f6" stroke-width="2"/>
+                <circle cx="1250" cy="168" r="5" fill="white" stroke="#3b82f6" stroke-width="2"/>
+
+                <!-- Advance 3.0 -->
+                <rect x="20" y="245" width="80" height="26" rx="5" fill="url(#advanceGrad)"/>
+                <text x="60" y="263" fill="white" font-size="9" font-weight="bold" text-anchor="middle">advance/3.0</text>
+                
+                <!-- Advance branch line -->
+                <path d="M 150 168 Q 160 210 180 258 L 1030 258" stroke="#f59e0b" stroke-width="5" fill="none" stroke-linecap="round"/>
+                
+                <!-- Advance commits -->
+                <circle cx="280" cy="258" r="6" fill="white" stroke="#f59e0b" stroke-width="2"/>
+                <circle cx="400" cy="258" r="6" fill="white" stroke="#f59e0b" stroke-width="2"/>
+                <circle cx="520" cy="258" r="6" fill="white" stroke="#f59e0b" stroke-width="2"/>
+                <circle cx="640" cy="258" r="6" fill="white" stroke="#f59e0b" stroke-width="2"/>
+                <circle cx="760" cy="258" r="6" fill="white" stroke="#f59e0b" stroke-width="2"/>
+                <circle cx="880" cy="258" r="6" fill="white" stroke="#f59e0b" stroke-width="2"/>
+                <circle cx="1000" cy="258" r="6" fill="white" stroke="#f59e0b" stroke-width="2"/>
+                <circle cx="1030" cy="258" r="10" fill="#f59e0b" stroke="white" stroke-width="2"/>
+                
+                <!-- Merge arrow -->
+                <path d="M 1030 258 Q 1040 210 1050 178" stroke="#f59e0b" stroke-width="3" stroke-dasharray="5,3"/>
+                <polygon points="1050,185 1045,200 1055,200" fill="#f59e0b"/>
+                
+                <text x="600" y="290" fill="#fbbf24" font-size="10" text-anchor="middle">Release 3.0 features developed in parallel (not blocking 2.5 or 2.6)</text>
+
+                <!-- Feature branches on advance -->
+                <rect x="20" y="320" width="80" height="26" rx="5" fill="url(#featureGrad)"/>
+                <text x="60" y="338" fill="white" font-size="9" font-weight="bold" text-anchor="middle">feature/ADV-*</text>
+                
+                <path d="M 260 258 Q 270 300 290 340 L 350 340" stroke="#06b6d4" stroke-width="3" fill="none" stroke-linecap="round"/>
+                <circle cx="320" cy="340" r="5" fill="white" stroke="#06b6d4" stroke-width="2"/>
+                <text x="320" y="365" fill="#22d3ee" font-size="8" text-anchor="middle">ADV-3.0-001</text>
+                <path d="M 350 340 Q 380 300 400 265" stroke="#06b6d4" stroke-width="2" stroke-dasharray="3,2"/>
+
+                <path d="M 500 258 Q 510 300 530 340 L 590 340" stroke="#06b6d4" stroke-width="3" fill="none" stroke-linecap="round"/>
+                <circle cx="560" cy="340" r="5" fill="white" stroke="#06b6d4" stroke-width="2"/>
+                <text x="560" y="365" fill="#22d3ee" font-size="8" text-anchor="middle">ADV-3.0-002</text>
+                <path d="M 590 340 Q 620 300 640 265" stroke="#06b6d4" stroke-width="2" stroke-dasharray="3,2"/>
+
+                <path d="M 740 258 Q 750 300 770 340 L 830 340" stroke="#06b6d4" stroke-width="3" fill="none" stroke-linecap="round"/>
+                <circle cx="800" cy="340" r="5" fill="white" stroke="#06b6d4" stroke-width="2"/>
+                <text x="800" y="365" fill="#22d3ee" font-size="8" text-anchor="middle">ADV-3.0-003</text>
+                <path d="M 830 340 Q 860 300 880 265" stroke="#06b6d4" stroke-width="2" stroke-dasharray="3,2"/>
+            </svg>
         </div>
 
         <div class="two-columns">
             <div class="card">
-                <h3>📅 Week 1: Development</h3>
+                <h3>🔶 When to Use Advance Branch</h3>
                 <ul>
-                    <li>Feature branches created from develop</li>
-                    <li>Daily code reviews and merges</li>
-                    <li>Continuous deployment to DEV</li>
-                    <li>Unit and integration tests</li>
-                </ul>
-            </div>
-            <div class="card">
-                <h3>📅 Week 2: Stabilization</h3>
-                <ul>
-                    <li>Release branch cut on Monday</li>
-                    <li>QA regression testing (Mon-Tue)</li>
-                    <li>UAT testing (Wed-Thu)</li>
-                    <li>Production release (Friday)</li>
-                </ul>
-            </div>
-        </div>
-    </section>
-
-    <!-- Slide 5: Advance Release -->
-    <section class="slide" id="slide5">
-        <span class="slide-number">5 / 12</span>
-        <div class="slide-header">
-            <h2>Advance Release Strategy</h2>
-            <p>Working on Release 3.0 while 2.5 is in progress</p>
-        </div>
-
-        <div class="branch-diagram">
-            <div class="branch-container">
-                <div class="branch-row branch-develop">
-                    <div class="branch-label">develop (2.5)</div>
-                    <div class="branch-line">
-                        <div class="commit" style="left: 10%; color: var(--develop);"></div>
-                        <div class="commit" style="left: 30%; color: var(--develop);"></div>
-                        <div class="commit" style="left: 50%; color: var(--develop);"></div>
-                        <div class="commit" style="left: 70%; color: var(--develop);"></div>
-                        <div class="commit" style="left: 90%; color: var(--develop);"></div>
-                    </div>
-                </div>
-
-                <div class="branch-row branch-advance">
-                    <div class="branch-label">advance/3.0</div>
-                    <div class="branch-line" style="width: 60%; margin-left: 25%;">
-                        <div class="commit" style="left: 15%; color: var(--advance);">
-                            <span class="commit-label">3.0 Feature A</span>
-                        </div>
-                        <div class="commit" style="left: 40%; color: var(--advance);">
-                            <span class="commit-label">3.0 Feature B</span>
-                        </div>
-                        <div class="commit" style="left: 65%; color: var(--advance);">
-                            <span class="commit-label">3.0 Feature C</span>
-                        </div>
-                        <div class="commit" style="left: 90%; color: var(--advance);">
-                            <span class="commit-label">Merge to develop</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="branch-row branch-release">
-                    <div class="branch-label">release/2.5.0</div>
-                    <div class="branch-line" style="width: 30%; margin-left: 50%;">
-                        <div class="commit" style="left: 30%; color: var(--release);"></div>
-                        <div class="commit" style="left: 70%; color: var(--release);">
-                            <span class="tag" style="background: var(--success);">v2.5.0</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="cards-grid">
-            <div class="card">
-                <div class="card-icon" style="background: var(--advance);">🔮</div>
-                <h3>When to Use Advance Branch</h3>
-                <ul>
-                    <li>Feature won't make current release</li>
+                    <li>Feature won't make the current release deadline</li>
                     <li>Breaking changes that need isolation</li>
-                    <li>Long-running feature development</li>
-                    <li>Experimental features</li>
+                    <li>Long-running feature development (2+ sprints)</li>
+                    <li>Experimental features requiring validation</li>
+                    <li>Major refactoring or architecture changes</li>
                 </ul>
             </div>
             <div class="card">
-                <div class="card-icon" style="background: var(--develop);">🔄</div>
-                <h3>Workflow</h3>
+                <h3>✅ Advance Branch Workflow</h3>
                 <ul>
-                    <li>Create <code>advance/3.0</code> from develop</li>
-                    <li>Create features as <code>feature/ADV-3.0-xxx</code></li>
-                    <li>Merge to advance branch</li>
-                    <li>After 2.5 ships, merge to develop</li>
-                </ul>
-            </div>
-            <div class="card">
-                <div class="card-icon" style="background: var(--success);">✨</div>
-                <h3>Benefits</h3>
-                <ul>
-                    <li>No blocking between releases</li>
-                    <li>Parallel development streams</li>
-                    <li>Clean separation of concerns</li>
-                    <li>Easy to defer if needed</li>
+                    <li><strong>Create:</strong> <code>advance/3.0</code> from develop</li>
+                    <li><strong>Feature:</strong> <code>feature/ADV-3.0-xxx</code> from advance</li>
+                    <li><strong>Merge:</strong> Features merge to advance branch</li>
+                    <li><strong>Sync:</strong> Regularly rebase/merge from develop</li>
+                    <li><strong>Complete:</strong> Merge advance to develop when ready</li>
                 </ul>
             </div>
         </div>
     </section>
 
-    <!-- Slide 6: JFrog Artifact Flow -->
-    <section class="slide" id="slide6">
-        <span class="slide-number">6 / 12</span>
+    <!-- ========================================
+         SLIDE 5: Environment Promotion
+         ======================================== -->
+    <section class="slide" id="slide5">
+        <span class="slide-number">5 / 10</span>
         <div class="slide-header">
-            <h2>JFrog Artifactory Flow</h2>
-            <p>Build Once, Deploy Many - Artifact Promotion</p>
+            <h2>Environment Promotion Flow</h2>
+            <p>Branch to Environment Mapping & Deployment Gates</p>
         </div>
 
-        <div class="jfrog-flow">
-            <div class="jfrog-row">
-                <div class="jfrog-repo dev">
-                    <h3>docker-dev-local</h3>
-                    <p>Development Builds</p>
-                </div>
-                <div class="jfrog-arrow">→</div>
-                <div class="jfrog-artifacts">
-                    user-service:2.3.1-abc123<br>
-                    order-service:1.8.0-def456<br>
-                    payment-service:3.0.0-ghi789
-                </div>
-                <div class="jfrog-arrow">→</div>
-                <div style="text-align: center;">
-                    <span class="badge badge-primary" style="font-size: 1rem; padding: 15px 25px;">DEV</span>
-                </div>
+        <div class="env-flow" style="margin: 40px 0;">
+            <div class="env-box dev">
+                <span class="env-type">Auto Deploy</span>
+                <h3>DEV</h3>
+                <p>develop branch</p>
+                <p style="margin-top: 8px; opacity: 0.8; font-size: 0.75rem;">Smoke Tests</p>
             </div>
-
-            <div style="text-align: center; font-size: 2rem; color: var(--warning);">↓ Promote</div>
-
-            <div class="jfrog-row">
-                <div class="jfrog-repo rc">
-                    <h3>docker-rc-local</h3>
-                    <p>Release Candidates</p>
-                </div>
-                <div class="jfrog-arrow">→</div>
-                <div class="jfrog-artifacts">
-                    user-service:2.3.1-rc.1<br>
-                    user-service:2.3.1-rc.2<br>
-                    order-service:1.8.0-rc.1
-                </div>
-                <div class="jfrog-arrow">→</div>
-                <div style="text-align: center;">
-                    <span class="badge" style="background: var(--release); font-size: 1rem; padding: 15px 25px;">QA / UAT</span>
-                </div>
+            <div class="env-arrow">→</div>
+            <div class="env-box qa">
+                <span class="env-type">Auto Deploy</span>
+                <h3>QA-REG</h3>
+                <p>release/* branch</p>
+                <p style="margin-top: 8px; opacity: 0.8; font-size: 0.75rem;">Full Regression</p>
             </div>
-
-            <div style="text-align: center; font-size: 2rem; color: var(--warning);">↓ Promote</div>
-
-            <div class="jfrog-row">
-                <div class="jfrog-repo release">
-                    <h3>docker-release-local</h3>
-                    <p>Production Releases</p>
-                </div>
-                <div class="jfrog-arrow">→</div>
-                <div class="jfrog-artifacts">
-                    user-service:2.3.1 (immutable)<br>
-                    order-service:1.8.0 (immutable)<br>
-                    payment-service:3.0.0 (immutable)
-                </div>
-                <div class="jfrog-arrow">→</div>
-                <div style="text-align: center;">
-                    <span class="badge badge-success" style="font-size: 1rem; padding: 15px 25px;">PRODUCTION</span>
-                </div>
+            <div class="env-arrow">→</div>
+            <div class="env-box uat">
+                <span class="env-type">Manual Gate</span>
+                <h3>UAT</h3>
+                <p>release/* + tag</p>
+                <p style="margin-top: 8px; opacity: 0.8; font-size: 0.75rem;">User Acceptance</p>
             </div>
-        </div>
-
-        <div class="two-columns" style="margin-top: 30px;">
-            <div class="card">
-                <h3>🏗️ Repository Structure</h3>
-                <div class="code-block">
-                    company.jfrog.io/<br>
-                    ├── docker-dev-local/<br>
-                    ├── docker-rc-local/<br>
-                    ├── docker-release-local/<br>
-                    ├── helm-local/<br>
-                    └── libs-release-local/
-                </div>
+            <div class="env-arrow">→</div>
+            <div class="env-box preprod">
+                <span class="env-type">Manual Gate</span>
+                <h3>PRE-PROD</h3>
+                <p>release/* + tag</p>
+                <p style="margin-top: 8px; opacity: 0.8; font-size: 0.75rem;">Performance Test</p>
             </div>
-            <div class="card">
-                <h3>🔒 Key Principles</h3>
-                <ul>
-                    <li><strong>Build Once:</strong> Same artifact through all envs</li>
-                    <li><strong>Immutable:</strong> Production artifacts cannot be overwritten</li>
-                    <li><strong>Traceable:</strong> Full audit trail of promotions</li>
-                    <li><strong>Secure:</strong> Xray security scanning at each stage</li>
-                </ul>
+            <div class="env-arrow">→</div>
+            <div class="env-box prod">
+                <span class="env-type">Manual Gate</span>
+                <h3>PRODUCTION</h3>
+                <p>master branch</p>
+                <p style="margin-top: 8px; opacity: 0.8; font-size: 0.75rem;">Canary Deploy</p>
             </div>
-        </div>
-    </section>
-
-    <!-- Slide 7: Service Isolation -->
-    <section class="slide" id="slide7">
-        <span class="slide-number">7 / 12</span>
-        <div class="slide-header">
-            <h2>Isolated Pipelines per Service</h2>
-            <p>Principle #1: Independent Build, Test, Deploy</p>
-        </div>
-
-        <div class="cards-grid" style="grid-template-columns: repeat(5, 1fr);">
-            <div class="card" style="text-align: center;">
-                <div class="card-icon" style="background: #3b82f6; margin: 0 auto;">👤</div>
-                <h3>User Service</h3>
-                <p>v2.3.1</p>
-                <span class="badge badge-success">Deployed</span>
-            </div>
-            <div class="card" style="text-align: center;">
-                <div class="card-icon" style="background: #8b5cf6; margin: 0 auto;">📦</div>
-                <h3>Order Service</h3>
-                <p>v1.8.0</p>
-                <span class="badge badge-success">Deployed</span>
-            </div>
-            <div class="card" style="text-align: center;">
-                <div class="card-icon" style="background: #10b981; margin: 0 auto;">💳</div>
-                <h3>Payment Service</h3>
-                <p>v3.0.0</p>
-                <span class="badge badge-warning">In QA</span>
-            </div>
-            <div class="card" style="text-align: center;">
-                <div class="card-icon" style="background: #f59e0b; margin: 0 auto;">🔔</div>
-                <h3>Notification</h3>
-                <p>v1.2.5</p>
-                <span class="badge badge-success">Deployed</span>
-            </div>
-            <div class="card" style="text-align: center;">
-                <div class="card-icon" style="background: #ef4444; margin: 0 auto;">🌐</div>
-                <h3>API Gateway</h3>
-                <p>v2.0.0</p>
-                <span class="badge badge-info">Building</span>
-            </div>
-        </div>
-
-        <div class="section-divider"><span>Benefits of Service-Level Pipelines</span></div>
-
-        <div class="cards-grid" style="grid-template-columns: repeat(4, 1fr);">
-            <div class="card">
-                <h3>⚡ Faster Builds</h3>
-                <p>Only build changed service, not entire monorepo</p>
-                <p style="color: var(--success); margin-top: 10px;">80% reduction in CI time</p>
-            </div>
-            <div class="card">
-                <h3>🎯 Reduced Blast Radius</h3>
-                <p>Failure in Service A doesn't block Service B</p>
-                <p style="color: var(--success); margin-top: 10px;">Isolated failures</p>
-            </div>
-            <div class="card">
-                <h3>🚀 Deployment Autonomy</h3>
-                <p>Teams deploy independently on their schedule</p>
-                <p style="color: var(--success); margin-top: 10px;">Faster time to production</p>
-            </div>
-            <div class="card">
-                <h3>↩️ Simple Rollback</h3>
-                <p>Rollback single service without affecting others</p>
-                <p style="color: var(--success); margin-top: 10px;">Reduced risk</p>
-            </div>
-        </div>
-
-        <div class="code-block" style="margin-top: 30px;">
-            <span class="comment"># Pipeline triggered only for changed service</span><br><br>
-            <span class="keyword">on:</span><br>
-            &nbsp;&nbsp;<span class="keyword">push:</span><br>
-            &nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">paths:</span><br>
-            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;- <span class="string">'services/user-service/**'</span><br>
-            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;- <span class="string">'shared/common-lib/**'</span>
-        </div>
-    </section>
-
-    <!-- Slide 8: Independent Versioning -->
-    <section class="slide" id="slide8">
-        <span class="slide-number">8 / 12</span>
-        <div class="slide-header">
-            <h2>Independent Versioning per Service</h2>
-            <p>Principle #2: Semantic Versioning (SemVer)</p>
         </div>
 
         <table class="styled-table">
             <thead>
                 <tr>
-                    <th>Service</th>
-                    <th>Current Version</th>
-                    <th>Last Updated</th>
-                    <th>Change Type</th>
-                    <th>Status</th>
+                    <th>Environment</th>
+                    <th>Branch</th>
+                    <th>Tag Pattern</th>
+                    <th>Deploy Type</th>
+                    <th>Approvers</th>
+                    <th>Testing</th>
                 </tr>
             </thead>
             <tbody>
                 <tr>
-                    <td>user-service</td>
-                    <td><span class="badge badge-success">2.3.1</span></td>
-                    <td>Jan 15, 2024</td>
-                    <td>Patch (bug fix)</td>
-                    <td>✅ Production</td>
+                    <td><span class="badge badge-primary">DEV</span></td>
+                    <td>develop</td>
+                    <td>-</td>
+                    <td>Automatic</td>
+                    <td>None</td>
+                    <td>Smoke, Unit</td>
                 </tr>
                 <tr>
-                    <td>order-service</td>
-                    <td><span class="badge badge-info">1.8.0</span></td>
-                    <td>Jan 16, 2024</td>
-                    <td>Minor (new feature)</td>
-                    <td>✅ Production</td>
+                    <td><span class="badge badge-purple">QA</span></td>
+                    <td>release/*</td>
+                    <td>qa-v2.5.0-rc1</td>
+                    <td>Automatic</td>
+                    <td>QA Team</td>
+                    <td>Regression, Integration</td>
                 </tr>
                 <tr>
-                    <td>payment-service</td>
-                    <td><span class="badge badge-danger">3.0.0</span></td>
-                    <td>Jan 18, 2024</td>
-                    <td>Major (breaking change)</td>
-                    <td>🔄 In QA</td>
+                    <td><span class="badge badge-warning">UAT</span></td>
+                    <td>release/*</td>
+                    <td>uat-v2.5.0</td>
+                    <td>Manual</td>
+                    <td>QA Lead, Product Owner</td>
+                    <td>User Acceptance</td>
                 </tr>
                 <tr>
-                    <td>notification-service</td>
-                    <td><span class="badge badge-success">1.2.5</span></td>
-                    <td>Jan 10, 2024</td>
-                    <td>Patch (security fix)</td>
-                    <td>✅ Production</td>
+                    <td><span class="badge badge-info">PRE-PROD</span></td>
+                    <td>release/*</td>
+                    <td>preprod-v2.5.0</td>
+                    <td>Manual</td>
+                    <td>Tech Lead, Release Mgr</td>
+                    <td>Performance, Security</td>
+                </tr>
+                <tr>
+                    <td><span class="badge badge-success">PRODUCTION</span></td>
+                    <td>master</td>
+                    <td>v2.5.0</td>
+                    <td>Manual (Canary)</td>
+                    <td>Release Mgr, Ops</td>
+                    <td>Canary Monitoring</td>
                 </tr>
             </tbody>
         </table>
 
-        <div class="section-divider"><span>Version Bump Rules</span></div>
-
-        <div class="cards-grid">
-            <div class="card" style="border-left: 4px solid var(--success);">
-                <h3>PATCH (x.y.Z)</h3>
-                <p>Bug fixes, security patches</p>
-                <p style="margin-top: 10px;"><code>2.3.0 → 2.3.1</code></p>
-                <p style="color: var(--success); margin-top: 10px;">Backward compatible</p>
-            </div>
-            <div class="card" style="border-left: 4px solid var(--info);">
-                <h3>MINOR (x.Y.0)</h3>
-                <p>New features, enhancements</p>
-                <p style="margin-top: 10px;"><code>2.3.0 → 2.4.0</code></p>
-                <p style="color: var(--info); margin-top: 10px;">Backward compatible</p>
-            </div>
-            <div class="card" style="border-left: 4px solid var(--danger);">
-                <h3>MAJOR (X.0.0)</h3>
-                <p>Breaking changes, API changes</p>
-                <p style="margin-top: 10px;"><code>2.3.0 → 3.0.0</code></p>
-                <p style="color: var(--danger); margin-top: 10px;">May break consumers</p>
-            </div>
-        </div>
-
-        <div class="code-block" style="margin-top: 30px;">
-            <span class="comment"># Each service has its own VERSION file</span><br><br>
-            services/<br>
-            ├── user-service/<br>
-            │&nbsp;&nbsp;&nbsp;└── VERSION → <span class="string">2.3.1</span><br>
-            ├── order-service/<br>
-            │&nbsp;&nbsp;&nbsp;└── VERSION → <span class="string">1.8.0</span><br>
-            └── payment-service/<br>
-            &nbsp;&nbsp;&nbsp;&nbsp;└── VERSION → <span class="string">3.0.0</span>
+        <div class="code-block">
+            <span class="code-comment"># Tag-based environment promotion</span><br><br>
+            git tag -a <span class="code-string">qa-v2.5.0-rc1</span> -m "QA Release Candidate 1"<br>
+            git tag -a <span class="code-string">uat-v2.5.0</span> -m "UAT Approved"<br>
+            git tag -a <span class="code-string">preprod-v2.5.0</span> -m "Pre-prod Validation"<br>
+            git tag -a <span class="code-string">v2.5.0</span> -m "Production Release"<br>
         </div>
     </section>
 
-    <!-- Slide 9: Deployment Strategies -->
-    <section class="slide" id="slide9">
-        <span class="slide-number">9 / 12</span>
+    <!-- ========================================
+         SLIDE 6: JFrog Artifact Flow
+         ======================================== -->
+    <section class="slide" id="slide6">
+        <span class="slide-number">6 / 10</span>
+        <div class="slide-header">
+            <h2>JFrog Artifact Promotion</h2>
+            <p>Build Once, Deploy Many - Immutable Artifacts</p>
+        </div>
+
+        <div class="branch-diagram-container" style="padding: 30px;">
+            <div style="display: flex; justify-content: space-between; align-items: stretch; gap: 30px;">
+                <div style="flex: 1; text-align: center;">
+                    <div style="background: linear-gradient(135deg, #3b82f6, #1d4ed8); padding: 25px; border-radius: 12px; margin-bottom: 15px;">
+                        <h3 style="margin-bottom: 10px;">docker-dev-local</h3>
+                        <p style="font-size: 0.85rem; opacity: 0.9;">Development Builds</p>
+                    </div>
+                    <div class="code-block" style="text-align: left; font-size: 0.8rem;">
+                        user-service:2.3.1-abc123<br>
+                        user-service:2.3.1-def456<br>
+                        order-service:1.8.0-ghi789
+                    </div>
+                    <div style="margin-top: 10px;">
+                        <span class="badge badge-primary">DEV Environment</span>
+                    </div>
+                </div>
+
+                <div style="display: flex; align-items: center; font-size: 2.5rem; color: #f59e0b;">→</div>
+
+                <div style="flex: 1; text-align: center;">
+                    <div style="background: linear-gradient(135deg, #8b5cf6, #6d28d9); padding: 25px; border-radius: 12px; margin-bottom: 15px;">
+                        <h3 style="margin-bottom: 10px;">docker-rc-local</h3>
+                        <p style="font-size: 0.85rem; opacity: 0.9;">Release Candidates</p>
+                    </div>
+                    <div class="code-block" style="text-align: left; font-size: 0.8rem;">
+                        user-service:2.3.1-rc.1<br>
+                        user-service:2.3.1-rc.2<br>
+                        order-service:1.8.0-rc.1
+                    </div>
+                    <div style="margin-top: 10px;">
+                        <span class="badge badge-purple">QA / UAT / Pre-Prod</span>
+                    </div>
+                </div>
+
+                <div style="display: flex; align-items: center; font-size: 2.5rem; color: #f59e0b;">→</div>
+
+                <div style="flex: 1; text-align: center;">
+                    <div style="background: linear-gradient(135deg, #10b981, #059669); padding: 25px; border-radius: 12px; margin-bottom: 15px;">
+                        <h3 style="margin-bottom: 10px;">docker-release-local</h3>
+                        <p style="font-size: 0.85rem; opacity: 0.9;">Production Releases</p>
+                    </div>
+                    <div class="code-block" style="text-align: left; font-size: 0.8rem;">
+                        user-service:2.3.1 🔒<br>
+                        order-service:1.8.0 🔒<br>
+                        payment-service:3.0.0 🔒
+                    </div>
+                    <div style="margin-top: 10px;">
+                        <span class="badge badge-success">PRODUCTION</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="cards-grid" style="grid-template-columns: repeat(4, 1fr);">
+            <div class="card" style="border-top: 3px solid #3b82f6;">
+                <h3>🏗️ Build Once</h3>
+                <p>Same artifact flows through all environments - no rebuilding</p>
+            </div>
+            <div class="card" style="border-top: 3px solid #8b5cf6;">
+                <h3>📦 Promote</h3>
+                <p>Artifacts promoted between repos after testing passes</p>
+            </div>
+            <div class="card" style="border-top: 3px solid #10b981;">
+                <h3>🔒 Immutable</h3>
+                <p>Production artifacts cannot be modified or deleted</p>
+            </div>
+            <div class="card" style="border-top: 3px solid #ef4444;">
+                <h3>🔍 Scanned</h3>
+                <p>Xray security scanning at each promotion stage</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- ========================================
+         SLIDE 7: Service Isolation
+         ======================================== -->
+    <section class="slide" id="slide7">
+        <span class="slide-number">7 / 10</span>
+        <div class="slide-header">
+            <h2>Isolated Pipelines per Service</h2>
+            <p>Independent Build, Test, and Deploy for Each Microservice</p>
+        </div>
+
+        <div style="display: flex; justify-content: center; gap: 20px; margin: 30px 0; flex-wrap: wrap;">
+            <div class="card" style="flex: 0 0 180px; text-align: center;">
+                <div style="width: 60px; height: 60px; border-radius: 50%; background: linear-gradient(135deg, #3b82f6, #1d4ed8); display: flex; align-items: center; justify-content: center; margin: 0 auto 15px; font-size: 1.5rem;">👤</div>
+                <h3>User Service</h3>
+                <p style="font-size: 0.85rem; margin: 10px 0;">v2.3.1</p>
+                <span class="badge badge-success">Deployed</span>
+            </div>
+            <div class="card" style="flex: 0 0 180px; text-align: center;">
+                <div style="width: 60px; height: 60px; border-radius: 50%; background: linear-gradient(135deg, #8b5cf6, #6d28d9); display: flex; align-items: center; justify-content: center; margin: 0 auto 15px; font-size: 1.5rem;">📦</div>
+                <h3>Order Service</h3>
+                <p style="font-size: 0.85rem; margin: 10px 0;">v1.8.0</p>
+                <span class="badge badge-success">Deployed</span>
+            </div>
+            <div class="card" style="flex: 0 0 180px; text-align: center;">
+                <div style="width: 60px; height: 60px; border-radius: 50%; background: linear-gradient(135deg, #10b981, #059669); display: flex; align-items: center; justify-content: center; margin: 0 auto 15px; font-size: 1.5rem;">💳</div>
+                <h3>Payment Service</h3>
+                <p style="font-size: 0.85rem; margin: 10px 0;">v3.0.0</p>
+                <span class="badge badge-warning">In QA</span>
+            </div>
+            <div class="card" style="flex: 0 0 180px; text-align: center;">
+                <div style="width: 60px; height: 60px; border-radius: 50%; background: linear-gradient(135deg, #f59e0b, #d97706); display: flex; align-items: center; justify-content: center; margin: 0 auto 15px; font-size: 1.5rem;">🔔</div>
+                <h3>Notification</h3>
+                <p style="font-size: 0.85rem; margin: 10px 0;">v1.2.5</p>
+                <span class="badge badge-success">Deployed</span>
+            </div>
+            <div class="card" style="flex: 0 0 180px; text-align: center;">
+                <div style="width: 60px; height: 60px; border-radius: 50%; background: linear-gradient(135deg, #ef4444, #dc2626); display: flex; align-items: center; justify-content: center; margin: 0 auto 15px; font-size: 1.5rem;">🌐</div>
+                <h3>API Gateway</h3>
+                <p style="font-size: 0.85rem; margin: 10px 0;">v2.0.0</p>
+                <span class="badge badge-info">Building</span>
+            </div>
+        </div>
+
+        <div class="section-divider"><span>Each Service Has Independent VERSION File</span></div>
+
+        <div class="code-block">
+            <span class="code-comment"># Path-based pipeline triggers - only build what changed</span><br><br>
+            <span class="code-keyword">on:</span><br>
+            &nbsp;&nbsp;<span class="code-keyword">push:</span><br>
+            &nbsp;&nbsp;&nbsp;&nbsp;<span class="code-keyword">paths:</span><br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;- <span class="code-string">'services/user-service/**'</span>&nbsp;&nbsp;<span class="code-comment"># Only triggers user-service pipeline</span><br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;- <span class="code-string">'shared/common-lib/**'</span>&nbsp;&nbsp;&nbsp;&nbsp;<span class="code-comment"># Shared dependency changes</span><br>
+        </div>
+
+        <div class="cards-grid" style="grid-template-columns: repeat(4, 1fr); margin-top: 25px;">
+            <div class="card">
+                <h3>⚡ Faster Builds</h3>
+                <p>80% reduction in CI time by building only changed services</p>
+            </div>
+            <div class="card">
+                <h3>🎯 Reduced Blast Radius</h3>
+                <p>Failure in one service doesn't block others</p>
+            </div>
+            <div class="card">
+                <h3>🚀 Deploy Autonomy</h3>
+                <p>Teams deploy independently on their schedule</p>
+            </div>
+            <div class="card">
+                <h3>↩️ Simple Rollback</h3>
+                <p>Rollback single service without affecting others</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- ========================================
+         SLIDE 8: Deployment Strategies
+         ======================================== -->
+    <section class="slide" id="slide8">
+        <span class="slide-number">8 / 10</span>
         <div class="slide-header">
             <h2>Deployment Strategies</h2>
-            <p>Principle #3: Progressive Delivery</p>
+            <p>Canary, Blue-Green & Feature Flags</p>
         </div>
 
         <div class="two-columns">
             <div class="card">
                 <h3>🐦 Canary Deployment</h3>
-                <div style="margin: 20px 0;">
-                    <div style="display: flex; align-items: center; margin-bottom: 10px;">
-                        <div style="width: 100px;">10%</div>
-                        <div style="flex: 1; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden;">
-                            <div style="width: 10%; height: 20px; background: var(--warning);"></div>
-                        </div>
-                        <div style="width: 80px; text-align: right;">5 min</div>
+                <p style="margin-bottom: 20px;">Gradual rollout with automatic rollback on anomaly detection</p>
+                
+                <div style="margin-bottom: 12px;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                        <span>Step 1: 10%</span><span>5 min</span>
                     </div>
-                    <div style="display: flex; align-items: center; margin-bottom: 10px;">
-                        <div style="width: 100px;">25%</div>
-                        <div style="flex: 1; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden;">
-                            <div style="width: 25%; height: 20px; background: var(--warning);"></div>
-                        </div>
-                        <div style="width: 80px; text-align: right;">5 min</div>
-                    </div>
-                    <div style="display: flex; align-items: center; margin-bottom: 10px;">
-                        <div style="width: 100px;">50%</div>
-                        <div style="flex: 1; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden;">
-                            <div style="width: 50%; height: 20px; background: var(--warning);"></div>
-                        </div>
-                        <div style="width: 80px; text-align: right;">5 min</div>
-                    </div>
-                    <div style="display: flex; align-items: center;">
-                        <div style="width: 100px;">100%</div>
-                        <div style="flex: 1; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden;">
-                            <div style="width: 100%; height: 20px; background: var(--success);"></div>
-                        </div>
-                        <div style="width: 80px; text-align: right;">Complete</div>
+                    <div style="background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden;">
+                        <div style="width: 10%; height: 20px; background: linear-gradient(90deg, #f59e0b, #d97706);"></div>
                     </div>
                 </div>
-                <p>Gradual rollout with automatic rollback on anomaly detection</p>
+                <div style="margin-bottom: 12px;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                        <span>Step 2: 25%</span><span>5 min</span>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden;">
+                        <div style="width: 25%; height: 20px; background: linear-gradient(90deg, #f59e0b, #d97706);"></div>
+                    </div>
+                </div>
+                <div style="margin-bottom: 12px;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                        <span>Step 3: 50%</span><span>5 min</span>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden;">
+                        <div style="width: 50%; height: 20px; background: linear-gradient(90deg, #f59e0b, #d97706);"></div>
+                    </div>
+                </div>
+                <div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                        <span>Step 4: 100%</span><span>Complete</span>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden;">
+                        <div style="width: 100%; height: 20px; background: linear-gradient(90deg, #10b981, #059669);"></div>
+                    </div>
+                </div>
             </div>
 
             <div class="card">
                 <h3>🔵🟢 Blue-Green Deployment</h3>
-                <div style="display: flex; gap: 20px; margin: 20px 0;">
-                    <div style="flex: 1; padding: 20px; background: #3b82f6; border-radius: 8px; text-align: center;">
-                        <h4>BLUE (v1.0)</h4>
-                        <p>Current Active</p>
+                <p style="margin-bottom: 20px;">Instant switch with immediate rollback capability</p>
+                
+                <div style="display: flex; gap: 20px; margin: 30px 0;">
+                    <div style="flex: 1; padding: 25px; background: linear-gradient(135deg, #3b82f6, #1d4ed8); border-radius: 12px; text-align: center;">
+                        <h4 style="font-size: 1.2rem;">BLUE</h4>
+                        <p style="font-size: 0.9rem;">v1.0 (Current)</p>
+                        <div style="margin-top: 10px; font-size: 2rem;">✓</div>
                     </div>
-                    <div style="display: flex; align-items: center;">⟷</div>
-                    <div style="flex: 1; padding: 20px; background: #10b981; border-radius: 8px; text-align: center;">
-                        <h4>GREEN (v1.1)</h4>
-                        <p>Standby</p>
+                    <div style="display: flex; align-items: center; font-size: 1.5rem; color: rgba(255,255,255,0.5);">⟷</div>
+                    <div style="flex: 1; padding: 25px; background: linear-gradient(135deg, #10b981, #059669); border-radius: 12px; text-align: center;">
+                        <h4 style="font-size: 1.2rem;">GREEN</h4>
+                        <p style="font-size: 0.9rem;">v1.1 (Standby)</p>
+                        <div style="margin-top: 10px; font-size: 2rem;">⏳</div>
                     </div>
                 </div>
-                <p>Instant switch between environments. Rollback = switch back.</p>
+                
+                <p style="text-align: center; color: #94a3b8;">Switch traffic instantly • Rollback = switch back</p>
             </div>
         </div>
 
-        <div class="section-divider"><span>Feature Flags</span></div>
+        <div class="section-divider"><span>Feature Flags for Progressive Rollout</span></div>
 
-        <div class="cards-grid">
-            <div class="card">
-                <h3>🚩 Progressive Rollout</h3>
-                <ul>
-                    <li>Roll out to specific users</li>
-                    <li>Toggle features without redeploying</li>
-                    <li>Run A/B tests</li>
-                    <li>Kill switch for emergencies</li>
-                </ul>
+        <div class="cards-grid" style="grid-template-columns: repeat(4, 1fr);">
+            <div class="card" style="text-align: center;">
+                <h3>DEV</h3>
+                <div style="font-size: 2rem; margin: 10px 0;">100%</div>
+                <div style="background: #10b981; height: 8px; border-radius: 4px;"></div>
             </div>
-            <div class="card">
-                <h3>🎯 Targeting</h3>
-                <ul>
-                    <li>Beta testers group</li>
-                    <li>Specific regions</li>
-                    <li>User segments</li>
-                    <li>Percentage rollout</li>
-                </ul>
+            <div class="card" style="text-align: center;">
+                <h3>QA</h3>
+                <div style="font-size: 2rem; margin: 10px 0;">100%</div>
+                <div style="background: #10b981; height: 8px; border-radius: 4px;"></div>
             </div>
-            <div class="card">
-                <h3>📊 Environment Config</h3>
-                <div class="code-block" style="margin-top: 10px; font-size: 0.75rem;">
-                    DEV: 100% enabled<br>
-                    QA: 100% enabled<br>
-                    UAT: 100% enabled<br>
-                    PROD: 10% → 100%
-                </div>
+            <div class="card" style="text-align: center;">
+                <h3>UAT</h3>
+                <div style="font-size: 2rem; margin: 10px 0;">100%</div>
+                <div style="background: #10b981; height: 8px; border-radius: 4px;"></div>
+            </div>
+            <div class="card" style="text-align: center;">
+                <h3>PROD</h3>
+                <div style="font-size: 2rem; margin: 10px 0;">10%→100%</div>
+                <div style="background: linear-gradient(90deg, #f59e0b 30%, rgba(255,255,255,0.1) 30%); height: 8px; border-radius: 4px;"></div>
             </div>
         </div>
     </section>
 
-    <!-- Slide 10: Package Upgrade Strategy -->
-    <section class="slide" id="slide10">
-        <span class="slide-number">10 / 12</span>
+    <!-- ========================================
+         SLIDE 9: Package Upgrades
+         ======================================== -->
+    <section class="slide" id="slide9">
+        <span class="slide-number">9 / 10</span>
         <div class="slide-header">
             <h2>Package Upgrade Strategy</h2>
-            <p>Major Framework Migration: Angular 5 → 9</p>
+            <p>Major Framework Migration Path</p>
         </div>
 
-        <div class="upgrade-path">
-            <div class="version-box current">
-                <h3>Angular 5</h3>
-                <p>Current</p>
+        <div style="display: flex; justify-content: center; align-items: center; gap: 15px; margin: 40px 0; flex-wrap: wrap;">
+            <div style="padding: 20px 30px; border-radius: 12px; text-align: center; background: rgba(239, 68, 68, 0.2); border: 2px solid #ef4444;">
+                <h3 style="font-size: 1.5rem;">Angular 5</h3>
+                <p style="font-size: 0.8rem; color: #fca5a5;">Current</p>
             </div>
-            <div class="upgrade-arrow-container">
-                <span class="upgrade-arrow">→</span>
-                <span class="sprint-label">2 Sprints</span>
+            <div style="display: flex; flex-direction: column; align-items: center;">
+                <span style="font-size: 1.5rem; color: #f59e0b;">→</span>
+                <span style="font-size: 0.7rem; background: #f59e0b; color: #000; padding: 2px 8px; border-radius: 10px;">2 Sprints</span>
             </div>
-            <div class="version-box">
-                <h3>Angular 6</h3>
-                <p>RxJS 6</p>
+            <div style="padding: 20px 30px; border-radius: 12px; text-align: center; background: rgba(255,255,255,0.05); border: 2px solid rgba(255,255,255,0.2);">
+                <h3 style="font-size: 1.5rem;">Angular 6</h3>
+                <p style="font-size: 0.8rem; color: #94a3b8;">RxJS 6</p>
             </div>
-            <div class="upgrade-arrow-container">
-                <span class="upgrade-arrow">→</span>
-                <span class="sprint-label">2 Sprints</span>
+            <div style="display: flex; flex-direction: column; align-items: center;">
+                <span style="font-size: 1.5rem; color: #f59e0b;">→</span>
+                <span style="font-size: 0.7rem; background: #f59e0b; color: #000; padding: 2px 8px; border-radius: 10px;">2 Sprints</span>
             </div>
-            <div class="version-box">
-                <h3>Angular 7</h3>
-                <p>CLI Updates</p>
+            <div style="padding: 20px 30px; border-radius: 12px; text-align: center; background: rgba(255,255,255,0.05); border: 2px solid rgba(255,255,255,0.2);">
+                <h3 style="font-size: 1.5rem;">Angular 7</h3>
+                <p style="font-size: 0.8rem; color: #94a3b8;">CLI Updates</p>
             </div>
-            <div class="upgrade-arrow-container">
-                <span class="upgrade-arrow">→</span>
-                <span class="sprint-label">2 Sprints</span>
+            <div style="display: flex; flex-direction: column; align-items: center;">
+                <span style="font-size: 1.5rem; color: #f59e0b;">→</span>
+                <span style="font-size: 0.7rem; background: #f59e0b; color: #000; padding: 2px 8px; border-radius: 10px;">2 Sprints</span>
             </div>
-            <div class="version-box">
-                <h3>Angular 8</h3>
-                <p>Lazy Load</p>
+            <div style="padding: 20px 30px; border-radius: 12px; text-align: center; background: rgba(255,255,255,0.05); border: 2px solid rgba(255,255,255,0.2);">
+                <h3 style="font-size: 1.5rem;">Angular 8</h3>
+                <p style="font-size: 0.8rem; color: #94a3b8;">Lazy Load</p>
             </div>
-            <div class="upgrade-arrow-container">
-                <span class="upgrade-arrow">→</span>
-                <span class="sprint-label">2 Sprints</span>
+            <div style="display: flex; flex-direction: column; align-items: center;">
+                <span style="font-size: 1.5rem; color: #f59e0b;">→</span>
+                <span style="font-size: 0.7rem; background: #f59e0b; color: #000; padding: 2px 8px; border-radius: 10px;">2 Sprints</span>
             </div>
-            <div class="version-box target">
-                <h3>Angular 9</h3>
-                <p>Ivy</p>
+            <div style="padding: 20px 30px; border-radius: 12px; text-align: center; background: rgba(16, 185, 129, 0.2); border: 2px solid #10b981;">
+                <h3 style="font-size: 1.5rem;">Angular 9</h3>
+                <p style="font-size: 0.8rem; color: #6ee7b7;">Ivy</p>
             </div>
         </div>
-
-        <div class="section-divider"><span>Key Principle: One Major Version at a Time</span></div>
 
         <div class="cards-grid">
             <div class="card">
@@ -1459,133 +1734,57 @@
                 <table class="styled-table" style="margin: 0;">
                     <tr>
                         <td><span class="badge badge-success">Patch</span></td>
-                        <td>Auto-merge</td>
+                        <td>Auto-merge (Renovate)</td>
                     </tr>
                     <tr>
                         <td><span class="badge badge-info">Minor</span></td>
-                        <td>Review & merge</td>
+                        <td>PR + Review + Merge</td>
                     </tr>
                     <tr>
                         <td><span class="badge badge-danger">Major</span></td>
-                        <td>Dedicated branch</td>
+                        <td>Dedicated upgrade/* branch</td>
                     </tr>
                 </table>
             </div>
             <div class="card">
                 <h3>🔄 Automation Tools</h3>
                 <ul>
-                    <li><strong>Renovate:</strong> Auto-create PRs</li>
+                    <li><strong>Renovate:</strong> Auto-create upgrade PRs</li>
                     <li><strong>Dependabot:</strong> Security updates</li>
                     <li><strong>ng update:</strong> Angular migrations</li>
                     <li><strong>OpenRewrite:</strong> Java migrations</li>
                 </ul>
             </div>
             <div class="card">
-                <h3>✅ Testing at Each Step</h3>
-                <ul>
-                    <li>Unit tests (80%+ coverage)</li>
-                    <li>Integration tests</li>
-                    <li>E2E tests for critical paths</li>
-                    <li>Performance benchmarks</li>
-                </ul>
+                <h3>✅ Key Principle</h3>
+                <p style="font-size: 1.2rem; text-align: center; margin: 20px 0; color: #f59e0b;">
+                    Never skip major versions!
+                </p>
+                <p style="text-align: center;">Upgrade one major version at a time with full testing at each step.</p>
             </div>
         </div>
     </section>
 
-    <!-- Slide 11: RBAC & Governance -->
-    <section class="slide" id="slide11">
-        <span class="slide-number">11 / 12</span>
+    <!-- ========================================
+         SLIDE 10: Summary
+         ======================================== -->
+    <section class="slide" id="slide10">
+        <span class="slide-number">10 / 10</span>
         <div class="slide-header">
-            <h2>RBAC & Governance</h2>
-            <p>Principle #4: Role-Based Access Control</p>
-        </div>
-
-        <table class="styled-table">
-            <thead>
-                <tr>
-                    <th>Role</th>
-                    <th>Branches</th>
-                    <th>Environments</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td><span class="badge badge-info">Developer</span></td>
-                    <td>feature/*, bugfix/*</td>
-                    <td>DEV</td>
-                    <td>Create, push, PR to develop</td>
-                </tr>
-                <tr>
-                    <td><span class="badge" style="background: #8b5cf6;">Senior Dev</span></td>
-                    <td>feature/*, bugfix/*, develop</td>
-                    <td>DEV, QA</td>
-                    <td>Approve PRs, merge to develop</td>
-                </tr>
-                <tr>
-                    <td><span class="badge badge-warning">QA Engineer</span></td>
-                    <td>release/* (read), bugfix/*</td>
-                    <td>QA</td>
-                    <td>Deploy to QA, sign-off</td>
-                </tr>
-                <tr>
-                    <td><span class="badge" style="background: #06b6d4;">Release Manager</span></td>
-                    <td>release/*, hotfix/*</td>
-                    <td>QA, UAT, Pre-Prod</td>
-                    <td>Create release, promote artifacts</td>
-                </tr>
-                <tr>
-                    <td><span class="badge badge-success">Ops/SRE</span></td>
-                    <td>All (read), hotfix/*</td>
-                    <td>All</td>
-                    <td>Deploy to Prod, rollback</td>
-                </tr>
-            </tbody>
-        </table>
-
-        <div class="section-divider"><span>GitOps & Audit Trails</span></div>
-
-        <div class="cards-grid">
-            <div class="card">
-                <div class="card-icon" style="background: var(--primary);">📝</div>
-                <h3>Git as Source of Truth</h3>
-                <p>All pipeline definitions, configs, and manifests stored in Git</p>
-            </div>
-            <div class="card">
-                <div class="card-icon" style="background: var(--success);">🔍</div>
-                <h3>Full Audit Trail</h3>
-                <p>Every change logged with who, what, when, and why</p>
-            </div>
-            <div class="card">
-                <div class="card-icon" style="background: var(--warning);">🔐</div>
-                <h3>Branch Protection</h3>
-                <p>Required reviews, status checks, and signed commits</p>
-            </div>
-            <div class="card">
-                <div class="card-icon" style="background: var(--info);">📋</div>
-                <h3>CODEOWNERS</h3>
-                <p>Automatic review assignment based on file paths</p>
-            </div>
-        </div>
-    </section>
-
-    <!-- Slide 12: Summary -->
-    <section class="slide" id="slide12">
-        <span class="slide-number">12 / 12</span>
-        <div class="slide-header">
-            <h2>Summary: Key Takeaways</h2>
-            <p>Enterprise Branching & Release Strategy</p>
+            <h2>Summary: Complete Strategy</h2>
+            <p>Key Takeaways for Enterprise Microservice Deployment</p>
         </div>
 
         <div class="cards-grid" style="grid-template-columns: repeat(2, 1fr);">
             <div class="card">
                 <h3>🌿 Branching Strategy</h3>
                 <ul>
-                    <li><strong>develop:</strong> Integration for current release</li>
-                    <li><strong>advance/*:</strong> Future release work</li>
-                    <li><strong>release/*:</strong> Stabilization</li>
-                    <li><strong>master:</strong> Production-ready</li>
-                    <li><strong>hotfix/*:</strong> Emergency fixes</li>
+                    <li><strong>develop:</strong> Current release integration</li>
+                    <li><strong>advance/*:</strong> Future release work (parallel)</li>
+                    <li><strong>release/*:</strong> Release candidate stabilization</li>
+                    <li><strong>master:</strong> Production-ready code</li>
+                    <li><strong>feature/*:</strong> Short-lived development (1-3 days)</li>
+                    <li><strong>hotfix/*:</strong> Emergency production fixes</li>
                 </ul>
             </div>
             <div class="card">
@@ -1593,18 +1792,18 @@
                 <ul>
                     <li><strong>DEV:</strong> Auto-deploy on develop merge</li>
                     <li><strong>QA:</strong> Auto-deploy on release creation</li>
-                    <li><strong>UAT:</strong> Manual gate with sign-off</li>
+                    <li><strong>UAT:</strong> Manual gate with PO sign-off</li>
                     <li><strong>Pre-Prod:</strong> Performance validation</li>
-                    <li><strong>Prod:</strong> Canary deployment</li>
+                    <li><strong>Prod:</strong> Canary → Blue-Green deploy</li>
                 </ul>
             </div>
             <div class="card">
-                <h3>📦 JFrog Artifacts</h3>
+                <h3>📦 JFrog & Artifacts</h3>
                 <ul>
                     <li><strong>Build Once:</strong> Same artifact through all envs</li>
-                    <li><strong>Promote:</strong> dev → rc → release</li>
+                    <li><strong>Promote:</strong> docker-dev → docker-rc → docker-release</li>
                     <li><strong>Immutable:</strong> Production artifacts locked</li>
-                    <li><strong>Scan:</strong> Security at each stage</li>
+                    <li><strong>Scan:</strong> Xray security at each stage</li>
                 </ul>
             </div>
             <div class="card">
@@ -1612,22 +1811,19 @@
                 <ul>
                     <li><strong>#1:</strong> Isolated pipelines per service</li>
                     <li><strong>#2:</strong> Independent versioning (SemVer)</li>
-                    <li><strong>#3:</strong> Progressive delivery (Canary)</li>
+                    <li><strong>#3:</strong> Progressive delivery (Canary/Feature Flags)</li>
                     <li><strong>#4:</strong> RBAC & GitOps governance</li>
                     <li><strong>#5:</strong> Standardized templates</li>
                 </ul>
             </div>
         </div>
 
-        <div style="text-align: center; margin-top: 40px; padding: 30px; background: rgba(255,255,255,0.05); border-radius: 16px;">
-            <h3 style="color: var(--success); margin-bottom: 15px;">Ready for Implementation</h3>
-            <p style="font-size: 1.2rem; opacity: 0.8;">
-                Documents available in repository:
-            </p>
-            <div style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 20px;">
+        <div style="text-align: center; margin-top: 30px; padding: 30px; background: linear-gradient(135deg, rgba(37,99,235,0.1), rgba(124,58,237,0.1)); border-radius: 16px; border: 1px solid rgba(255,255,255,0.1);">
+            <h3 style="color: #10b981; margin-bottom: 15px;">📚 Documentation Available</h3>
+            <div style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: center;">
                 <span class="badge badge-primary" style="padding: 10px 15px;">AI-DEVOPS-DEPLOYMENT-STRATEGY.md</span>
                 <span class="badge badge-info" style="padding: 10px 15px;">MICROSERVICE-BRANCHING-STRATEGY.md</span>
-                <span class="badge" style="background: var(--release); padding: 10px 15px;">BRANCHING-RELEASE-DEPLOYMENT-GUIDE.md</span>
+                <span class="badge badge-purple" style="padding: 10px 15px;">BRANCHING-RELEASE-DEPLOYMENT-GUIDE.md</span>
                 <span class="badge badge-warning" style="padding: 10px 15px;">ENTERPRISE-MICROSERVICE-BRANCHING-CICD-STRATEGY.md</span>
                 <span class="badge badge-success" style="padding: 10px 15px;">PACKAGE-UPGRADE-STRATEGY.md</span>
             </div>
@@ -1642,7 +1838,7 @@
 
     <script>
         let currentSlide = 1;
-        const totalSlides = 12;
+        const totalSlides = 10;
 
         function showSlide(n) {
             if (n < 1) n = totalSlides;
@@ -1651,24 +1847,14 @@
             document.getElementById(`slide${n}`).scrollIntoView({ behavior: 'smooth' });
         }
 
-        function nextSlide() {
-            showSlide(currentSlide + 1);
-        }
+        function nextSlide() { showSlide(currentSlide + 1); }
+        function prevSlide() { showSlide(currentSlide - 1); }
 
-        function prevSlide() {
-            showSlide(currentSlide - 1);
-        }
-
-        // Keyboard navigation
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'ArrowRight' || e.key === ' ') {
-                nextSlide();
-            } else if (e.key === 'ArrowLeft') {
-                prevSlide();
-            }
+            if (e.key === 'ArrowRight' || e.key === ' ') nextSlide();
+            else if (e.key === 'ArrowLeft') prevSlide();
         });
 
-        // Update current slide on scroll
         window.addEventListener('scroll', () => {
             const slides = document.querySelectorAll('.slide');
             slides.forEach((slide, index) => {

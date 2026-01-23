@@ -190,4 +190,226 @@ EFFORT  Technical Debt   │   Consider Later   │ EFFORT
 
 ---
 
+---
+
+## 🌊 STREAMING CHECKLIST
+
+- [ ] Auto Loader used for file ingestion (not manual listing)
+- [ ] Schema location configured for Auto Loader
+- [ ] Appropriate trigger strategy selected
+- [ ] Checkpointing enabled and configured
+- [ ] Watermarking for late data handling
+- [ ] State store optimized (RocksDB for large state)
+- [ ] Rate limiting configured if needed
+
+---
+
+## 🖥️ CLUSTER CHECKLIST
+
+- [ ] Appropriate cluster size for workload
+- [ ] Autoscaling configured with proper min/max
+- [ ] Spot instances for workers (on-demand for driver)
+- [ ] Auto-termination enabled
+- [ ] Photon enabled (if beneficial)
+- [ ] Cluster pools for frequently used clusters
+- [ ] Job clusters for scheduled workloads
+
+---
+
+## 💾 MEMORY CHECKLIST
+
+- [ ] Executor memory appropriately sized
+- [ ] Memory overhead configured for non-JVM memory
+- [ ] GC tuning applied (if needed)
+- [ ] Spill monitored and minimized
+- [ ] Off-heap memory for large datasets
+- [ ] No memory leaks from unclosed resources
+
+---
+
+## 📥 DATA INGESTION CHECKLIST
+
+- [ ] Auto Loader or COPY INTO for file ingestion
+- [ ] Schema enforcement on ingestion
+- [ ] Incremental loading pattern implemented
+- [ ] Error handling for bad records
+- [ ] Rate limiting for external APIs
+- [ ] Connection pooling for JDBC sources
+
+---
+
+## 🔄 SCHEMA EVOLUTION CHECKLIST
+
+- [ ] mergeSchema enabled where needed
+- [ ] Schema validation before writes
+- [ ] Column mapping mode for renames
+- [ ] Breaking changes handled gracefully
+- [ ] Schema documented and versioned
+
+---
+
+## ⏱️ TIME TRAVEL CHECKLIST
+
+- [ ] Appropriate log retention configured
+- [ ] Deleted file retention set
+- [ ] VACUUM scheduled with proper retention
+- [ ] History queries optimized
+- [ ] Restore procedures documented
+
+---
+
+## 💰 COST OPTIMIZATION CHECKLIST
+
+- [ ] Spot instances utilized
+- [ ] Clusters right-sized
+- [ ] Auto-termination enabled
+- [ ] Job clusters for scheduled work
+- [ ] Storage optimized (VACUUM, compression)
+- [ ] Unnecessary data archived/deleted
+- [ ] Query efficiency monitored
+
+---
+
+## 🔀 WINDOW & AGGREGATION CHECKLIST
+
+- [ ] Window functions partitioned (no full-data windows)
+- [ ] Two-phase aggregation for skewed data
+- [ ] Approximate functions for estimates
+- [ ] Rollup/Cube for hierarchical aggregations
+- [ ] Aggregations pushed down where possible
+
+---
+
+## 📊 DELTA LIVE TABLES CHECKLIST
+
+- [ ] Expectations defined for data quality
+- [ ] Appropriate table types (streaming vs materialized)
+- [ ] Pipeline mode selected (triggered vs continuous)
+- [ ] Error handling configured
+- [ ] Quarantine pattern for bad records
+
+---
+
+## 🏛️ UNITY CATALOG CHECKLIST
+
+- [ ] Three-level namespace used
+- [ ] Fully qualified table names
+- [ ] Row-level security where needed
+- [ ] Column masking for sensitive data
+- [ ] External locations properly configured
+- [ ] Audit logging enabled
+- [ ] Lineage tracked
+
+---
+
+## 🔗 EXTERNAL SOURCES CHECKLIST
+
+- [ ] Secrets used for credentials
+- [ ] Connection pooling enabled
+- [ ] Timeout and retry configured
+- [ ] Rate limiting implemented
+- [ ] Error handling for connectivity issues
+- [ ] Incremental extraction where possible
+
+---
+
+## 📓 ORCHESTRATION CHECKLIST
+
+- [ ] dbutils.notebook.run for sub-notebooks
+- [ ] Parallel execution where possible
+- [ ] Proper error handling and propagation
+- [ ] Return values used for status
+- [ ] Workflows/Jobs for scheduling
+- [ ] Dependencies properly defined
+
+---
+
+## 📈 CHANGE DATA FEED CHECKLIST
+
+- [ ] CDF enabled on tables needing change tracking
+- [ ] Change types handled correctly
+- [ ] Downstream consumers updated
+- [ ] Retention configured appropriately
+- [ ] Incremental processing implemented
+
+---
+
+## 🤖 MLFLOW CHECKLIST
+
+- [ ] Experiments organized properly
+- [ ] Parameters logged
+- [ ] Metrics logged
+- [ ] Models registered
+- [ ] Model stages managed
+- [ ] Feature Store integrated (if applicable)
+
+---
+
+## 🔒 CONCURRENCY CHECKLIST
+
+- [ ] Appropriate isolation level set
+- [ ] Conflict retry logic implemented
+- [ ] Table constraints defined
+- [ ] MERGE used for safe upserts
+- [ ] No race conditions in logic
+
+---
+
+## 🚀 SERVERLESS SQL CHECKLIST
+
+- [ ] Queries optimized for Photon
+- [ ] Materialized views for repeated queries
+- [ ] Statistics up to date
+- [ ] Z-ORDER on filtered columns
+- [ ] No Python UDFs (not Photon-compatible)
+
+---
+
+## 📦 ASSET BUNDLES CHECKLIST
+
+- [ ] Bundle structure follows best practices
+- [ ] Environment-specific configurations
+- [ ] CI/CD integration set up
+- [ ] Service principals for production
+- [ ] Validation passes before deploy
+
+---
+
+## 🌐 NETWORK CHECKLIST
+
+- [ ] Shuffle compression enabled
+- [ ] Appropriate timeouts configured
+- [ ] Network retries implemented
+- [ ] Broadcast threshold optimized
+- [ ] Shuffle partitions tuned
+
+---
+
+## 📋 COMPLETE SCORING GUIDE (EXPANDED)
+
+Rate each category 1-5:
+
+| Category | Score (1-5) | Weight | Weighted |
+|----------|-------------|--------|----------|
+| Performance | ___ | x3 | ___ |
+| Delta Lake | ___ | x3 | ___ |
+| Code Quality | ___ | x2 | ___ |
+| Error Handling | ___ | x2 | ___ |
+| Security | ___ | x3 | ___ |
+| Documentation | ___ | x1 | ___ |
+| Testing | ___ | x2 | ___ |
+| Streaming (if applicable) | ___ | x2 | ___ |
+| Cost Optimization | ___ | x2 | ___ |
+| Orchestration | ___ | x1 | ___ |
+| **TOTAL** | | | ___/105 |
+
+**Score Interpretation:**
+- 90-105: Production ready, well optimized
+- 75-89: Production ready, minor improvements possible
+- 60-74: Needs optimization before production
+- 45-59: Significant refactoring required
+- <45: Major rewrite recommended
+
+---
+
 *Use this checklist alongside the full DATABRICKS_OPTIMIZATION_CONTEXT.md document*

@@ -4,6 +4,140 @@
 
 ---
 
+## 🤖 AI AGENT CONTEXT PROMPT (COPY THIS FOR CURSOR AI)
+
+Use the following as your system/context prompt when feeding notebooks to Cursor AI Opus 4.5 for optimization:
+
+```
+You are an expert Azure Databricks optimization engineer. Your role is to analyze and optimize PySpark/Spark SQL notebooks for production deployment. Apply the following optimization principles systematically:
+
+## CORE OPTIMIZATION AREAS
+
+### 1. SPARK PERFORMANCE
+- Enable AQE (Adaptive Query Execution) with all sub-features
+- Set optimal shuffle partitions (2-4x cores or use "auto")
+- Configure broadcast threshold based on cluster memory (10-100MB)
+- Enable Photon acceleration where applicable
+- Use predicate pushdown and column pruning (select columns early, filter on partitions first)
+
+### 2. JOIN OPTIMIZATION
+- Broadcast small tables (<100MB) using broadcast() hint
+- Handle data skew with salting technique
+- Use bucketing for repeated joins on same key
+- Handle null values in join keys with eqNullSafe()
+- Cache intermediate join results when reused
+
+### 3. DELTA LAKE BEST PRACTICES
+- Enable auto-optimize and auto-compact
+- Configure appropriate file sizes (128MB-256MB target)
+- Use Z-ORDER on frequently filtered columns
+- Implement MERGE for upserts (not delete+insert)
+- Schedule VACUUM with appropriate retention (7+ days)
+- Use liquid clustering for new tables (DBR 13.3+)
+- Enable Change Data Feed when downstream consumers need changes
+
+### 4. CACHING STRATEGY
+- Cache DataFrames used 2+ times
+- Use MEMORY_AND_DISK for large datasets
+- Always unpersist() when done
+- Never cache streaming or single-use data
+
+### 5. PARTITIONING
+- Partition by low-cardinality columns (date, region)
+- Target 128MB-1GB file sizes
+- Use coalesce() to reduce partitions (no shuffle)
+- Avoid high-cardinality partition columns
+
+### 6. STREAMING (if applicable)
+- Use Auto Loader for file ingestion (not manual listing)
+- Configure schema location for schema evolution
+- Set appropriate watermarks for late data
+- Use trigger(availableNow=True) for batch-like processing
+- Implement proper checkpointing
+
+### 7. CODE STRUCTURE
+- Organize into clear sections: Imports, Config, Functions, Main, Execution
+- Use dbutils.widgets for parameterization
+- Implement environment-specific configurations (dev/staging/prod)
+- Create reusable helper functions with docstrings
+- Use type hints for function signatures
+
+### 8. ERROR HANDLING
+- Wrap external calls in try/except blocks
+- Implement retry with exponential backoff
+- Create custom exception classes
+- Validate DataFrames (schema, row counts)
+- Log errors with context
+
+### 9. IDEMPOTENCY
+- Use replaceWhere or MERGE for safe overwrites
+- Implement checkpoint patterns
+- Ensure re-runs produce same results
+- Handle partial failures gracefully
+
+### 10. LOGGING & MONITORING
+- Use structured JSON logging
+- Log processing stages with row counts
+- Implement timing for performance tracking
+- Capture metrics for monitoring systems
+
+### 11. SECURITY
+- Use dbutils.secrets for all credentials
+- Never hardcode passwords/keys
+- Use service principals for Azure resources
+- Implement row/column-level security where needed
+- Use Unity Catalog for governance
+
+### 12. COST OPTIMIZATION
+- Right-size clusters for workload
+- Use spot instances for workers
+- Enable auto-termination
+- Use job clusters for scheduled work
+- VACUUM to remove old files
+
+### 13. DATA TYPES & NULL HANDLING
+- Use appropriate precision for decimals
+- Handle timezone-aware timestamps
+- Coalesce or handle nulls explicitly
+- Use correct types (avoid string for dates/numbers)
+
+### 14. AVOID ANTI-PATTERNS
+- Never use collect() on large data
+- Never iterate rows with Python loops
+- Avoid Python UDFs (use built-in or Pandas UDFs)
+- Don't call count() multiple times without caching
+- Avoid SELECT * (select needed columns only)
+- Never use windows without partitionBy
+
+## OUTPUT FORMAT
+
+When optimizing a notebook, provide:
+
+1. **ANALYSIS**: List current issues with severity (Critical/High/Medium/Low)
+2. **RECOMMENDATIONS**: Prioritized list of optimizations
+3. **REFACTORED CODE**: Complete optimized code with:
+   - Clear section headers
+   - Inline comments explaining changes
+   - Original code commented for reference where helpful
+4. **EXPECTED IMPROVEMENTS**: Estimated performance/cost gains
+5. **TESTING NOTES**: What to verify after changes
+
+## NOTEBOOK CONTEXT TEMPLATE
+
+Before analyzing, request or identify:
+- Notebook purpose
+- Data sizes (input/output)
+- Execution frequency
+- Current runtime/issues
+- Cluster configuration
+- Unity Catalog usage
+- Streaming vs batch
+
+Always prioritize: Performance > Reliability > Maintainability > Cost
+```
+
+---
+
 ## 🎯 OPTIMIZATION OBJECTIVES
 
 When optimizing a Databricks notebook, focus on these key objectives:
@@ -2908,4 +3042,1266 @@ Please provide:
 
 ---
 
-*Last Updated: 2024 | Compatible with Databricks Runtime 13.0+ | Covers Unity Catalog, DLT, Serverless, and Asset Bundles*
+## 3️⃣5️⃣ DBUTILS COMPREHENSIVE REFERENCE
+
+### File System Operations (dbutils.fs)
+
+```python
+# ✅ List files
+files = dbutils.fs.ls("/mnt/data/")
+for file in files:
+    print(f"{file.name} - {file.size} bytes")
+
+# ✅ Copy files
+dbutils.fs.cp("/mnt/source/file.parquet", "/mnt/dest/file.parquet")
+dbutils.fs.cp("/mnt/source/", "/mnt/dest/", recurse=True)
+
+# ✅ Move files
+dbutils.fs.mv("/mnt/source/file.parquet", "/mnt/dest/file.parquet")
+
+# ✅ Remove files
+dbutils.fs.rm("/mnt/data/old_file.parquet")
+dbutils.fs.rm("/mnt/data/old_folder/", recurse=True)
+
+# ✅ Create directories
+dbutils.fs.mkdirs("/mnt/data/new_folder/")
+
+# ✅ Read/write small files
+content = dbutils.fs.head("/mnt/data/config.json", 1000)  # First 1000 bytes
+dbutils.fs.put("/mnt/data/output.txt", "content here", overwrite=True)
+
+# ✅ Mount Azure storage
+dbutils.fs.mount(
+    source="wasbs://container@storage.blob.core.windows.net/",
+    mount_point="/mnt/mydata",
+    extra_configs={
+        "fs.azure.account.key.storage.blob.core.windows.net": 
+            dbutils.secrets.get("scope", "storage-key")
+    }
+)
+
+# ✅ Unmount
+dbutils.fs.unmount("/mnt/mydata")
+
+# ✅ List mounts
+display(dbutils.fs.mounts())
+```
+
+### Secrets Management (dbutils.secrets)
+
+```python
+# ✅ Get secret value
+password = dbutils.secrets.get(scope="my-scope", key="db-password")
+
+# ✅ List available scopes
+scopes = dbutils.secrets.listScopes()
+for scope in scopes:
+    print(scope.name)
+
+# ✅ List secrets in scope (returns metadata, not values)
+secrets = dbutils.secrets.list("my-scope")
+for secret in secrets:
+    print(secret.key)
+
+# ✅ Best practice: Create wrapper function
+def get_secret(key: str, scope: str = "default-scope") -> str:
+    """Get secret with error handling."""
+    try:
+        return dbutils.secrets.get(scope=scope, key=key)
+    except Exception as e:
+        raise ValueError(f"Failed to retrieve secret '{key}' from scope '{scope}': {e}")
+```
+
+### Widgets (dbutils.widgets)
+
+```python
+# ✅ Create widgets
+dbutils.widgets.text("environment", "dev", "Environment")
+dbutils.widgets.dropdown("region", "us-east", ["us-east", "us-west", "eu-west"], "Region")
+dbutils.widgets.combobox("table", "default", ["default", "custom"], "Table Name")
+dbutils.widgets.multiselect("columns", "col1", ["col1", "col2", "col3"], "Columns")
+
+# ✅ Get widget values
+environment = dbutils.widgets.get("environment")
+region = dbutils.widgets.get("region")
+
+# ✅ Remove widgets
+dbutils.widgets.remove("environment")
+dbutils.widgets.removeAll()
+
+# ✅ Production pattern with defaults
+def get_param(name: str, default: str = None) -> str:
+    """Get parameter with fallback."""
+    try:
+        value = dbutils.widgets.get(name)
+        return value if value else default
+    except:
+        return default
+
+ENVIRONMENT = get_param("environment", "dev")
+PROCESS_DATE = get_param("process_date", datetime.now().strftime("%Y-%m-%d"))
+```
+
+### Notebook Utilities (dbutils.notebook)
+
+```python
+# ✅ Run another notebook
+result = dbutils.notebook.run(
+    path="/Shared/ETL/process_data",
+    timeout_seconds=3600,
+    arguments={"date": "2024-01-15", "env": "prod"}
+)
+
+# ✅ Exit with return value
+dbutils.notebook.exit(json.dumps({"status": "success", "rows": 1000}))
+
+# ✅ Get notebook context
+context = dbutils.notebook.entry_point.getDbutils().notebook().getContext()
+notebook_path = context.notebookPath().get()
+cluster_id = context.clusterId().get()
+job_id = context.jobId().getOrElse(lambda: None)
+run_id = context.currentRunId().getOrElse(lambda: None)
+```
+
+### Library Utilities (dbutils.library)
+
+```python
+# ✅ Install library (notebook-scoped)
+dbutils.library.installPyPI("pandas", version="1.5.0")
+dbutils.library.installPyPI("requests")
+
+# ✅ Restart Python to load libraries
+dbutils.library.restartPython()
+
+# Note: Prefer cluster libraries or %pip for production
+```
+
+---
+
+## 3️⃣6️⃣ AZURE-SPECIFIC OPTIMIZATIONS
+
+### Azure Data Lake Storage Gen2 Configuration
+
+```python
+# ✅ ABFS connector (recommended over WASB)
+spark.conf.set("fs.azure.account.auth.type.STORAGE_ACCOUNT.dfs.core.windows.net", "OAuth")
+spark.conf.set("fs.azure.account.oauth.provider.type.STORAGE_ACCOUNT.dfs.core.windows.net", 
+               "org.apache.hadoop.fs.azurebfs.oauth2.ClientCredsTokenProvider")
+spark.conf.set("fs.azure.account.oauth2.client.id.STORAGE_ACCOUNT.dfs.core.windows.net", 
+               dbutils.secrets.get("azure", "client-id"))
+spark.conf.set("fs.azure.account.oauth2.client.secret.STORAGE_ACCOUNT.dfs.core.windows.net", 
+               dbutils.secrets.get("azure", "client-secret"))
+spark.conf.set("fs.azure.account.oauth2.client.endpoint.STORAGE_ACCOUNT.dfs.core.windows.net", 
+               "https://login.microsoftonline.com/TENANT_ID/oauth2/token")
+
+# ✅ Read from ADLS Gen2
+df = spark.read.parquet("abfss://container@storageaccount.dfs.core.windows.net/path/")
+
+# ✅ Performance tuning for ADLS
+spark.conf.set("fs.azure.read.request.size", "4194304")  # 4MB read size
+spark.conf.set("fs.azure.write.request.size", "4194304")  # 4MB write size
+```
+
+### Azure Key Vault Integration
+
+```python
+# ✅ Key Vault-backed secret scope (recommended)
+# Created via Databricks CLI:
+# databricks secrets create-scope --scope my-scope --scope-backend-type AZURE_KEYVAULT \
+#   --resource-id /subscriptions/.../resourceGroups/.../providers/Microsoft.KeyVault/vaults/my-vault
+
+# Use like regular secrets
+password = dbutils.secrets.get(scope="my-keyvault-scope", key="database-password")
+
+# ✅ Direct Key Vault access (if needed)
+from azure.identity import DefaultAzureCredential
+from azure.keyvault.secrets import SecretClient
+
+credential = DefaultAzureCredential()
+client = SecretClient(vault_url="https://my-vault.vault.azure.net/", credential=credential)
+secret = client.get_secret("my-secret")
+```
+
+### Azure Service Principal Configuration
+
+```python
+# ✅ For accessing Azure resources
+tenant_id = dbutils.secrets.get("azure", "tenant-id")
+client_id = dbutils.secrets.get("azure", "client-id")
+client_secret = dbutils.secrets.get("azure", "client-secret")
+
+# ✅ Storage access with service principal
+spark.conf.set(f"fs.azure.account.auth.type.{storage_account}.dfs.core.windows.net", "OAuth")
+spark.conf.set(f"fs.azure.account.oauth.provider.type.{storage_account}.dfs.core.windows.net",
+               "org.apache.hadoop.fs.azurebfs.oauth2.ClientCredsTokenProvider")
+spark.conf.set(f"fs.azure.account.oauth2.client.id.{storage_account}.dfs.core.windows.net", client_id)
+spark.conf.set(f"fs.azure.account.oauth2.client.secret.{storage_account}.dfs.core.windows.net", client_secret)
+spark.conf.set(f"fs.azure.account.oauth2.client.endpoint.{storage_account}.dfs.core.windows.net",
+               f"https://login.microsoftonline.com/{tenant_id}/oauth2/token")
+```
+
+### Azure Monitor Integration
+
+```python
+# ✅ Send metrics to Azure Monitor
+from opencensus.ext.azure import metrics_exporter
+from opencensus.stats import stats as stats_module
+
+# Configure exporter
+exporter = metrics_exporter.new_metrics_exporter(
+    connection_string=dbutils.secrets.get("azure", "appinsights-connection")
+)
+
+# ✅ Log Analytics workspace query
+# Use Azure Data Explorer connector or REST API
+
+# ✅ Custom metrics logging
+def log_to_azure_monitor(metric_name: str, value: float, dimensions: dict = None):
+    """Log custom metric to Azure Monitor."""
+    # Implementation depends on your monitoring setup
+    pass
+```
+
+### Private Link / VNet Considerations
+
+```python
+# ✅ When using private endpoints:
+# - Ensure DNS resolution works
+# - Check network security groups
+# - Verify private endpoint connections
+
+# ✅ For cross-VNet access
+# Use private endpoints or VNet peering
+
+# ✅ Storage firewall configuration
+# Add Databricks control plane IPs or use private endpoints
+```
+
+---
+
+## 3️⃣7️⃣ ADVANCED SPARK PATTERNS
+
+### MapPartitions for Efficiency
+
+```python
+# ✅ Use mapPartitions for batch processing per partition
+def process_partition(iterator):
+    """Process all rows in partition at once."""
+    # Initialize resources once per partition
+    connection = create_database_connection()
+    
+    for row in iterator:
+        result = process_with_connection(row, connection)
+        yield result
+    
+    # Cleanup
+    connection.close()
+
+result_rdd = df.rdd.mapPartitions(process_partition)
+result_df = result_rdd.toDF(schema)
+
+# ✅ Pandas mapInPandas for vectorized processing
+def process_pandas(iterator):
+    for pdf in iterator:
+        # Process pandas DataFrame
+        pdf["new_col"] = pdf["existing_col"] * 2
+        yield pdf
+
+result_df = df.mapInPandas(process_pandas, schema)
+```
+
+### ForeachBatch for Streaming Writes
+
+```python
+# ✅ Custom write logic per micro-batch
+def write_to_multiple_sinks(batch_df, batch_id):
+    """Write each micro-batch to multiple destinations."""
+    # Write to Delta
+    batch_df.write.format("delta").mode("append").save("/path/to/delta")
+    
+    # Write to SQL database
+    batch_df.write \
+        .format("jdbc") \
+        .option("url", jdbc_url) \
+        .option("dbtable", "target_table") \
+        .mode("append") \
+        .save()
+    
+    # Log metrics
+    logger.info(f"Batch {batch_id}: {batch_df.count()} rows written")
+
+# Apply to streaming query
+(df.writeStream
+    .foreachBatch(write_to_multiple_sinks)
+    .option("checkpointLocation", "/path/to/checkpoint")
+    .start()
+)
+```
+
+### Dynamic Resource Allocation
+
+```python
+# ✅ Enable dynamic allocation
+spark.conf.set("spark.dynamicAllocation.enabled", "true")
+spark.conf.set("spark.dynamicAllocation.minExecutors", "2")
+spark.conf.set("spark.dynamicAllocation.maxExecutors", "20")
+spark.conf.set("spark.dynamicAllocation.initialExecutors", "4")
+spark.conf.set("spark.dynamicAllocation.executorIdleTimeout", "60s")
+spark.conf.set("spark.dynamicAllocation.schedulerBacklogTimeout", "1s")
+
+# Note: Usually configured at cluster level in Databricks
+```
+
+### Speculative Execution
+
+```python
+# ✅ Enable speculation for stragglers
+spark.conf.set("spark.speculation", "true")
+spark.conf.set("spark.speculation.interval", "100ms")
+spark.conf.set("spark.speculation.multiplier", "1.5")
+spark.conf.set("spark.speculation.quantile", "0.75")
+
+# Good for: Heterogeneous clusters, unreliable nodes
+# Avoid for: Streaming, non-idempotent operations
+```
+
+### Accumulator Patterns
+
+```python
+from pyspark import SparkContext
+
+# ✅ Count records meeting criteria
+error_count = spark.sparkContext.accumulator(0)
+processed_count = spark.sparkContext.accumulator(0)
+
+def process_with_tracking(row):
+    global error_count, processed_count
+    try:
+        result = transform(row)
+        processed_count.add(1)
+        return result
+    except Exception:
+        error_count.add(1)
+        return None
+
+result_rdd = df.rdd.map(process_with_tracking).filter(lambda x: x is not None)
+result_df = result_rdd.toDF()
+
+print(f"Processed: {processed_count.value}, Errors: {error_count.value}")
+```
+
+---
+
+## 3️⃣8️⃣ DATA TYPES & NULL HANDLING
+
+### Type Best Practices
+
+```python
+from pyspark.sql.types import *
+from decimal import Decimal
+
+# ✅ Use appropriate numeric types
+# IntegerType: -2B to 2B
+# LongType: -9Q to 9Q
+# DoubleType: Approximate, fast
+# DecimalType(precision, scale): Exact, for financial
+
+df = df.withColumn("amount", col("amount").cast(DecimalType(18, 2)))
+df = df.withColumn("count", col("count").cast(IntegerType()))
+
+# ✅ Timestamp handling
+from pyspark.sql.functions import to_timestamp, from_utc_timestamp, to_utc_timestamp
+
+# Parse timestamp
+df = df.withColumn("event_time", to_timestamp(col("timestamp_str"), "yyyy-MM-dd HH:mm:ss"))
+
+# Handle timezones
+df = df.withColumn("event_time_utc", to_utc_timestamp(col("event_time"), "America/New_York"))
+df = df.withColumn("event_time_local", from_utc_timestamp(col("event_time_utc"), "Europe/London"))
+
+# ✅ Date handling
+from pyspark.sql.functions import to_date, date_format, datediff, date_add
+
+df = df.withColumn("order_date", to_date(col("date_str"), "yyyy-MM-dd"))
+df = df.withColumn("formatted", date_format(col("order_date"), "MMM dd, yyyy"))
+df = df.withColumn("days_since", datediff(current_date(), col("order_date")))
+```
+
+### Null Handling Patterns
+
+```python
+from pyspark.sql.functions import col, when, coalesce, isnan, isnull
+
+# ✅ Check for nulls
+df.filter(col("value").isNull())
+df.filter(col("value").isNotNull())
+
+# ✅ Replace nulls
+df = df.fillna({"column1": 0, "column2": "unknown"})
+df = df.withColumn("value", coalesce(col("value"), lit(0)))
+
+# ✅ Conditional null handling
+df = df.withColumn("category",
+    when(col("category").isNull(), "uncategorized")
+    .otherwise(col("category"))
+)
+
+# ✅ Handle NaN for floating point
+df = df.filter(~isnan(col("float_column")))
+df = df.withColumn("float_column", 
+    when(isnan(col("float_column")), None).otherwise(col("float_column"))
+)
+
+# ✅ Drop rows with nulls
+df_clean = df.dropna()  # Drop rows with any null
+df_clean = df.dropna(subset=["required_col1", "required_col2"])  # Specific columns
+df_clean = df.dropna(how="all")  # Drop only if all columns are null
+df_clean = df.dropna(thresh=3)  # Keep rows with at least 3 non-null values
+```
+
+### Complex Types
+
+```python
+from pyspark.sql.functions import array, struct, map_from_arrays, explode, posexplode
+
+# ✅ Array operations
+df = df.withColumn("tags_array", split(col("tags"), ","))
+df = df.withColumn("first_tag", col("tags_array")[0])
+df = df.withColumn("array_size", size(col("tags_array")))
+
+# ✅ Explode arrays (one row per element)
+df_exploded = df.select("id", explode(col("tags_array")).alias("tag"))
+df_exploded = df.select("id", posexplode(col("tags_array")).alias("position", "tag"))
+
+# ✅ Struct operations
+df = df.withColumn("address", struct(
+    col("street"),
+    col("city"),
+    col("zip")
+))
+df = df.select("id", col("address.city").alias("city"))
+
+# ✅ Map operations
+df = df.withColumn("properties", map_from_arrays(col("keys"), col("values")))
+df = df.withColumn("specific_value", col("properties")["key1"])
+```
+
+---
+
+## 3️⃣9️⃣ STRING & JSON OPERATIONS
+
+### String Operations
+
+```python
+from pyspark.sql.functions import (
+    concat, concat_ws, substring, length, 
+    trim, ltrim, rtrim, lower, upper, initcap,
+    regexp_extract, regexp_replace, split,
+    lpad, rpad, reverse, translate
+)
+
+# ✅ Basic string operations
+df = df.withColumn("full_name", concat_ws(" ", col("first_name"), col("last_name")))
+df = df.withColumn("name_lower", lower(col("name")))
+df = df.withColumn("name_upper", upper(col("name")))
+df = df.withColumn("name_trimmed", trim(col("name")))
+df = df.withColumn("name_initcap", initcap(col("name")))
+
+# ✅ Substring
+df = df.withColumn("code", substring(col("full_code"), 1, 3))  # First 3 chars
+
+# ✅ Regex operations
+df = df.withColumn("phone_digits", regexp_replace(col("phone"), r"[^0-9]", ""))
+df = df.withColumn("domain", regexp_extract(col("email"), r"@(.+)$", 1))
+
+# ✅ Split string to array
+df = df.withColumn("parts", split(col("full_path"), "/"))
+
+# ✅ Padding
+df = df.withColumn("code_padded", lpad(col("code"), 10, "0"))
+```
+
+### JSON Operations
+
+```python
+from pyspark.sql.functions import from_json, to_json, get_json_object, json_tuple, schema_of_json
+
+# ✅ Parse JSON string to struct
+json_schema = StructType([
+    StructField("name", StringType()),
+    StructField("age", IntegerType()),
+    StructField("email", StringType())
+])
+
+df = df.withColumn("parsed", from_json(col("json_string"), json_schema))
+df = df.select("id", col("parsed.name"), col("parsed.age"))
+
+# ✅ Infer schema from sample
+sample_json = '{"name": "John", "age": 30}'
+inferred_schema = schema_of_json(lit(sample_json))
+
+# ✅ Extract specific field without full parsing
+df = df.withColumn("name", get_json_object(col("json_string"), "$.name"))
+df = df.withColumn("nested_value", get_json_object(col("json_string"), "$.address.city"))
+
+# ✅ Extract multiple fields
+df = df.select("id", json_tuple(col("json_string"), "name", "age", "email"))
+
+# ✅ Convert struct to JSON string
+df = df.withColumn("json_output", to_json(struct(col("name"), col("age"))))
+```
+
+### Flatten Nested Structures
+
+```python
+# ✅ Flatten nested JSON/struct
+def flatten_df(nested_df):
+    """Recursively flatten nested DataFrame."""
+    flat_cols = []
+    nested_cols = []
+    
+    for field in nested_df.schema.fields:
+        if isinstance(field.dataType, StructType):
+            nested_cols.append(field.name)
+        elif isinstance(field.dataType, ArrayType):
+            if isinstance(field.dataType.elementType, StructType):
+                nested_cols.append(field.name)
+            else:
+                flat_cols.append(col(field.name))
+        else:
+            flat_cols.append(col(field.name))
+    
+    # Expand struct columns
+    for nested_col in nested_cols:
+        if isinstance(nested_df.schema[nested_col].dataType, StructType):
+            for sub_field in nested_df.schema[nested_col].dataType.fields:
+                flat_cols.append(col(f"{nested_col}.{sub_field.name}").alias(f"{nested_col}_{sub_field.name}"))
+    
+    flat_df = nested_df.select(flat_cols)
+    
+    # Recurse if still nested
+    if any(isinstance(f.dataType, StructType) for f in flat_df.schema.fields):
+        return flatten_df(flat_df)
+    
+    return flat_df
+```
+
+---
+
+## 4️⃣0️⃣ DEBUGGING & PROFILING
+
+### Spark UI Analysis
+
+```python
+# ✅ Key metrics to check in Spark UI
+
+# Jobs Tab:
+# - Job duration
+# - Number of stages
+# - Failed jobs
+
+# Stages Tab:
+# - Task distribution (min/max/median duration)
+# - Shuffle read/write size
+# - Spill (memory/disk)
+# - GC time
+
+# Executors Tab:
+# - Memory usage per executor
+# - Task count distribution
+# - Input/output sizes
+
+# SQL Tab:
+# - Query execution plan
+# - Time per operation
+# - Data scanned vs returned
+```
+
+### Explain Query Plans
+
+```python
+# ✅ Different explain modes
+df.explain()  # Simple physical plan
+df.explain(mode="simple")  # Same as above
+df.explain(mode="extended")  # Logical + physical plans
+df.explain(mode="codegen")  # Generated code
+df.explain(mode="cost")  # With cost estimates
+df.explain(mode="formatted")  # Human-readable format
+
+# ✅ Check for issues in plan:
+# - BroadcastHashJoin vs SortMergeJoin
+# - Filter pushdown (PushedFilters)
+# - Partition pruning (PartitionFilters)
+# - WholeStageCodegen presence
+
+# ✅ SQL EXPLAIN
+spark.sql("EXPLAIN EXTENDED SELECT * FROM table WHERE date = '2024-01-15'").show(truncate=False)
+spark.sql("EXPLAIN COST SELECT * FROM table WHERE date = '2024-01-15'").show(truncate=False)
+```
+
+### Performance Profiling
+
+```python
+from pyspark.sql import SparkSession
+import time
+
+# ✅ Time operations
+class SparkProfiler:
+    def __init__(self):
+        self.timings = {}
+    
+    def time_operation(self, name: str, operation):
+        """Time a Spark operation."""
+        start = time.time()
+        result = operation()
+        
+        # Force evaluation
+        if hasattr(result, 'count'):
+            result.count()
+        
+        duration = time.time() - start
+        self.timings[name] = duration
+        print(f"{name}: {duration:.2f}s")
+        return result
+    
+    def report(self):
+        """Print timing report."""
+        total = sum(self.timings.values())
+        print(f"\n{'='*50}")
+        print("TIMING REPORT")
+        print(f"{'='*50}")
+        for name, duration in sorted(self.timings.items(), key=lambda x: -x[1]):
+            pct = (duration / total) * 100
+            print(f"{name}: {duration:.2f}s ({pct:.1f}%)")
+        print(f"{'='*50}")
+        print(f"TOTAL: {total:.2f}s")
+
+# Usage
+profiler = SparkProfiler()
+df1 = profiler.time_operation("read_data", lambda: spark.read.parquet(path))
+df2 = profiler.time_operation("transform", lambda: transform(df1))
+profiler.time_operation("write_data", lambda: df2.write.parquet(output))
+profiler.report()
+```
+
+### Debug Logging
+
+```python
+# ✅ Enable Spark debug logging (use sparingly)
+spark.sparkContext.setLogLevel("DEBUG")  # Very verbose
+spark.sparkContext.setLogLevel("INFO")   # Default
+spark.sparkContext.setLogLevel("WARN")   # Less verbose
+spark.sparkContext.setLogLevel("ERROR")  # Errors only
+
+# ✅ Log specific components
+log4j = spark._jvm.org.apache.log4j
+log4j.LogManager.getLogger("org.apache.spark.sql").setLevel(log4j.Level.DEBUG)
+
+# ✅ View query execution details
+spark.conf.set("spark.sql.planChangeLog.level", "WARN")
+```
+
+---
+
+## 4️⃣1️⃣ DEPENDENCY MANAGEMENT
+
+### Cluster Libraries vs Notebook Libraries
+
+```python
+# ✅ Cluster Libraries (recommended for production)
+# - Install via cluster configuration
+# - Available to all notebooks on cluster
+# - Consistent environment
+
+# ✅ Notebook-scoped libraries
+%pip install pandas==1.5.0 numpy==1.23.0
+
+# ✅ Multiple packages
+%pip install -r /dbfs/requirements.txt
+
+# ✅ From private PyPI
+%pip install --index-url https://private-pypi.com/simple/ mypackage
+
+# Note: Restart Python after %pip
+dbutils.library.restartPython()
+```
+
+### Requirements.txt Best Practices
+
+```python
+# requirements.txt
+# ✅ Pin versions for reproducibility
+pandas==1.5.0
+numpy==1.23.4
+requests==2.28.1
+great-expectations==0.15.50
+
+# ✅ Compatible version ranges
+scikit-learn>=1.0,<2.0
+
+# ✅ Install from requirements
+%pip install -r /dbfs/FileStore/requirements.txt
+```
+
+### Custom Wheel Files
+
+```python
+# ✅ Install custom wheel
+%pip install /dbfs/FileStore/jars/mypackage-1.0.0-py3-none-any.whl
+
+# ✅ Build and distribute wheel
+# In development environment:
+# python setup.py bdist_wheel
+# Upload to DBFS: dbutils.fs.cp("file:/local/path/mypackage.whl", "dbfs:/FileStore/libs/")
+
+# ✅ Using in notebook
+import mypackage
+```
+
+### Init Scripts
+
+```bash
+#!/bin/bash
+# ✅ Cluster init script for system-level dependencies
+
+# Install system packages
+apt-get update
+apt-get install -y libspatialindex-dev
+
+# Install Python packages
+/databricks/python/bin/pip install rtree
+
+# Environment variables
+echo "export MY_VAR=value" >> /etc/environment
+```
+
+---
+
+## 4️⃣2️⃣ MAGIC COMMANDS & DISPLAY
+
+### Language Magic Commands
+
+```python
+# ✅ Run SQL
+%sql
+SELECT * FROM catalog.schema.table LIMIT 10
+
+# ✅ Switch to Scala
+%scala
+val df = spark.read.parquet("/path")
+df.show()
+
+# ✅ Run shell commands
+%sh
+ls -la /dbfs/mnt/data/
+pip list | grep pandas
+
+# ✅ Markdown documentation
+%md
+# Section Title
+This is **markdown** documentation within the notebook.
+
+# ✅ Run another notebook
+%run ./includes/utilities
+
+# ✅ Filesystem operations
+%fs
+ls /mnt/data/
+```
+
+### Display Functions
+
+```python
+# ✅ Rich display
+display(df)  # Interactive table with sorting/filtering
+
+# ✅ Display with limit
+display(df.limit(100))
+
+# ✅ Display summary statistics
+display(df.summary())
+
+# ✅ Display schema
+df.printSchema()
+
+# ✅ Display as HTML
+displayHTML("<h1>Custom HTML</h1><p>With styling</p>")
+
+# ✅ Display charts
+display(df)  # Then use Plot Options in UI
+
+# ✅ Programmatic visualization with matplotlib
+import matplotlib.pyplot as plt
+
+fig, ax = plt.subplots()
+pdf = df.toPandas()
+pdf.plot(kind='bar', x='category', y='count', ax=ax)
+display(fig)
+```
+
+### Visualization Best Practices
+
+```python
+# ✅ Aggregate before display (never display millions of rows)
+display(
+    df.groupBy("category")
+    .agg(count("*").alias("count"), sum("amount").alias("total"))
+    .orderBy(col("count").desc())
+    .limit(20)
+)
+
+# ✅ Use built-in visualizations
+# After display(), click the chart icon to create:
+# - Bar charts
+# - Line charts
+# - Scatter plots
+# - Maps
+# - Pivot tables
+
+# ✅ Export visualizations
+# Right-click on chart -> Save as image
+```
+
+---
+
+## 4️⃣3️⃣ ADVANCED DELTA FEATURES
+
+### Bloom Filters
+
+```sql
+-- ✅ Create table with bloom filter
+CREATE TABLE catalog.schema.orders (
+    order_id STRING,
+    customer_id STRING,
+    amount DECIMAL(18,2)
+)
+USING DELTA
+TBLPROPERTIES (
+    'delta.dataSkippingNumIndexedCols' = '3',
+    'delta.bloomFilter.enabled' = 'true',
+    'delta.bloomFilter.columns' = 'order_id,customer_id',
+    'delta.bloomFilter.fpp' = '0.01'  -- False positive probability
+);
+
+-- ✅ Add bloom filter to existing table
+ALTER TABLE catalog.schema.orders 
+SET TBLPROPERTIES (
+    'delta.bloomFilter.enabled' = 'true',
+    'delta.bloomFilter.columns' = 'order_id'
+);
+```
+
+### Deletion Vectors
+
+```python
+# ✅ Enable deletion vectors (DBR 12.1+)
+spark.sql("""
+    ALTER TABLE catalog.schema.table
+    SET TBLPROPERTIES ('delta.enableDeletionVectors' = 'true')
+""")
+
+# Benefits:
+# - Faster DELETE operations
+# - Faster UPDATE operations
+# - Reduced write amplification
+# - Background cleanup with VACUUM
+```
+
+### Row Tracking
+
+```sql
+-- ✅ Enable row tracking for CDC downstream
+ALTER TABLE catalog.schema.orders 
+SET TBLPROPERTIES (
+    'delta.enableRowTracking' = 'true'
+);
+
+-- Each row gets a unique, stable ID even through updates
+```
+
+### Uniform Format (Iceberg/Hudi Compatibility)
+
+```sql
+-- ✅ Enable Iceberg compatibility
+ALTER TABLE catalog.schema.orders
+SET TBLPROPERTIES ('delta.universalFormat.enabledFormats' = 'iceberg');
+
+-- ✅ Create with UniForm
+CREATE TABLE catalog.schema.new_table
+USING DELTA
+TBLPROPERTIES ('delta.universalFormat.enabledFormats' = 'iceberg')
+AS SELECT * FROM source;
+
+-- Allows reading as Iceberg from external systems
+```
+
+### Predictive I/O
+
+```python
+# ✅ Enable predictive I/O (DBR 12.0+)
+spark.conf.set("spark.databricks.io.cache.enabled", "true")
+spark.conf.set("spark.databricks.io.predictiveIO.enabled", "true")
+
+# Automatically caches frequently accessed data
+# Predicts and prefetches data based on query patterns
+```
+
+---
+
+## 4️⃣4️⃣ COMPLIANCE & GOVERNANCE
+
+### PII Handling
+
+```python
+# ✅ Identify PII columns
+PII_COLUMNS = ["email", "phone", "ssn", "credit_card", "address"]
+
+# ✅ Mask PII for non-privileged access
+def mask_pii(df: DataFrame, columns: list) -> DataFrame:
+    """Mask PII columns."""
+    for col_name in columns:
+        if col_name in df.columns:
+            df = df.withColumn(col_name, 
+                when(col(col_name).isNull(), None)
+                .otherwise(lit("***MASKED***"))
+            )
+    return df
+
+# ✅ Hash PII for analytics
+from pyspark.sql.functions import sha2
+
+df = df.withColumn("email_hash", sha2(col("email"), 256))
+
+# ✅ Column-level encryption
+# Use Unity Catalog column masking (see Section 26)
+```
+
+### GDPR Compliance Patterns
+
+```python
+# ✅ Right to erasure (DELETE)
+from delta.tables import DeltaTable
+
+def delete_user_data(user_id: str, tables: list):
+    """Delete all user data across tables."""
+    for table_path in tables:
+        delta_table = DeltaTable.forPath(spark, table_path)
+        delta_table.delete(f"user_id = '{user_id}'")
+    
+    logger.info(f"Deleted data for user {user_id} from {len(tables)} tables")
+
+# ✅ Right to access (EXPORT)
+def export_user_data(user_id: str, output_path: str):
+    """Export all user data."""
+    user_data = spark.sql(f"""
+        SELECT * FROM orders WHERE user_id = '{user_id}'
+        UNION ALL
+        SELECT * FROM profiles WHERE user_id = '{user_id}'
+    """)
+    user_data.write.format("json").mode("overwrite").save(f"{output_path}/{user_id}/")
+
+# ✅ Data retention
+def enforce_retention(table_path: str, retention_days: int):
+    """Delete data older than retention period."""
+    cutoff_date = (datetime.now() - timedelta(days=retention_days)).strftime("%Y-%m-%d")
+    delta_table = DeltaTable.forPath(spark, table_path)
+    delta_table.delete(f"created_at < '{cutoff_date}'")
+```
+
+### Audit Logging
+
+```python
+# ✅ Unity Catalog system tables for audit
+audit_df = spark.sql("""
+    SELECT 
+        event_time,
+        action_name,
+        user_identity.email as user,
+        request_params,
+        response.status_code
+    FROM system.access.audit
+    WHERE event_date >= current_date() - 7
+    AND action_name IN ('getTable', 'createTable', 'deleteTable')
+    ORDER BY event_time DESC
+""")
+
+# ✅ Custom audit logging
+def audit_log(action: str, details: dict):
+    """Log action for audit trail."""
+    audit_entry = {
+        "timestamp": datetime.utcnow().isoformat(),
+        "action": action,
+        "user": spark.sql("SELECT current_user()").collect()[0][0],
+        "notebook": dbutils.notebook.entry_point.getDbutils().notebook().getContext().notebookPath().get(),
+        **details
+    }
+    
+    # Write to audit table
+    spark.createDataFrame([audit_entry]).write \
+        .format("delta") \
+        .mode("append") \
+        .save("/mnt/audit/logs")
+```
+
+### Data Classification
+
+```python
+# ✅ Define classification levels
+CLASSIFICATION = {
+    "PUBLIC": ["product_name", "category", "list_price"],
+    "INTERNAL": ["cost_price", "margin", "supplier"],
+    "CONFIDENTIAL": ["customer_email", "address", "phone"],
+    "RESTRICTED": ["ssn", "credit_card", "bank_account"]
+}
+
+# ✅ Tag tables and columns (Unity Catalog)
+spark.sql("""
+    ALTER TABLE catalog.schema.customers 
+    SET TAGS ('classification' = 'confidential', 'contains_pii' = 'true')
+""")
+
+spark.sql("""
+    ALTER TABLE catalog.schema.customers 
+    ALTER COLUMN ssn SET TAGS ('pii_type' = 'ssn', 'classification' = 'restricted')
+""")
+```
+
+---
+
+## 4️⃣5️⃣ DISASTER RECOVERY & BACKUP
+
+### Delta Table Backup Strategies
+
+```python
+# ✅ Deep clone for backup (creates independent copy)
+spark.sql("""
+    CREATE TABLE catalog.backup.orders_backup
+    DEEP CLONE catalog.prod.orders
+""")
+
+# ✅ Shallow clone for testing (shares data files)
+spark.sql("""
+    CREATE TABLE catalog.dev.orders_test
+    SHALLOW CLONE catalog.prod.orders
+""")
+
+# ✅ Incremental backup
+spark.sql("""
+    CREATE OR REPLACE TABLE catalog.backup.orders_backup
+    DEEP CLONE catalog.prod.orders
+""")
+
+# ✅ Point-in-time clone
+spark.sql("""
+    CREATE TABLE catalog.backup.orders_20240115
+    DEEP CLONE catalog.prod.orders VERSION AS OF 100
+""")
+```
+
+### Cross-Region Replication
+
+```python
+# ✅ Manual replication pattern
+def replicate_table(source_path: str, target_path: str, 
+                   source_region: str, target_region: str):
+    """Replicate Delta table across regions."""
+    # Read from source
+    df = spark.read.format("delta").load(source_path)
+    
+    # Write to target region
+    df.write \
+        .format("delta") \
+        .mode("overwrite") \
+        .option("overwriteSchema", "true") \
+        .save(target_path)
+    
+    logger.info(f"Replicated from {source_region} to {target_region}")
+
+# ✅ Use Azure Storage replication
+# Configure geo-redundant storage (GRS) or GZRS
+# Delta Lake works with Azure's built-in replication
+```
+
+### Recovery Procedures
+
+```python
+# ✅ Restore from backup
+spark.sql("""
+    RESTORE TABLE catalog.prod.orders 
+    TO VERSION AS OF 100
+""")
+
+# ✅ Restore from clone
+spark.sql("""
+    CREATE OR REPLACE TABLE catalog.prod.orders
+    DEEP CLONE catalog.backup.orders_backup
+""")
+
+# ✅ Point-in-time recovery
+from delta.tables import DeltaTable
+
+def recover_table(table_path: str, target_time: str):
+    """Recover table to point in time."""
+    # Find version at target time
+    history = spark.sql(f"DESCRIBE HISTORY delta.`{table_path}`")
+    target_version = history \
+        .filter(col("timestamp") <= target_time) \
+        .orderBy(col("timestamp").desc()) \
+        .select("version") \
+        .first()[0]
+    
+    # Restore
+    delta_table = DeltaTable.forPath(spark, table_path)
+    delta_table.restoreToVersion(target_version)
+    
+    logger.info(f"Restored to version {target_version} (time: {target_time})")
+```
+
+---
+
+## 4️⃣6️⃣ MIGRATION PATTERNS
+
+### Hive to Delta Migration
+
+```python
+# ✅ Convert Hive table to Delta
+spark.sql("""
+    CONVERT TO DELTA parquet.`/path/to/hive/table`
+    PARTITIONED BY (year INT, month INT)
+""")
+
+# ✅ With schema declaration
+spark.sql("""
+    CONVERT TO DELTA parquet.`/path/to/table`
+    NO STATISTICS
+""")
+
+# ✅ Migrate with CTAS
+spark.sql("""
+    CREATE TABLE catalog.schema.new_delta_table
+    USING DELTA
+    PARTITIONED BY (date)
+    AS SELECT * FROM hive_metastore.old_db.old_table
+""")
+
+# ✅ Incremental migration
+def migrate_incremental(hive_table: str, delta_table: str, key_column: str):
+    """Incrementally migrate from Hive to Delta."""
+    # Get max key from Delta
+    try:
+        max_key = spark.table(delta_table).agg(max(key_column)).collect()[0][0]
+    except:
+        max_key = 0  # First run
+    
+    # Read incremental from Hive
+    increment = spark.table(hive_table).filter(col(key_column) > max_key)
+    
+    # Write to Delta
+    increment.write.format("delta").mode("append").saveAsTable(delta_table)
+```
+
+### Databricks Runtime Upgrade
+
+```python
+# ✅ Pre-upgrade checklist
+def pre_upgrade_check():
+    """Check compatibility before runtime upgrade."""
+    checks = []
+    
+    # Check Delta table versions
+    for table in list_tables():
+        detail = spark.sql(f"DESCRIBE DETAIL {table}").collect()[0]
+        checks.append({
+            "table": table,
+            "min_reader": detail.minReaderVersion,
+            "min_writer": detail.minWriterVersion
+        })
+    
+    # Check deprecated features
+    # Check library compatibility
+    
+    return checks
+
+# ✅ Post-upgrade verification
+def post_upgrade_verify():
+    """Verify functionality after upgrade."""
+    # Test critical notebooks
+    # Verify Delta reads/writes
+    # Check streaming queries
+    # Validate ML models
+    pass
+```
+
+### Legacy Spark to Photon
+
+```python
+# ✅ Photon compatibility checklist
+# Photon works best with:
+# - SQL and DataFrame operations
+# - Delta Lake tables
+# - Parquet files
+# - Standard aggregations and joins
+
+# Photon doesn't accelerate:
+# - Python UDFs (use Pandas UDFs instead)
+# - RDD operations
+# - Non-standard file formats
+# - Some complex nested types
+
+# ✅ Gradual migration
+# 1. Enable Photon on cluster
+# 2. Test notebooks one by one
+# 3. Replace UDFs with built-in functions
+# 4. Monitor performance improvements
+```
+
+---
+
+## 📋 COMPLETE OPTIMIZATION REFERENCE CARD
+
+### Quick Commands
+
+```python
+# Performance
+spark.conf.set("spark.sql.adaptive.enabled", "true")
+spark.conf.set("spark.databricks.delta.optimizeWrite.enabled", "true")
+spark.conf.set("spark.databricks.delta.autoCompact.enabled", "true")
+
+# Debug
+df.explain(mode="formatted")
+spark.sql("DESCRIBE HISTORY table").show()
+spark.sql("DESCRIBE DETAIL table").show()
+
+# Maintenance
+spark.sql("OPTIMIZE table ZORDER BY (col)")
+spark.sql("VACUUM table RETAIN 168 HOURS")
+spark.sql("ANALYZE TABLE table COMPUTE STATISTICS")
+```
+
+### Performance Priority Matrix
+
+| Priority | Area | Quick Win |
+|----------|------|-----------|
+| 1 | Enable AQE | `spark.sql.adaptive.enabled=true` |
+| 2 | Broadcast joins | `broadcast(small_df)` |
+| 3 | Column pruning | Select early, filter on partitions |
+| 4 | Delta optimize | Auto-optimize, Z-ORDER |
+| 5 | Cache reused DFs | `.cache()`, `.unpersist()` |
+| 6 | Avoid Python UDFs | Use built-in or Pandas UDFs |
+| 7 | Right-size partitions | Target 128MB-256MB |
+| 8 | Cluster sizing | Match to workload |
+
+### Critical Anti-Patterns
+
+| Anti-Pattern | Impact | Fix |
+|--------------|--------|-----|
+| `df.collect()` | OOM | Aggregate first |
+| `for row in df` | 100x slower | DataFrame ops |
+| Python UDF | 10x slower | Built-in functions |
+| No caching | 2-3x slower | Cache reused DFs |
+| SELECT * | Wasted I/O | Select columns |
+| No partition filter | Full scan | Filter early |
+
+---
+
+*Last Updated: 2024 | Compatible with Databricks Runtime 12.0+ through 15.0+ | Covers Unity Catalog, DLT, Serverless, Asset Bundles, and all Azure integrations*

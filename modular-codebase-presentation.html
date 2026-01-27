@@ -1,0 +1,1374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modular Codebase Architecture - Business Presentation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            color: #fff;
+            overflow-x: hidden;
+        }
+
+        .slide {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 60px 40px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .slide::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(circle at 20% 80%, rgba(120, 119, 198, 0.15) 0%, transparent 50%),
+                        radial-gradient(circle at 80% 20%, rgba(255, 107, 107, 0.1) 0%, transparent 50%);
+            pointer-events: none;
+        }
+
+        h1 {
+            font-size: 3.5rem;
+            margin-bottom: 20px;
+            background: linear-gradient(90deg, #ffd700, #ff6b6b, #4ecdc4);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-align: center;
+        }
+
+        h2 {
+            font-size: 2.5rem;
+            color: #ffd700;
+            margin-bottom: 40px;
+            text-align: center;
+        }
+
+        h3 {
+            font-size: 1.8rem;
+            color: #4ecdc4;
+            margin-bottom: 15px;
+        }
+
+        .subtitle {
+            font-size: 1.5rem;
+            color: #a0a0a0;
+            margin-bottom: 40px;
+        }
+
+        /* Title Slide */
+        .title-slide {
+            text-align: center;
+        }
+
+        .title-slide .logo {
+            width: 150px;
+            height: 150px;
+            background: linear-gradient(135deg, #4ecdc4, #44a08d);
+            border-radius: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 40px;
+            box-shadow: 0 20px 60px rgba(78, 205, 196, 0.3);
+        }
+
+        .title-slide .logo svg {
+            width: 80px;
+            height: 80px;
+        }
+
+        /* Comparison Section */
+        .comparison-container {
+            display: flex;
+            gap: 60px;
+            justify-content: center;
+            align-items: flex-start;
+            flex-wrap: wrap;
+            max-width: 1400px;
+        }
+
+        .architecture-box {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 20px;
+            padding: 40px;
+            width: 450px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: transform 0.3s ease;
+        }
+
+        .architecture-box:hover {
+            transform: translateY(-10px);
+        }
+
+        .monolithic {
+            border-color: rgba(255, 107, 107, 0.3);
+        }
+
+        .modular {
+            border-color: rgba(78, 205, 196, 0.3);
+        }
+
+        .architecture-visual {
+            height: 200px;
+            margin-bottom: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Monolithic Visual */
+        .monolith-block {
+            width: 180px;
+            height: 180px;
+            background: linear-gradient(135deg, #ff6b6b, #c92a2a);
+            border-radius: 15px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 15px 40px rgba(255, 107, 107, 0.3);
+            position: relative;
+        }
+
+        .monolith-block span {
+            font-size: 0.9rem;
+            padding: 5px 10px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 5px;
+            margin: 3px;
+        }
+
+        /* Modular Visual */
+        .module-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+        }
+
+        .module-block {
+            width: 55px;
+            height: 55px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+            font-weight: bold;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+            transition: transform 0.3s ease;
+        }
+
+        .module-block:hover {
+            transform: scale(1.1);
+        }
+
+        .module-block:nth-child(1) { background: linear-gradient(135deg, #4ecdc4, #44a08d); }
+        .module-block:nth-child(2) { background: linear-gradient(135deg, #667eea, #764ba2); }
+        .module-block:nth-child(3) { background: linear-gradient(135deg, #f093fb, #f5576c); }
+        .module-block:nth-child(4) { background: linear-gradient(135deg, #4facfe, #00f2fe); }
+        .module-block:nth-child(5) { background: linear-gradient(135deg, #43e97b, #38f9d7); }
+        .module-block:nth-child(6) { background: linear-gradient(135deg, #fa709a, #fee140); }
+
+        /* Benefits Grid */
+        .benefits-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 30px;
+            max-width: 1200px;
+            width: 100%;
+        }
+
+        .benefit-card {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 20px;
+            padding: 30px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.3s ease;
+        }
+
+        .benefit-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .benefit-icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 20px;
+            font-size: 1.8rem;
+        }
+
+        .benefit-card ul {
+            list-style: none;
+            margin-top: 15px;
+        }
+
+        .benefit-card li {
+            padding: 8px 0;
+            padding-left: 25px;
+            position: relative;
+            color: #b0b0b0;
+        }
+
+        .benefit-card li::before {
+            content: '✓';
+            position: absolute;
+            left: 0;
+            color: #4ecdc4;
+            font-weight: bold;
+        }
+
+        /* Challenges Section */
+        .challenges-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            max-width: 1100px;
+        }
+
+        .challenge-item {
+            background: rgba(255, 107, 107, 0.1);
+            border: 1px solid rgba(255, 107, 107, 0.2);
+            border-radius: 15px;
+            padding: 25px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            transition: all 0.3s ease;
+        }
+
+        .challenge-item:hover {
+            background: rgba(255, 107, 107, 0.15);
+            transform: translateX(10px);
+        }
+
+        .challenge-icon {
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, #ff6b6b, #c92a2a);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            flex-shrink: 0;
+        }
+
+        /* Flow Diagram */
+        .flow-container {
+            display: flex;
+            align-items: center;
+            gap: 30px;
+            flex-wrap: wrap;
+            justify-content: center;
+            max-width: 1200px;
+        }
+
+        .flow-step {
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 20px;
+            padding: 30px;
+            text-align: center;
+            width: 200px;
+            position: relative;
+        }
+
+        .flow-step .step-number {
+            position: absolute;
+            top: -15px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: linear-gradient(135deg, #ffd700, #ff6b6b);
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 1rem;
+        }
+
+        .flow-step .step-icon {
+            font-size: 3rem;
+            margin: 20px 0;
+        }
+
+        .flow-arrow {
+            font-size: 2rem;
+            color: #4ecdc4;
+        }
+
+        /* ROI Section */
+        .roi-container {
+            display: flex;
+            gap: 40px;
+            flex-wrap: wrap;
+            justify-content: center;
+            max-width: 1200px;
+        }
+
+        .roi-card {
+            background: linear-gradient(135deg, rgba(78, 205, 196, 0.2), rgba(68, 160, 141, 0.1));
+            border: 1px solid rgba(78, 205, 196, 0.3);
+            border-radius: 20px;
+            padding: 40px;
+            text-align: center;
+            width: 250px;
+        }
+
+        .roi-value {
+            font-size: 3.5rem;
+            font-weight: bold;
+            background: linear-gradient(90deg, #4ecdc4, #44a08d);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .roi-label {
+            font-size: 1rem;
+            color: #a0a0a0;
+            margin-top: 10px;
+        }
+
+        /* Summary Slide */
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 30px;
+            max-width: 1000px;
+        }
+
+        .summary-item {
+            text-align: center;
+            padding: 30px;
+        }
+
+        .summary-icon {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 20px;
+            background: linear-gradient(135deg, #4ecdc4, #44a08d);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.5rem;
+        }
+
+        /* Navigation */
+        .nav-dots {
+            position: fixed;
+            right: 30px;
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            z-index: 100;
+        }
+
+        .nav-dot {
+            width: 12px;
+            height: 12px;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .nav-dot:hover, .nav-dot.active {
+            background: #4ecdc4;
+            transform: scale(1.3);
+        }
+
+        /* Slide Counter */
+        .slide-counter {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            font-size: 1rem;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        /* Animations */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        .fade-in {
+            animation: fadeInUp 0.8s ease forwards;
+        }
+
+        .pulse {
+            animation: pulse 2s ease infinite;
+        }
+
+        /* Visual Diagram Styles */
+        .diagram-container {
+            display: flex;
+            gap: 100px;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .diagram {
+            position: relative;
+        }
+
+        .diagram-label {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 1.3rem;
+            font-weight: bold;
+        }
+
+        /* Analogy Section */
+        .analogy-container {
+            display: flex;
+            gap: 80px;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+            max-width: 1200px;
+        }
+
+        .analogy-box {
+            text-align: center;
+            max-width: 400px;
+        }
+
+        .analogy-visual {
+            width: 300px;
+            height: 200px;
+            margin: 0 auto 20px;
+            position: relative;
+        }
+
+        /* Example Section */
+        .example-container {
+            display: flex;
+            gap: 40px;
+            max-width: 1400px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .example-side {
+            flex: 1;
+            min-width: 400px;
+            max-width: 600px;
+        }
+
+        .example-header {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .example-header .icon {
+            width: 50px;
+            height: 50px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+        }
+
+        .scenario-list {
+            list-style: none;
+        }
+
+        .scenario-list li {
+            padding: 15px 20px;
+            margin-bottom: 12px;
+            border-radius: 12px;
+            display: flex;
+            align-items: flex-start;
+            gap: 15px;
+        }
+
+        .scenario-list .icon-circle {
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            font-size: 1rem;
+        }
+
+        .before-list li {
+            background: rgba(255, 107, 107, 0.1);
+            border-left: 3px solid #ff6b6b;
+        }
+
+        .before-list .icon-circle {
+            background: rgba(255, 107, 107, 0.2);
+        }
+
+        .after-list li {
+            background: rgba(78, 205, 196, 0.1);
+            border-left: 3px solid #4ecdc4;
+        }
+
+        .after-list .icon-circle {
+            background: rgba(78, 205, 196, 0.2);
+        }
+
+        /* Building Blocks Visual */
+        .building-visual {
+            display: flex;
+            gap: 60px;
+            align-items: flex-end;
+            justify-content: center;
+            margin-bottom: 40px;
+        }
+
+        .building {
+            text-align: center;
+        }
+
+        .building-label {
+            margin-top: 15px;
+            font-weight: bold;
+            font-size: 1.1rem;
+        }
+
+        /* LEGO-like blocks */
+        .lego-tower {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .lego-block {
+            width: 120px;
+            height: 40px;
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+            font-weight: bold;
+            margin-bottom: 4px;
+            position: relative;
+        }
+
+        .lego-block::before {
+            content: '';
+            position: absolute;
+            top: -8px;
+            left: 20px;
+            width: 15px;
+            height: 8px;
+            background: inherit;
+            border-radius: 3px 3px 0 0;
+        }
+
+        .lego-block::after {
+            content: '';
+            position: absolute;
+            top: -8px;
+            right: 20px;
+            width: 15px;
+            height: 8px;
+            background: inherit;
+            border-radius: 3px 3px 0 0;
+        }
+
+        .lego-block.red { background: #ff6b6b; }
+        .lego-block.blue { background: #667eea; }
+        .lego-block.green { background: #4ecdc4; }
+        .lego-block.purple { background: #a855f7; }
+        .lego-block.orange { background: #f97316; }
+        .lego-block.pink { background: #ec4899; }
+
+        /* E-commerce visual */
+        .ecommerce-diagram {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 20px;
+            padding: 30px;
+            margin-top: 30px;
+        }
+
+        .store-modules {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .store-module {
+            width: 140px;
+            padding: 20px;
+            border-radius: 15px;
+            text-align: center;
+            transition: transform 0.3s ease;
+        }
+
+        .store-module:hover {
+            transform: scale(1.05);
+        }
+
+        .store-module .module-icon {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        .store-module .module-name {
+            font-weight: bold;
+            font-size: 0.9rem;
+        }
+
+        .store-module .module-team {
+            font-size: 0.75rem;
+            color: #a0a0a0;
+            margin-top: 5px;
+        }
+
+        .module-cart { background: linear-gradient(135deg, rgba(78, 205, 196, 0.3), rgba(68, 160, 141, 0.2)); }
+        .module-payment { background: linear-gradient(135deg, rgba(102, 126, 234, 0.3), rgba(118, 75, 162, 0.2)); }
+        .module-inventory { background: linear-gradient(135deg, rgba(240, 147, 251, 0.3), rgba(245, 87, 108, 0.2)); }
+        .module-users { background: linear-gradient(135deg, rgba(79, 172, 254, 0.3), rgba(0, 242, 254, 0.2)); }
+        .module-search { background: linear-gradient(135deg, rgba(67, 233, 123, 0.3), rgba(56, 249, 215, 0.2)); }
+        .module-reviews { background: linear-gradient(135deg, rgba(250, 112, 154, 0.3), rgba(254, 225, 64, 0.2)); }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            h1 { font-size: 2.5rem; }
+            h2 { font-size: 1.8rem; }
+            .slide { padding: 40px 20px; }
+            .comparison-container { gap: 30px; }
+            .architecture-box { width: 100%; max-width: 350px; }
+            .nav-dots { display: none; }
+            .summary-grid { grid-template-columns: 1fr; }
+            .example-side { min-width: 300px; }
+            .building-visual { flex-direction: column; gap: 40px; }
+        }
+
+        /* Navigation hint */
+        .nav-hint {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255, 255, 255, 0.4);
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .nav-hint .arrow {
+            animation: bounce 2s infinite;
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(5px); }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation Dots -->
+    <nav class="nav-dots">
+        <div class="nav-dot active" onclick="scrollToSlide(0)"></div>
+        <div class="nav-dot" onclick="scrollToSlide(1)"></div>
+        <div class="nav-dot" onclick="scrollToSlide(2)"></div>
+        <div class="nav-dot" onclick="scrollToSlide(3)"></div>
+        <div class="nav-dot" onclick="scrollToSlide(4)"></div>
+        <div class="nav-dot" onclick="scrollToSlide(5)"></div>
+        <div class="nav-dot" onclick="scrollToSlide(6)"></div>
+        <div class="nav-dot" onclick="scrollToSlide(7)"></div>
+        <div class="nav-dot" onclick="scrollToSlide(8)"></div>
+        <div class="nav-dot" onclick="scrollToSlide(9)"></div>
+    </nav>
+
+    <!-- Slide 1: Title -->
+    <section class="slide title-slide" id="slide-0">
+        <div class="logo pulse">
+            <svg viewBox="0 0 24 24" fill="white">
+                <path d="M3 3h7v7H3V3zm11 0h7v7h-7V3zm-11 11h7v7H3v-7zm11 0h7v7h-7v-7z"/>
+            </svg>
+        </div>
+        <h1>Modular Codebase Architecture</h1>
+        <p class="subtitle">Transforming Software Development for Business Success</p>
+        <div style="margin-top: 40px; color: #a0a0a0;">
+            <p>A Strategic Guide for Business Leaders</p>
+        </div>
+        <div class="nav-hint">
+            <span>Scroll or use arrow keys to navigate</span>
+            <span class="arrow">↓</span>
+        </div>
+    </section>
+
+    <!-- Slide 2: Simple Analogy - LEGO Blocks -->
+    <section class="slide" id="slide-1">
+        <h2>Think of It Like Building Blocks</h2>
+        <p style="color: #a0a0a0; margin-bottom: 40px; text-align: center; max-width: 800px;">
+            Imagine building a house. Would you rather have one giant piece of concrete, or individual bricks you can arrange, replace, and reuse?
+        </p>
+        
+        <div class="building-visual">
+            <!-- Monolithic Building -->
+            <div class="building">
+                <svg width="150" height="180" viewBox="0 0 150 180">
+                    <rect x="10" y="10" width="130" height="160" rx="10" fill="url(#monoGrad)" />
+                    <text x="75" y="85" text-anchor="middle" fill="white" font-size="11" font-weight="bold">EVERYTHING</text>
+                    <text x="75" y="105" text-anchor="middle" fill="white" font-size="11" font-weight="bold">IN ONE</text>
+                    <text x="75" y="125" text-anchor="middle" fill="white" font-size="11" font-weight="bold">BLOCK</text>
+                    <defs>
+                        <linearGradient id="monoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" style="stop-color:#ff6b6b"/>
+                            <stop offset="100%" style="stop-color:#c92a2a"/>
+                        </linearGradient>
+                    </defs>
+                </svg>
+                <div class="building-label" style="color: #ff6b6b;">Monolithic</div>
+                <p style="color: #a0a0a0; font-size: 0.9rem; margin-top: 10px;">One piece - hard to change</p>
+            </div>
+            
+            <div style="font-size: 3rem; color: #ffd700;">VS</div>
+            
+            <!-- Modular Building -->
+            <div class="building">
+                <div class="lego-tower">
+                    <div class="lego-block pink">Reviews</div>
+                    <div class="lego-block orange">Search</div>
+                    <div class="lego-block purple">Users</div>
+                    <div class="lego-block green">Payments</div>
+                    <div class="lego-block blue">Cart</div>
+                </div>
+                <div class="building-label" style="color: #4ecdc4;">Modular</div>
+                <p style="color: #a0a0a0; font-size: 0.9rem; margin-top: 10px;">Building blocks - easy to swap</p>
+            </div>
+        </div>
+        
+        <div style="background: rgba(255,255,255,0.05); padding: 25px 40px; border-radius: 15px; max-width: 700px; text-align: center;">
+            <p style="font-size: 1.1rem;">
+                <strong style="color: #4ecdc4;">Key Insight:</strong> 
+                With modular architecture, if you need to upgrade the "Payments" block, 
+                you only touch that piece — everything else stays intact.
+            </p>
+        </div>
+    </section>
+
+    <!-- Slide 3: Visual Comparison -->
+    <section class="slide" id="slide-2">
+        <h2>Monolithic vs Modular Architecture</h2>
+        <div class="comparison-container">
+            <div class="architecture-box monolithic">
+                <div class="architecture-visual">
+                    <div class="monolith-block">
+                        <span>UI</span>
+                        <span>Logic</span>
+                        <span>Data</span>
+                        <span>API</span>
+                    </div>
+                </div>
+                <h3 style="color: #ff6b6b;">Monolithic</h3>
+                <p style="color: #a0a0a0; margin-bottom: 15px;">Everything tightly coupled in one large codebase</p>
+                <ul style="list-style: none; color: #b0b0b0; font-size: 0.9rem;">
+                    <li style="padding: 5px 0;">❌ Change one thing, test everything</li>
+                    <li style="padding: 5px 0;">❌ One bug can crash the whole system</li>
+                    <li style="padding: 5px 0;">❌ Teams wait for each other</li>
+                </ul>
+            </div>
+            
+            <div style="font-size: 3rem; color: #4ecdc4;">→</div>
+            
+            <div class="architecture-box modular">
+                <div class="architecture-visual">
+                    <div class="module-grid">
+                        <div class="module-block">Auth</div>
+                        <div class="module-block">Users</div>
+                        <div class="module-block">API</div>
+                        <div class="module-block">UI</div>
+                        <div class="module-block">Data</div>
+                        <div class="module-block">Utils</div>
+                    </div>
+                </div>
+                <h3>Modular</h3>
+                <p style="color: #a0a0a0; margin-bottom: 15px;">Independent modules working together seamlessly</p>
+                <ul style="list-style: none; color: #b0b0b0; font-size: 0.9rem;">
+                    <li style="padding: 5px 0;">✅ Change one module, test only that</li>
+                    <li style="padding: 5px 0;">✅ Issues are isolated and contained</li>
+                    <li style="padding: 5px 0;">✅ Teams work in parallel</li>
+                </ul>
+            </div>
+        </div>
+    </section>
+
+    <!-- Slide 4: Real-World Example - E-commerce -->
+    <section class="slide" id="slide-3">
+        <h2>Real Example: E-Commerce Platform</h2>
+        <p style="color: #a0a0a0; margin-bottom: 30px; text-align: center;">
+            Let's see how a shopping website benefits from modular architecture
+        </p>
+        
+        <div class="ecommerce-diagram">
+            <p style="text-align: center; margin-bottom: 25px; color: #ffd700; font-size: 1.2rem;">
+                🛒 ShopMart - Online Store Modules
+            </p>
+            <div class="store-modules">
+                <div class="store-module module-cart">
+                    <div class="module-icon">🛒</div>
+                    <div class="module-name">Shopping Cart</div>
+                    <div class="module-team">Team Alpha</div>
+                </div>
+                <div class="store-module module-payment">
+                    <div class="module-icon">💳</div>
+                    <div class="module-name">Payments</div>
+                    <div class="module-team">Team Beta</div>
+                </div>
+                <div class="store-module module-inventory">
+                    <div class="module-icon">📦</div>
+                    <div class="module-name">Inventory</div>
+                    <div class="module-team">Team Gamma</div>
+                </div>
+                <div class="store-module module-users">
+                    <div class="module-icon">👤</div>
+                    <div class="module-name">User Accounts</div>
+                    <div class="module-team">Team Delta</div>
+                </div>
+                <div class="store-module module-search">
+                    <div class="module-icon">🔍</div>
+                    <div class="module-name">Search</div>
+                    <div class="module-team">Team Epsilon</div>
+                </div>
+                <div class="store-module module-reviews">
+                    <div class="module-icon">⭐</div>
+                    <div class="module-name">Reviews</div>
+                    <div class="module-team">Team Zeta</div>
+                </div>
+            </div>
+        </div>
+        
+        <div style="display: flex; gap: 30px; margin-top: 30px; flex-wrap: wrap; justify-content: center;">
+            <div style="background: rgba(78, 205, 196, 0.1); padding: 20px; border-radius: 15px; max-width: 350px; border-left: 3px solid #4ecdc4;">
+                <strong style="color: #4ecdc4;">Example Scenario:</strong>
+                <p style="color: #a0a0a0; margin-top: 10px; font-size: 0.95rem;">
+                    Need to add Apple Pay? Only the <strong>Payments team</strong> works on it. 
+                    Cart, Search, and Reviews continue running normally. No coordination delays!
+                </p>
+            </div>
+            <div style="background: rgba(102, 126, 234, 0.1); padding: 20px; border-radius: 15px; max-width: 350px; border-left: 3px solid #667eea;">
+                <strong style="color: #667eea;">Black Friday Ready:</strong>
+                <p style="color: #a0a0a0; margin-top: 10px; font-size: 0.95rem;">
+                    Expecting 10x traffic on Search? Scale only the <strong>Search module</strong> 
+                    without touching anything else. Save money, stay fast!
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Slide 5: Before & After Scenario -->
+    <section class="slide" id="slide-4">
+        <h2>Before & After: A Day in Development</h2>
+        <p style="color: #a0a0a0; margin-bottom: 40px; text-align: center;">
+            How the same feature request plays out differently
+        </p>
+        
+        <div class="example-container">
+            <!-- Before: Monolithic -->
+            <div class="example-side">
+                <div class="example-header">
+                    <div class="icon" style="background: linear-gradient(135deg, #ff6b6b, #c92a2a);">😰</div>
+                    <div>
+                        <h3 style="color: #ff6b6b; margin-bottom: 5px;">BEFORE: Monolithic</h3>
+                        <p style="color: #a0a0a0; font-size: 0.9rem;">Adding a "Wishlist" feature</p>
+                    </div>
+                </div>
+                <ul class="scenario-list before-list">
+                    <li>
+                        <div class="icon-circle">1</div>
+                        <div>
+                            <strong>Wait for other teams</strong>
+                            <p style="color: #a0a0a0; font-size: 0.85rem;">3 teams working on same codebase - merge conflicts everywhere</p>
+                        </div>
+                    </li>
+                    <li>
+                        <div class="icon-circle">2</div>
+                        <div>
+                            <strong>Full system testing required</strong>
+                            <p style="color: #a0a0a0; font-size: 0.85rem;">Small change = test entire application (2 days)</p>
+                        </div>
+                    </li>
+                    <li>
+                        <div class="icon-circle">3</div>
+                        <div>
+                            <strong>Risky deployment</strong>
+                            <p style="color: #a0a0a0; font-size: 0.85rem;">Deploying affects all features, schedule for low-traffic window</p>
+                        </div>
+                    </li>
+                    <li>
+                        <div class="icon-circle">4</div>
+                        <div>
+                            <strong>Bug discovered → rollback ALL</strong>
+                            <p style="color: #a0a0a0; font-size: 0.85rem;">Issue in wishlist? Revert everyone's work</p>
+                        </div>
+                    </li>
+                </ul>
+                <div style="text-align: center; margin-top: 20px; padding: 15px; background: rgba(255, 107, 107, 0.15); border-radius: 10px;">
+                    <strong style="color: #ff6b6b;">Total Time: 3-4 Weeks</strong>
+                </div>
+            </div>
+            
+            <!-- After: Modular -->
+            <div class="example-side">
+                <div class="example-header">
+                    <div class="icon" style="background: linear-gradient(135deg, #4ecdc4, #44a08d);">😊</div>
+                    <div>
+                        <h3 style="color: #4ecdc4; margin-bottom: 5px;">AFTER: Modular</h3>
+                        <p style="color: #a0a0a0; font-size: 0.9rem;">Adding a "Wishlist" feature</p>
+                    </div>
+                </div>
+                <ul class="scenario-list after-list">
+                    <li>
+                        <div class="icon-circle">1</div>
+                        <div>
+                            <strong>Create new Wishlist module</strong>
+                            <p style="color: #a0a0a0; font-size: 0.85rem;">Work independently, no waiting for others</p>
+                        </div>
+                    </li>
+                    <li>
+                        <div class="icon-circle">2</div>
+                        <div>
+                            <strong>Test only wishlist module</strong>
+                            <p style="color: #a0a0a0; font-size: 0.85rem;">Focused testing in hours, not days</p>
+                        </div>
+                    </li>
+                    <li>
+                        <div class="icon-circle">3</div>
+                        <div>
+                            <strong>Deploy just wishlist</strong>
+                            <p style="color: #a0a0a0; font-size: 0.85rem;">Zero impact on cart, payments, or other features</p>
+                        </div>
+                    </li>
+                    <li>
+                        <div class="icon-circle">4</div>
+                        <div>
+                            <strong>Bug found → fix only wishlist</strong>
+                            <p style="color: #a0a0a0; font-size: 0.85rem;">Other teams unaffected, quick hotfix</p>
+                        </div>
+                    </li>
+                </ul>
+                <div style="text-align: center; margin-top: 20px; padding: 15px; background: rgba(78, 205, 196, 0.15); border-radius: 10px;">
+                    <strong style="color: #4ecdc4;">Total Time: 3-5 Days</strong>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Slide 6: Challenges with Monolithic -->
+    <section class="slide" id="slide-5">
+        <h2>Challenges with Monolithic Architecture</h2>
+        <p style="color: #a0a0a0; margin-bottom: 40px; text-align: center;">Why traditional approaches limit business growth</p>
+        
+        <div class="challenges-grid">
+            <div class="challenge-item">
+                <div class="challenge-icon">📈</div>
+                <div>
+                    <h4>Scalability Issues</h4>
+                    <p style="color: #a0a0a0; font-size: 0.9rem;">Can't scale specific features independently</p>
+                </div>
+            </div>
+            <div class="challenge-item">
+                <div class="challenge-icon">⏱️</div>
+                <div>
+                    <h4>Long Build Times</h4>
+                    <p style="color: #a0a0a0; font-size: 0.9rem;">Small changes require full rebuilds</p>
+                </div>
+            </div>
+            <div class="challenge-item">
+                <div class="challenge-icon">🔗</div>
+                <div>
+                    <h4>Complex Dependencies</h4>
+                    <p style="color: #a0a0a0; font-size: 0.9rem;">Tangled code creates maintenance nightmares</p>
+                </div>
+            </div>
+            <div class="challenge-item">
+                <div class="challenge-icon">👥</div>
+                <div>
+                    <h4>Limited Collaboration</h4>
+                    <p style="color: #a0a0a0; font-size: 0.9rem;">Teams stepping on each other's code</p>
+                </div>
+            </div>
+            <div class="challenge-item">
+                <div class="challenge-icon">💥</div>
+                <div>
+                    <h4>Single Point of Failure</h4>
+                    <p style="color: #a0a0a0; font-size: 0.9rem;">One bug can bring down everything</p>
+                </div>
+            </div>
+            <div class="challenge-item">
+                <div class="challenge-icon">🚀</div>
+                <div>
+                    <h4>Deployment Risks</h4>
+                    <p style="color: #a0a0a0; font-size: 0.9rem;">High risk with every release</p>
+                </div>
+            </div>
+            <div class="challenge-item">
+                <div class="challenge-icon">🔧</div>
+                <div>
+                    <h4>Limited Flexibility</h4>
+                    <p style="color: #a0a0a0; font-size: 0.9rem;">Technology choices are restricted</p>
+                </div>
+            </div>
+            <div class="challenge-item">
+                <div class="challenge-icon">🚧</div>
+                <div>
+                    <h4>Integration Bottlenecks</h4>
+                    <p style="color: #a0a0a0; font-size: 0.9rem;">Slow feature integration process</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Slide 7: Key Benefits -->
+    <section class="slide" id="slide-6">
+        <h2>Benefits of Modular Architecture</h2>
+        
+        <div class="benefits-grid">
+            <div class="benefit-card">
+                <div class="benefit-icon" style="background: linear-gradient(135deg, #4ecdc4, #44a08d);">🛠️</div>
+                <h3>Improved Maintainability</h3>
+                <ul>
+                    <li><strong>Separation of Concerns:</strong> Each module handles specific functionality</li>
+                    <li><strong>Easier Updates:</strong> Update modules independently without affecting others</li>
+                </ul>
+            </div>
+            
+            <div class="benefit-card">
+                <div class="benefit-icon" style="background: linear-gradient(135deg, #667eea, #764ba2);">📈</div>
+                <h3>Enhanced Scalability</h3>
+                <ul>
+                    <li><strong>Independent Development:</strong> Teams work in parallel on different modules</li>
+                    <li><strong>Scalable Codebase:</strong> Add new features as new modules easily</li>
+                </ul>
+            </div>
+            
+            <div class="benefit-card">
+                <div class="benefit-icon" style="background: linear-gradient(135deg, #f093fb, #f5576c);">♻️</div>
+                <h3>Reusability</h3>
+                <ul>
+                    <li><strong>Shared Modules:</strong> Use common functionality across projects</li>
+                    <li><strong>Library Creation:</strong> Build reusable component libraries</li>
+                </ul>
+            </div>
+            
+            <div class="benefit-card">
+                <div class="benefit-icon" style="background: linear-gradient(135deg, #4facfe, #00f2fe);">🎓</div>
+                <h3>Faster Onboarding</h3>
+                <ul>
+                    <li><strong>Easier Understanding:</strong> New developers focus on individual modules</li>
+                    <li><strong>Reduced Learning Curve:</strong> No need to understand entire application</li>
+                </ul>
+            </div>
+            
+            <div class="benefit-card">
+                <div class="benefit-icon" style="background: linear-gradient(135deg, #43e97b, #38f9d7);">🔄</div>
+                <h3>Technology Flexibility</h3>
+                <ul>
+                    <li><strong>Interchangeable Modules:</strong> Use different tech for different needs</li>
+                    <li><strong>Best Tools:</strong> Choose optimal technology for each task</li>
+                </ul>
+            </div>
+            
+            <div class="benefit-card">
+                <div class="benefit-icon" style="background: linear-gradient(135deg, #fa709a, #fee140);">🤝</div>
+                <h3>Better Collaboration</h3>
+                <ul>
+                    <li><strong>Team Autonomy:</strong> Teams own specific modules independently</li>
+                    <li><strong>Simplified Reviews:</strong> Smaller, focused code changes</li>
+                </ul>
+            </div>
+        </div>
+    </section>
+
+    <!-- Slide 8: Team Collaboration Visual -->
+    <section class="slide" id="slide-7">
+        <h2>How Teams Work Together</h2>
+        <p style="color: #a0a0a0; margin-bottom: 50px; text-align: center;">Each team owns their module, enabling parallel development</p>
+        
+        <div class="diagram-container">
+            <div class="diagram">
+                <svg width="400" height="300" viewBox="0 0 400 300">
+                    <!-- Central Hub -->
+                    <circle cx="200" cy="150" r="50" fill="url(#hubGradient)" />
+                    <text x="200" y="145" text-anchor="middle" fill="white" font-size="12" font-weight="bold">Shared</text>
+                    <text x="200" y="160" text-anchor="middle" fill="white" font-size="12" font-weight="bold">Core</text>
+                    
+                    <!-- Module 1 - Frontend -->
+                    <circle cx="100" cy="60" r="40" fill="url(#frontendGradient)" />
+                    <text x="100" y="55" text-anchor="middle" fill="white" font-size="10" font-weight="bold">Frontend</text>
+                    <text x="100" y="68" text-anchor="middle" fill="white" font-size="9">Team A</text>
+                    <line x1="130" y1="85" x2="165" y2="115" stroke="#667eea" stroke-width="2" stroke-dasharray="5,5"/>
+                    
+                    <!-- Module 2 - Backend -->
+                    <circle cx="300" cy="60" r="40" fill="url(#backendGradient)" />
+                    <text x="300" y="55" text-anchor="middle" fill="white" font-size="10" font-weight="bold">Backend</text>
+                    <text x="300" y="68" text-anchor="middle" fill="white" font-size="9">Team B</text>
+                    <line x1="270" y1="85" x2="235" y2="115" stroke="#4ecdc4" stroke-width="2" stroke-dasharray="5,5"/>
+                    
+                    <!-- Module 3 - Mobile -->
+                    <circle cx="100" cy="240" r="40" fill="url(#mobileGradient)" />
+                    <text x="100" y="235" text-anchor="middle" fill="white" font-size="10" font-weight="bold">Mobile</text>
+                    <text x="100" y="248" text-anchor="middle" fill="white" font-size="9">Team C</text>
+                    <line x1="130" y1="215" x2="165" y2="185" stroke="#f093fb" stroke-width="2" stroke-dasharray="5,5"/>
+                    
+                    <!-- Module 4 - Analytics -->
+                    <circle cx="300" cy="240" r="40" fill="url(#analyticsGradient)" />
+                    <text x="300" y="235" text-anchor="middle" fill="white" font-size="10" font-weight="bold">Analytics</text>
+                    <text x="300" y="248" text-anchor="middle" fill="white" font-size="9">Team D</text>
+                    <line x1="270" y1="215" x2="235" y2="185" stroke="#fa709a" stroke-width="2" stroke-dasharray="5,5"/>
+                    
+                    <!-- Gradients -->
+                    <defs>
+                        <linearGradient id="hubGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" style="stop-color:#ffd700"/>
+                            <stop offset="100%" style="stop-color:#ff6b6b"/>
+                        </linearGradient>
+                        <linearGradient id="frontendGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" style="stop-color:#667eea"/>
+                            <stop offset="100%" style="stop-color:#764ba2"/>
+                        </linearGradient>
+                        <linearGradient id="backendGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" style="stop-color:#4ecdc4"/>
+                            <stop offset="100%" style="stop-color:#44a08d"/>
+                        </linearGradient>
+                        <linearGradient id="mobileGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" style="stop-color:#f093fb"/>
+                            <stop offset="100%" style="stop-color:#f5576c"/>
+                        </linearGradient>
+                        <linearGradient id="analyticsGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" style="stop-color:#fa709a"/>
+                            <stop offset="100%" style="stop-color:#fee140"/>
+                        </linearGradient>
+                    </defs>
+                </svg>
+            </div>
+            
+            <div style="max-width: 400px;">
+                <h3 style="margin-bottom: 20px;">Key Advantages:</h3>
+                <div style="background: rgba(255,255,255,0.05); padding: 20px; border-radius: 15px; margin-bottom: 15px;">
+                    <strong style="color: #4ecdc4;">🚀 Parallel Development</strong>
+                    <p style="color: #a0a0a0; margin-top: 8px;">Multiple teams can develop simultaneously without conflicts</p>
+                </div>
+                <div style="background: rgba(255,255,255,0.05); padding: 20px; border-radius: 15px; margin-bottom: 15px;">
+                    <strong style="color: #667eea;">🎯 Clear Ownership</strong>
+                    <p style="color: #a0a0a0; margin-top: 8px;">Each team is responsible for their module's quality and performance</p>
+                </div>
+                <div style="background: rgba(255,255,255,0.05); padding: 20px; border-radius: 15px;">
+                    <strong style="color: #f093fb;">⚡ Faster Delivery</strong>
+                    <p style="color: #a0a0a0; margin-top: 8px;">Independent deployments mean faster time to market</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Slide 9: Business ROI -->
+    <section class="slide" id="slide-8">
+        <h2>Business Impact & ROI</h2>
+        <p style="color: #a0a0a0; margin-bottom: 50px; text-align: center;">Measurable benefits for your organization</p>
+        
+        <div class="roi-container">
+            <div class="roi-card">
+                <div class="roi-value">50%</div>
+                <div class="roi-label">Faster Feature Delivery</div>
+                <p style="color: #a0a0a0; font-size: 0.85rem; margin-top: 15px;">Parallel development accelerates time-to-market</p>
+            </div>
+            
+            <div class="roi-card">
+                <div class="roi-value">40%</div>
+                <div class="roi-label">Reduced Bug Rate</div>
+                <p style="color: #a0a0a0; font-size: 0.85rem; margin-top: 15px;">Isolated modules mean contained issues</p>
+            </div>
+            
+            <div class="roi-card">
+                <div class="roi-value">60%</div>
+                <div class="roi-label">Faster Onboarding</div>
+                <p style="color: #a0a0a0; font-size: 0.85rem; margin-top: 15px;">New developers productive in days, not months</p>
+            </div>
+            
+            <div class="roi-card">
+                <div class="roi-value">3x</div>
+                <div class="roi-label">Code Reusability</div>
+                <p style="color: #a0a0a0; font-size: 0.85rem; margin-top: 15px;">Shared modules reduce duplication</p>
+            </div>
+        </div>
+        
+        <div style="margin-top: 60px; text-align: center; max-width: 800px;">
+            <div style="background: linear-gradient(135deg, rgba(78, 205, 196, 0.15), rgba(102, 126, 234, 0.15)); padding: 30px; border-radius: 20px; border: 1px solid rgba(78, 205, 196, 0.3);">
+                <h3 style="color: #ffd700; margin-bottom: 15px;">💡 Bottom Line</h3>
+                <p style="font-size: 1.2rem; line-height: 1.6;">Modular architecture transforms your development process from a bottleneck into a competitive advantage, enabling faster innovation and reduced technical debt.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Slide 10: Summary -->
+    <section class="slide" id="slide-9">
+        <h2>Key Takeaways</h2>
+        
+        <div class="summary-grid">
+            <div class="summary-item">
+                <div class="summary-icon">🏗️</div>
+                <h3>Build Better</h3>
+                <p style="color: #a0a0a0;">Like LEGO blocks - swap, upgrade, or add pieces without rebuilding everything</p>
+            </div>
+            <div class="summary-item">
+                <div class="summary-icon">🚀</div>
+                <h3>Ship Faster</h3>
+                <p style="color: #a0a0a0;">Teams work in parallel - what took weeks now takes days</p>
+            </div>
+            <div class="summary-item">
+                <div class="summary-icon">📈</div>
+                <h3>Scale Easily</h3>
+                <p style="color: #a0a0a0;">Grow specific features on demand - pay only for what you need</p>
+            </div>
+        </div>
+        
+        <div style="margin-top: 50px; max-width: 900px;">
+            <div style="background: rgba(255,255,255,0.05); padding: 30px; border-radius: 20px; text-align: left;">
+                <h3 style="color: #ffd700; margin-bottom: 20px; text-align: center;">Remember the E-Commerce Example</h3>
+                <div style="display: flex; gap: 30px; flex-wrap: wrap; justify-content: center;">
+                    <div style="flex: 1; min-width: 250px;">
+                        <p style="color: #ff6b6b; font-weight: bold; margin-bottom: 10px;">❌ Monolithic Way:</p>
+                        <p style="color: #a0a0a0;">"We need to add Apple Pay, but we have to wait for the Search team to finish their update first..."</p>
+                    </div>
+                    <div style="flex: 1; min-width: 250px;">
+                        <p style="color: #4ecdc4; font-weight: bold; margin-bottom: 10px;">✅ Modular Way:</p>
+                        <p style="color: #a0a0a0;">"Apple Pay? Our Payments module is independent. We'll have it live by Friday!"</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div style="margin-top: 40px; text-align: center;">
+            <div style="background: linear-gradient(135deg, #4ecdc4, #44a08d); padding: 40px 60px; border-radius: 20px; display: inline-block;">
+                <h3 style="font-size: 1.8rem; margin-bottom: 15px;">Ready to Transform Your Codebase?</h3>
+                <p style="font-size: 1.1rem; opacity: 0.9;">Start your modular architecture journey today</p>
+            </div>
+        </div>
+    </section>
+
+    <div class="slide-counter">
+        <span id="currentSlide">1</span> / 10
+    </div>
+
+    <script>
+        // Navigation
+        const slides = document.querySelectorAll('.slide');
+        const dots = document.querySelectorAll('.nav-dot');
+        const currentSlideEl = document.getElementById('currentSlide');
+
+        function scrollToSlide(index) {
+            slides[index].scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // Update active dot on scroll
+        window.addEventListener('scroll', () => {
+            let current = 0;
+            slides.forEach((slide, index) => {
+                const rect = slide.getBoundingClientRect();
+                if (rect.top <= window.innerHeight / 2) {
+                    current = index;
+                }
+            });
+            
+            dots.forEach((dot, index) => {
+                dot.classList.toggle('active', index === current);
+            });
+            
+            currentSlideEl.textContent = current + 1;
+        });
+
+        // Keyboard navigation
+        document.addEventListener('keydown', (e) => {
+            let current = 0;
+            slides.forEach((slide, index) => {
+                const rect = slide.getBoundingClientRect();
+                if (rect.top <= window.innerHeight / 2) {
+                    current = index;
+                }
+            });
+
+            if (e.key === 'ArrowDown' || e.key === 'ArrowRight' || e.key === ' ') {
+                e.preventDefault();
+                if (current < slides.length - 1) {
+                    scrollToSlide(current + 1);
+                }
+            } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+                e.preventDefault();
+                if (current > 0) {
+                    scrollToSlide(current - 1);
+                }
+            }
+        });
+
+        // Add fade-in animation on scroll
+        const observerOptions = {
+            threshold: 0.3
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.querySelectorAll('.benefit-card, .challenge-item, .roi-card, .flow-step, .store-module, .lego-block').forEach((el, i) => {
+                        el.style.opacity = '0';
+                        el.style.transform = 'translateY(20px)';
+                        setTimeout(() => {
+                            el.style.transition = 'all 0.5s ease';
+                            el.style.opacity = '1';
+                            el.style.transform = 'translateY(0)';
+                        }, i * 100);
+                    });
+                }
+            });
+        }, observerOptions);
+
+        slides.forEach(slide => observer.observe(slide));
+    </script>
+</body>
+</html>

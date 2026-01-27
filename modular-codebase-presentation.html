@@ -1,0 +1,1045 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modular Codebase Architecture - Business Presentation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            color: #fff;
+            overflow-x: hidden;
+        }
+
+        .slide {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 60px 40px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .slide::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(circle at 20% 80%, rgba(120, 119, 198, 0.15) 0%, transparent 50%),
+                        radial-gradient(circle at 80% 20%, rgba(255, 107, 107, 0.1) 0%, transparent 50%);
+            pointer-events: none;
+        }
+
+        h1 {
+            font-size: 3.5rem;
+            margin-bottom: 20px;
+            background: linear-gradient(90deg, #ffd700, #ff6b6b, #4ecdc4);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-align: center;
+        }
+
+        h2 {
+            font-size: 2.5rem;
+            color: #ffd700;
+            margin-bottom: 40px;
+            text-align: center;
+        }
+
+        h3 {
+            font-size: 1.8rem;
+            color: #4ecdc4;
+            margin-bottom: 15px;
+        }
+
+        .subtitle {
+            font-size: 1.5rem;
+            color: #a0a0a0;
+            margin-bottom: 40px;
+        }
+
+        /* Title Slide */
+        .title-slide {
+            text-align: center;
+        }
+
+        .title-slide .logo {
+            width: 150px;
+            height: 150px;
+            background: linear-gradient(135deg, #4ecdc4, #44a08d);
+            border-radius: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 40px;
+            box-shadow: 0 20px 60px rgba(78, 205, 196, 0.3);
+        }
+
+        .title-slide .logo svg {
+            width: 80px;
+            height: 80px;
+        }
+
+        /* Comparison Section */
+        .comparison-container {
+            display: flex;
+            gap: 60px;
+            justify-content: center;
+            align-items: flex-start;
+            flex-wrap: wrap;
+            max-width: 1400px;
+        }
+
+        .architecture-box {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 20px;
+            padding: 40px;
+            width: 400px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: transform 0.3s ease;
+        }
+
+        .architecture-box:hover {
+            transform: translateY(-10px);
+        }
+
+        .monolithic {
+            border-color: rgba(255, 107, 107, 0.3);
+        }
+
+        .modular {
+            border-color: rgba(78, 205, 196, 0.3);
+        }
+
+        .architecture-visual {
+            height: 200px;
+            margin-bottom: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Monolithic Visual */
+        .monolith-block {
+            width: 180px;
+            height: 180px;
+            background: linear-gradient(135deg, #ff6b6b, #c92a2a);
+            border-radius: 15px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 15px 40px rgba(255, 107, 107, 0.3);
+            position: relative;
+        }
+
+        .monolith-block span {
+            font-size: 0.9rem;
+            padding: 5px 10px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 5px;
+            margin: 3px;
+        }
+
+        /* Modular Visual */
+        .module-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+        }
+
+        .module-block {
+            width: 55px;
+            height: 55px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+            font-weight: bold;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+            transition: transform 0.3s ease;
+        }
+
+        .module-block:hover {
+            transform: scale(1.1);
+        }
+
+        .module-block:nth-child(1) { background: linear-gradient(135deg, #4ecdc4, #44a08d); }
+        .module-block:nth-child(2) { background: linear-gradient(135deg, #667eea, #764ba2); }
+        .module-block:nth-child(3) { background: linear-gradient(135deg, #f093fb, #f5576c); }
+        .module-block:nth-child(4) { background: linear-gradient(135deg, #4facfe, #00f2fe); }
+        .module-block:nth-child(5) { background: linear-gradient(135deg, #43e97b, #38f9d7); }
+        .module-block:nth-child(6) { background: linear-gradient(135deg, #fa709a, #fee140); }
+
+        /* Benefits Grid */
+        .benefits-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 30px;
+            max-width: 1200px;
+            width: 100%;
+        }
+
+        .benefit-card {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 20px;
+            padding: 30px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.3s ease;
+        }
+
+        .benefit-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .benefit-icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 20px;
+            font-size: 1.8rem;
+        }
+
+        .benefit-card ul {
+            list-style: none;
+            margin-top: 15px;
+        }
+
+        .benefit-card li {
+            padding: 8px 0;
+            padding-left: 25px;
+            position: relative;
+            color: #b0b0b0;
+        }
+
+        .benefit-card li::before {
+            content: '✓';
+            position: absolute;
+            left: 0;
+            color: #4ecdc4;
+            font-weight: bold;
+        }
+
+        /* Challenges Section */
+        .challenges-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            max-width: 1100px;
+        }
+
+        .challenge-item {
+            background: rgba(255, 107, 107, 0.1);
+            border: 1px solid rgba(255, 107, 107, 0.2);
+            border-radius: 15px;
+            padding: 25px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            transition: all 0.3s ease;
+        }
+
+        .challenge-item:hover {
+            background: rgba(255, 107, 107, 0.15);
+            transform: translateX(10px);
+        }
+
+        .challenge-icon {
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, #ff6b6b, #c92a2a);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            flex-shrink: 0;
+        }
+
+        /* Flow Diagram */
+        .flow-container {
+            display: flex;
+            align-items: center;
+            gap: 30px;
+            flex-wrap: wrap;
+            justify-content: center;
+            max-width: 1200px;
+        }
+
+        .flow-step {
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 20px;
+            padding: 30px;
+            text-align: center;
+            width: 200px;
+            position: relative;
+        }
+
+        .flow-step .step-number {
+            position: absolute;
+            top: -15px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: linear-gradient(135deg, #ffd700, #ff6b6b);
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 1rem;
+        }
+
+        .flow-step .step-icon {
+            font-size: 3rem;
+            margin: 20px 0;
+        }
+
+        .flow-arrow {
+            font-size: 2rem;
+            color: #4ecdc4;
+        }
+
+        /* ROI Section */
+        .roi-container {
+            display: flex;
+            gap: 40px;
+            flex-wrap: wrap;
+            justify-content: center;
+            max-width: 1200px;
+        }
+
+        .roi-card {
+            background: linear-gradient(135deg, rgba(78, 205, 196, 0.2), rgba(68, 160, 141, 0.1));
+            border: 1px solid rgba(78, 205, 196, 0.3);
+            border-radius: 20px;
+            padding: 40px;
+            text-align: center;
+            width: 250px;
+        }
+
+        .roi-value {
+            font-size: 3.5rem;
+            font-weight: bold;
+            background: linear-gradient(90deg, #4ecdc4, #44a08d);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .roi-label {
+            font-size: 1rem;
+            color: #a0a0a0;
+            margin-top: 10px;
+        }
+
+        /* Timeline */
+        .timeline {
+            position: relative;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 4px;
+            height: 100%;
+            background: linear-gradient(to bottom, #4ecdc4, #667eea, #f093fb);
+            border-radius: 2px;
+        }
+
+        .timeline-item {
+            display: flex;
+            justify-content: flex-end;
+            padding-right: 50px;
+            position: relative;
+            margin-bottom: 50px;
+            width: 50%;
+        }
+
+        .timeline-item:nth-child(even) {
+            justify-content: flex-start;
+            padding-left: 50px;
+            padding-right: 0;
+            margin-left: 50%;
+        }
+
+        .timeline-content {
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 15px;
+            padding: 25px;
+            max-width: 350px;
+        }
+
+        .timeline-item::after {
+            content: '';
+            position: absolute;
+            right: -8px;
+            top: 20px;
+            width: 20px;
+            height: 20px;
+            background: #4ecdc4;
+            border-radius: 50%;
+            border: 4px solid #1a1a2e;
+        }
+
+        .timeline-item:nth-child(even)::after {
+            left: -8px;
+            right: auto;
+        }
+
+        /* Summary Slide */
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 30px;
+            max-width: 1000px;
+        }
+
+        .summary-item {
+            text-align: center;
+            padding: 30px;
+        }
+
+        .summary-icon {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 20px;
+            background: linear-gradient(135deg, #4ecdc4, #44a08d);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.5rem;
+        }
+
+        /* Navigation */
+        .nav-dots {
+            position: fixed;
+            right: 30px;
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            z-index: 100;
+        }
+
+        .nav-dot {
+            width: 12px;
+            height: 12px;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .nav-dot:hover, .nav-dot.active {
+            background: #4ecdc4;
+            transform: scale(1.3);
+        }
+
+        /* Slide Counter */
+        .slide-counter {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            font-size: 1rem;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        /* Animations */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        .fade-in {
+            animation: fadeInUp 0.8s ease forwards;
+        }
+
+        .pulse {
+            animation: pulse 2s ease infinite;
+        }
+
+        /* Visual Diagram Styles */
+        .diagram-container {
+            display: flex;
+            gap: 100px;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .diagram {
+            position: relative;
+        }
+
+        .diagram-label {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 1.3rem;
+            font-weight: bold;
+        }
+
+        /* Team Collaboration Visual */
+        .team-visual {
+            display: flex;
+            gap: 60px;
+            align-items: center;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .team-circle {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            font-size: 0.9rem;
+            font-weight: bold;
+        }
+
+        .team-circle.frontend { background: linear-gradient(135deg, #667eea, #764ba2); }
+        .team-circle.backend { background: linear-gradient(135deg, #4ecdc4, #44a08d); }
+        .team-circle.mobile { background: linear-gradient(135deg, #f093fb, #f5576c); }
+
+        .connection-line {
+            width: 60px;
+            height: 3px;
+            background: linear-gradient(90deg, transparent, #4ecdc4, transparent);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            h1 { font-size: 2.5rem; }
+            h2 { font-size: 1.8rem; }
+            .slide { padding: 40px 20px; }
+            .comparison-container { gap: 30px; }
+            .architecture-box { width: 100%; max-width: 350px; }
+            .nav-dots { display: none; }
+            .timeline::before { left: 20px; }
+            .timeline-item { width: 100%; padding-left: 50px; padding-right: 0; }
+            .timeline-item:nth-child(even) { margin-left: 0; }
+            .timeline-item::after { left: 12px; right: auto; }
+            .summary-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation Dots -->
+    <nav class="nav-dots">
+        <div class="nav-dot active" onclick="scrollToSlide(0)"></div>
+        <div class="nav-dot" onclick="scrollToSlide(1)"></div>
+        <div class="nav-dot" onclick="scrollToSlide(2)"></div>
+        <div class="nav-dot" onclick="scrollToSlide(3)"></div>
+        <div class="nav-dot" onclick="scrollToSlide(4)"></div>
+        <div class="nav-dot" onclick="scrollToSlide(5)"></div>
+        <div class="nav-dot" onclick="scrollToSlide(6)"></div>
+        <div class="nav-dot" onclick="scrollToSlide(7)"></div>
+    </nav>
+
+    <!-- Slide 1: Title -->
+    <section class="slide title-slide" id="slide-0">
+        <div class="logo pulse">
+            <svg viewBox="0 0 24 24" fill="white">
+                <path d="M3 3h7v7H3V3zm11 0h7v7h-7V3zm-11 11h7v7H3v-7zm11 0h7v7h-7v-7z"/>
+            </svg>
+        </div>
+        <h1>Modular Codebase Architecture</h1>
+        <p class="subtitle">Transforming Software Development for Business Success</p>
+        <div style="margin-top: 40px; color: #a0a0a0;">
+            <p>A Strategic Guide for Business Leaders</p>
+        </div>
+    </section>
+
+    <!-- Slide 2: Visual Comparison -->
+    <section class="slide" id="slide-1">
+        <h2>Monolithic vs Modular Architecture</h2>
+        <div class="comparison-container">
+            <div class="architecture-box monolithic">
+                <div class="architecture-visual">
+                    <div class="monolith-block">
+                        <span>UI</span>
+                        <span>Logic</span>
+                        <span>Data</span>
+                        <span>API</span>
+                    </div>
+                </div>
+                <h3 style="color: #ff6b6b;">Monolithic</h3>
+                <p style="color: #a0a0a0;">Everything tightly coupled in one large codebase</p>
+            </div>
+            
+            <div style="font-size: 3rem; color: #4ecdc4;">→</div>
+            
+            <div class="architecture-box modular">
+                <div class="architecture-visual">
+                    <div class="module-grid">
+                        <div class="module-block">Auth</div>
+                        <div class="module-block">Users</div>
+                        <div class="module-block">API</div>
+                        <div class="module-block">UI</div>
+                        <div class="module-block">Data</div>
+                        <div class="module-block">Utils</div>
+                    </div>
+                </div>
+                <h3>Modular</h3>
+                <p style="color: #a0a0a0;">Independent modules working together seamlessly</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Slide 3: Challenges with Monolithic -->
+    <section class="slide" id="slide-2">
+        <h2>Challenges with Monolithic Architecture</h2>
+        <p style="color: #a0a0a0; margin-bottom: 40px; text-align: center;">Why traditional approaches limit business growth</p>
+        
+        <div class="challenges-grid">
+            <div class="challenge-item">
+                <div class="challenge-icon">📈</div>
+                <div>
+                    <h4>Scalability Issues</h4>
+                    <p style="color: #a0a0a0; font-size: 0.9rem;">Difficult to scale individual components</p>
+                </div>
+            </div>
+            <div class="challenge-item">
+                <div class="challenge-icon">⏱️</div>
+                <div>
+                    <h4>Long Build Times</h4>
+                    <p style="color: #a0a0a0; font-size: 0.9rem;">Small changes require full rebuilds</p>
+                </div>
+            </div>
+            <div class="challenge-item">
+                <div class="challenge-icon">🔗</div>
+                <div>
+                    <h4>Complex Dependencies</h4>
+                    <p style="color: #a0a0a0; font-size: 0.9rem;">Tangled code creates maintenance nightmares</p>
+                </div>
+            </div>
+            <div class="challenge-item">
+                <div class="challenge-icon">👥</div>
+                <div>
+                    <h4>Limited Collaboration</h4>
+                    <p style="color: #a0a0a0; font-size: 0.9rem;">Teams stepping on each other's code</p>
+                </div>
+            </div>
+            <div class="challenge-item">
+                <div class="challenge-icon">💥</div>
+                <div>
+                    <h4>Single Point of Failure</h4>
+                    <p style="color: #a0a0a0; font-size: 0.9rem;">One bug can bring down everything</p>
+                </div>
+            </div>
+            <div class="challenge-item">
+                <div class="challenge-icon">🚀</div>
+                <div>
+                    <h4>Deployment Risks</h4>
+                    <p style="color: #a0a0a0; font-size: 0.9rem;">High risk with every release</p>
+                </div>
+            </div>
+            <div class="challenge-item">
+                <div class="challenge-icon">🔧</div>
+                <div>
+                    <h4>Limited Flexibility</h4>
+                    <p style="color: #a0a0a0; font-size: 0.9rem;">Technology choices are restricted</p>
+                </div>
+            </div>
+            <div class="challenge-item">
+                <div class="challenge-icon">🚧</div>
+                <div>
+                    <h4>Integration Bottlenecks</h4>
+                    <p style="color: #a0a0a0; font-size: 0.9rem;">Slow feature integration process</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Slide 4: Key Benefits -->
+    <section class="slide" id="slide-3">
+        <h2>Benefits of Modular Architecture</h2>
+        
+        <div class="benefits-grid">
+            <div class="benefit-card">
+                <div class="benefit-icon" style="background: linear-gradient(135deg, #4ecdc4, #44a08d);">🛠️</div>
+                <h3>Improved Maintainability</h3>
+                <ul>
+                    <li><strong>Separation of Concerns:</strong> Each module handles specific functionality</li>
+                    <li><strong>Easier Updates:</strong> Update modules independently without affecting others</li>
+                </ul>
+            </div>
+            
+            <div class="benefit-card">
+                <div class="benefit-icon" style="background: linear-gradient(135deg, #667eea, #764ba2);">📈</div>
+                <h3>Enhanced Scalability</h3>
+                <ul>
+                    <li><strong>Independent Development:</strong> Teams work in parallel on different modules</li>
+                    <li><strong>Scalable Codebase:</strong> Add new features as new modules easily</li>
+                </ul>
+            </div>
+            
+            <div class="benefit-card">
+                <div class="benefit-icon" style="background: linear-gradient(135deg, #f093fb, #f5576c);">♻️</div>
+                <h3>Reusability</h3>
+                <ul>
+                    <li><strong>Shared Modules:</strong> Use common functionality across projects</li>
+                    <li><strong>Library Creation:</strong> Build reusable component libraries</li>
+                </ul>
+            </div>
+            
+            <div class="benefit-card">
+                <div class="benefit-icon" style="background: linear-gradient(135deg, #4facfe, #00f2fe);">🎓</div>
+                <h3>Faster Onboarding</h3>
+                <ul>
+                    <li><strong>Easier Understanding:</strong> New developers focus on individual modules</li>
+                    <li><strong>Reduced Learning Curve:</strong> No need to understand entire application</li>
+                </ul>
+            </div>
+            
+            <div class="benefit-card">
+                <div class="benefit-icon" style="background: linear-gradient(135deg, #43e97b, #38f9d7);">🔄</div>
+                <h3>Technology Flexibility</h3>
+                <ul>
+                    <li><strong>Interchangeable Modules:</strong> Use different tech for different needs</li>
+                    <li><strong>Best Tools:</strong> Choose optimal technology for each task</li>
+                </ul>
+            </div>
+            
+            <div class="benefit-card">
+                <div class="benefit-icon" style="background: linear-gradient(135deg, #fa709a, #fee140);">🤝</div>
+                <h3>Better Collaboration</h3>
+                <ul>
+                    <li><strong>Team Autonomy:</strong> Teams own specific modules independently</li>
+                    <li><strong>Simplified Reviews:</strong> Smaller, focused code changes</li>
+                </ul>
+            </div>
+        </div>
+    </section>
+
+    <!-- Slide 5: Team Collaboration Visual -->
+    <section class="slide" id="slide-4">
+        <h2>How Teams Work Together</h2>
+        <p style="color: #a0a0a0; margin-bottom: 50px; text-align: center;">Each team owns their module, enabling parallel development</p>
+        
+        <div class="diagram-container">
+            <div class="diagram">
+                <svg width="400" height="300" viewBox="0 0 400 300">
+                    <!-- Central Hub -->
+                    <circle cx="200" cy="150" r="50" fill="url(#hubGradient)" />
+                    <text x="200" y="145" text-anchor="middle" fill="white" font-size="12" font-weight="bold">Shared</text>
+                    <text x="200" y="160" text-anchor="middle" fill="white" font-size="12" font-weight="bold">Core</text>
+                    
+                    <!-- Module 1 - Frontend -->
+                    <circle cx="100" cy="60" r="40" fill="url(#frontendGradient)" />
+                    <text x="100" y="55" text-anchor="middle" fill="white" font-size="10" font-weight="bold">Frontend</text>
+                    <text x="100" y="68" text-anchor="middle" fill="white" font-size="9">Team A</text>
+                    <line x1="130" y1="85" x2="165" y2="115" stroke="#667eea" stroke-width="2" stroke-dasharray="5,5"/>
+                    
+                    <!-- Module 2 - Backend -->
+                    <circle cx="300" cy="60" r="40" fill="url(#backendGradient)" />
+                    <text x="300" y="55" text-anchor="middle" fill="white" font-size="10" font-weight="bold">Backend</text>
+                    <text x="300" y="68" text-anchor="middle" fill="white" font-size="9">Team B</text>
+                    <line x1="270" y1="85" x2="235" y2="115" stroke="#4ecdc4" stroke-width="2" stroke-dasharray="5,5"/>
+                    
+                    <!-- Module 3 - Mobile -->
+                    <circle cx="100" cy="240" r="40" fill="url(#mobileGradient)" />
+                    <text x="100" y="235" text-anchor="middle" fill="white" font-size="10" font-weight="bold">Mobile</text>
+                    <text x="100" y="248" text-anchor="middle" fill="white" font-size="9">Team C</text>
+                    <line x1="130" y1="215" x2="165" y2="185" stroke="#f093fb" stroke-width="2" stroke-dasharray="5,5"/>
+                    
+                    <!-- Module 4 - Analytics -->
+                    <circle cx="300" cy="240" r="40" fill="url(#analyticsGradient)" />
+                    <text x="300" y="235" text-anchor="middle" fill="white" font-size="10" font-weight="bold">Analytics</text>
+                    <text x="300" y="248" text-anchor="middle" fill="white" font-size="9">Team D</text>
+                    <line x1="270" y1="215" x2="235" y2="185" stroke="#fa709a" stroke-width="2" stroke-dasharray="5,5"/>
+                    
+                    <!-- Gradients -->
+                    <defs>
+                        <linearGradient id="hubGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" style="stop-color:#ffd700"/>
+                            <stop offset="100%" style="stop-color:#ff6b6b"/>
+                        </linearGradient>
+                        <linearGradient id="frontendGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" style="stop-color:#667eea"/>
+                            <stop offset="100%" style="stop-color:#764ba2"/>
+                        </linearGradient>
+                        <linearGradient id="backendGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" style="stop-color:#4ecdc4"/>
+                            <stop offset="100%" style="stop-color:#44a08d"/>
+                        </linearGradient>
+                        <linearGradient id="mobileGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" style="stop-color:#f093fb"/>
+                            <stop offset="100%" style="stop-color:#f5576c"/>
+                        </linearGradient>
+                        <linearGradient id="analyticsGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" style="stop-color:#fa709a"/>
+                            <stop offset="100%" style="stop-color:#fee140"/>
+                        </linearGradient>
+                    </defs>
+                </svg>
+            </div>
+            
+            <div style="max-width: 400px;">
+                <h3 style="margin-bottom: 20px;">Key Advantages:</h3>
+                <div style="background: rgba(255,255,255,0.05); padding: 20px; border-radius: 15px; margin-bottom: 15px;">
+                    <strong style="color: #4ecdc4;">🚀 Parallel Development</strong>
+                    <p style="color: #a0a0a0; margin-top: 8px;">Multiple teams can develop simultaneously without conflicts</p>
+                </div>
+                <div style="background: rgba(255,255,255,0.05); padding: 20px; border-radius: 15px; margin-bottom: 15px;">
+                    <strong style="color: #667eea;">🎯 Clear Ownership</strong>
+                    <p style="color: #a0a0a0; margin-top: 8px;">Each team is responsible for their module's quality and performance</p>
+                </div>
+                <div style="background: rgba(255,255,255,0.05); padding: 20px; border-radius: 15px;">
+                    <strong style="color: #f093fb;">⚡ Faster Delivery</strong>
+                    <p style="color: #a0a0a0; margin-top: 8px;">Independent deployments mean faster time to market</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Slide 6: Business ROI -->
+    <section class="slide" id="slide-5">
+        <h2>Business Impact & ROI</h2>
+        <p style="color: #a0a0a0; margin-bottom: 50px; text-align: center;">Measurable benefits for your organization</p>
+        
+        <div class="roi-container">
+            <div class="roi-card">
+                <div class="roi-value">50%</div>
+                <div class="roi-label">Faster Feature Delivery</div>
+                <p style="color: #a0a0a0; font-size: 0.85rem; margin-top: 15px;">Parallel development accelerates time-to-market</p>
+            </div>
+            
+            <div class="roi-card">
+                <div class="roi-value">40%</div>
+                <div class="roi-label">Reduced Bug Rate</div>
+                <p style="color: #a0a0a0; font-size: 0.85rem; margin-top: 15px;">Isolated modules mean contained issues</p>
+            </div>
+            
+            <div class="roi-card">
+                <div class="roi-value">60%</div>
+                <div class="roi-label">Faster Onboarding</div>
+                <p style="color: #a0a0a0; font-size: 0.85rem; margin-top: 15px;">New developers productive in days, not months</p>
+            </div>
+            
+            <div class="roi-card">
+                <div class="roi-value">3x</div>
+                <div class="roi-label">Code Reusability</div>
+                <p style="color: #a0a0a0; font-size: 0.85rem; margin-top: 15px;">Shared modules reduce duplication</p>
+            </div>
+        </div>
+        
+        <div style="margin-top: 60px; text-align: center; max-width: 800px;">
+            <div style="background: linear-gradient(135deg, rgba(78, 205, 196, 0.15), rgba(102, 126, 234, 0.15)); padding: 30px; border-radius: 20px; border: 1px solid rgba(78, 205, 196, 0.3);">
+                <h3 style="color: #ffd700; margin-bottom: 15px;">💡 Bottom Line</h3>
+                <p style="font-size: 1.2rem; line-height: 1.6;">Modular architecture transforms your development process from a bottleneck into a competitive advantage, enabling faster innovation and reduced technical debt.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Slide 7: Implementation Roadmap -->
+    <section class="slide" id="slide-6">
+        <h2>Implementation Roadmap</h2>
+        <p style="color: #a0a0a0; margin-bottom: 50px; text-align: center;">A phased approach to transformation</p>
+        
+        <div class="flow-container">
+            <div class="flow-step">
+                <div class="step-number">1</div>
+                <div class="step-icon">🔍</div>
+                <h4>Assess</h4>
+                <p style="color: #a0a0a0; font-size: 0.9rem;">Analyze current codebase and identify module boundaries</p>
+            </div>
+            
+            <div class="flow-arrow">→</div>
+            
+            <div class="flow-step">
+                <div class="step-number">2</div>
+                <div class="step-icon">📐</div>
+                <h4>Design</h4>
+                <p style="color: #a0a0a0; font-size: 0.9rem;">Create module architecture and define interfaces</p>
+            </div>
+            
+            <div class="flow-arrow">→</div>
+            
+            <div class="flow-step">
+                <div class="step-number">3</div>
+                <div class="step-icon">🏗️</div>
+                <h4>Build</h4>
+                <p style="color: #a0a0a0; font-size: 0.9rem;">Incrementally extract and refactor modules</p>
+            </div>
+            
+            <div class="flow-arrow">→</div>
+            
+            <div class="flow-step">
+                <div class="step-number">4</div>
+                <div class="step-icon">✅</div>
+                <h4>Validate</h4>
+                <p style="color: #a0a0a0; font-size: 0.9rem;">Test, deploy, and iterate on the architecture</p>
+            </div>
+        </div>
+        
+        <div style="margin-top: 60px; display: flex; gap: 30px; flex-wrap: wrap; justify-content: center;">
+            <div style="background: rgba(255,255,255,0.05); padding: 25px; border-radius: 15px; max-width: 350px;">
+                <h4 style="color: #4ecdc4; margin-bottom: 10px;">✓ Quick Wins First</h4>
+                <p style="color: #a0a0a0;">Start with well-defined, low-risk modules to build momentum and learn</p>
+            </div>
+            <div style="background: rgba(255,255,255,0.05); padding: 25px; border-radius: 15px; max-width: 350px;">
+                <h4 style="color: #667eea; margin-bottom: 10px;">✓ Iterative Approach</h4>
+                <p style="color: #a0a0a0;">Gradually migrate while maintaining system stability</p>
+            </div>
+            <div style="background: rgba(255,255,255,0.05); padding: 25px; border-radius: 15px; max-width: 350px;">
+                <h4 style="color: #f093fb; margin-bottom: 10px;">✓ Continuous Improvement</h4>
+                <p style="color: #a0a0a0;">Refine module boundaries based on real-world usage</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Slide 8: Summary -->
+    <section class="slide" id="slide-7">
+        <h2>Key Takeaways</h2>
+        
+        <div class="summary-grid">
+            <div class="summary-item">
+                <div class="summary-icon">🏗️</div>
+                <h3>Build Better</h3>
+                <p style="color: #a0a0a0;">Modular architecture enables cleaner, more maintainable code</p>
+            </div>
+            <div class="summary-item">
+                <div class="summary-icon">🚀</div>
+                <h3>Ship Faster</h3>
+                <p style="color: #a0a0a0;">Parallel development dramatically accelerates delivery</p>
+            </div>
+            <div class="summary-item">
+                <div class="summary-icon">📈</div>
+                <h3>Scale Easily</h3>
+                <p style="color: #a0a0a0;">Grow your application and teams without growing pains</p>
+            </div>
+        </div>
+        
+        <div style="margin-top: 60px; text-align: center;">
+            <div style="background: linear-gradient(135deg, #4ecdc4, #44a08d); padding: 40px 60px; border-radius: 20px; display: inline-block;">
+                <h3 style="font-size: 1.8rem; margin-bottom: 15px;">Ready to Transform Your Codebase?</h3>
+                <p style="font-size: 1.1rem; opacity: 0.9;">Start your modular architecture journey today</p>
+            </div>
+        </div>
+        
+        <div style="margin-top: 40px; color: #a0a0a0; text-align: center;">
+            <p>Questions? Let's discuss how modular architecture can benefit your organization.</p>
+        </div>
+    </section>
+
+    <div class="slide-counter">
+        <span id="currentSlide">1</span> / 8
+    </div>
+
+    <script>
+        // Navigation
+        const slides = document.querySelectorAll('.slide');
+        const dots = document.querySelectorAll('.nav-dot');
+        const currentSlideEl = document.getElementById('currentSlide');
+
+        function scrollToSlide(index) {
+            slides[index].scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // Update active dot on scroll
+        window.addEventListener('scroll', () => {
+            let current = 0;
+            slides.forEach((slide, index) => {
+                const rect = slide.getBoundingClientRect();
+                if (rect.top <= window.innerHeight / 2) {
+                    current = index;
+                }
+            });
+            
+            dots.forEach((dot, index) => {
+                dot.classList.toggle('active', index === current);
+            });
+            
+            currentSlideEl.textContent = current + 1;
+        });
+
+        // Keyboard navigation
+        document.addEventListener('keydown', (e) => {
+            let current = 0;
+            slides.forEach((slide, index) => {
+                const rect = slide.getBoundingClientRect();
+                if (rect.top <= window.innerHeight / 2) {
+                    current = index;
+                }
+            });
+
+            if (e.key === 'ArrowDown' || e.key === 'ArrowRight' || e.key === ' ') {
+                e.preventDefault();
+                if (current < slides.length - 1) {
+                    scrollToSlide(current + 1);
+                }
+            } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+                e.preventDefault();
+                if (current > 0) {
+                    scrollToSlide(current - 1);
+                }
+            }
+        });
+
+        // Add fade-in animation on scroll
+        const observerOptions = {
+            threshold: 0.3
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.querySelectorAll('.benefit-card, .challenge-item, .roi-card, .flow-step').forEach((el, i) => {
+                        el.style.opacity = '0';
+                        el.style.transform = 'translateY(20px)';
+                        setTimeout(() => {
+                            el.style.transition = 'all 0.5s ease';
+                            el.style.opacity = '1';
+                            el.style.transform = 'translateY(0)';
+                        }, i * 100);
+                    });
+                }
+            });
+        }, observerOptions);
+
+        slides.forEach(slide => observer.observe(slide));
+    </script>
+</body>
+</html>

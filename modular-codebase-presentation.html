@@ -106,7 +106,7 @@
             background: rgba(255, 255, 255, 0.05);
             border-radius: 20px;
             padding: 40px;
-            width: 400px;
+            width: 450px;
             backdrop-filter: blur(10px);
             border: 1px solid rgba(255, 255, 255, 0.1);
             transition: transform 0.3s ease;
@@ -353,64 +353,6 @@
             margin-top: 10px;
         }
 
-        /* Timeline */
-        .timeline {
-            position: relative;
-            max-width: 900px;
-            margin: 0 auto;
-        }
-
-        .timeline::before {
-            content: '';
-            position: absolute;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 4px;
-            height: 100%;
-            background: linear-gradient(to bottom, #4ecdc4, #667eea, #f093fb);
-            border-radius: 2px;
-        }
-
-        .timeline-item {
-            display: flex;
-            justify-content: flex-end;
-            padding-right: 50px;
-            position: relative;
-            margin-bottom: 50px;
-            width: 50%;
-        }
-
-        .timeline-item:nth-child(even) {
-            justify-content: flex-start;
-            padding-left: 50px;
-            padding-right: 0;
-            margin-left: 50%;
-        }
-
-        .timeline-content {
-            background: rgba(255, 255, 255, 0.08);
-            border-radius: 15px;
-            padding: 25px;
-            max-width: 350px;
-        }
-
-        .timeline-item::after {
-            content: '';
-            position: absolute;
-            right: -8px;
-            top: 20px;
-            width: 20px;
-            height: 20px;
-            background: #4ecdc4;
-            border-radius: 50%;
-            border: 4px solid #1a1a2e;
-        }
-
-        .timeline-item:nth-child(even)::after {
-            left: -8px;
-            right: auto;
-        }
-
         /* Summary Slide */
         .summary-grid {
             display: grid;
@@ -516,37 +458,221 @@
             font-weight: bold;
         }
 
-        /* Team Collaboration Visual */
-        .team-visual {
+        /* Analogy Section */
+        .analogy-container {
             display: flex;
-            gap: 60px;
+            gap: 80px;
             align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+            max-width: 1200px;
+        }
+
+        .analogy-box {
+            text-align: center;
+            max-width: 400px;
+        }
+
+        .analogy-visual {
+            width: 300px;
+            height: 200px;
+            margin: 0 auto 20px;
+            position: relative;
+        }
+
+        /* Example Section */
+        .example-container {
+            display: flex;
+            gap: 40px;
+            max-width: 1400px;
             flex-wrap: wrap;
             justify-content: center;
         }
 
-        .team-circle {
-            width: 120px;
-            height: 120px;
+        .example-side {
+            flex: 1;
+            min-width: 400px;
+            max-width: 600px;
+        }
+
+        .example-header {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .example-header .icon {
+            width: 50px;
+            height: 50px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+        }
+
+        .scenario-list {
+            list-style: none;
+        }
+
+        .scenario-list li {
+            padding: 15px 20px;
+            margin-bottom: 12px;
+            border-radius: 12px;
+            display: flex;
+            align-items: flex-start;
+            gap: 15px;
+        }
+
+        .scenario-list .icon-circle {
+            width: 35px;
+            height: 35px;
             border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            font-size: 1rem;
+        }
+
+        .before-list li {
+            background: rgba(255, 107, 107, 0.1);
+            border-left: 3px solid #ff6b6b;
+        }
+
+        .before-list .icon-circle {
+            background: rgba(255, 107, 107, 0.2);
+        }
+
+        .after-list li {
+            background: rgba(78, 205, 196, 0.1);
+            border-left: 3px solid #4ecdc4;
+        }
+
+        .after-list .icon-circle {
+            background: rgba(78, 205, 196, 0.2);
+        }
+
+        /* Building Blocks Visual */
+        .building-visual {
+            display: flex;
+            gap: 60px;
+            align-items: flex-end;
+            justify-content: center;
+            margin-bottom: 40px;
+        }
+
+        .building {
+            text-align: center;
+        }
+
+        .building-label {
+            margin-top: 15px;
+            font-weight: bold;
+            font-size: 1.1rem;
+        }
+
+        /* LEGO-like blocks */
+        .lego-tower {
             display: flex;
             flex-direction: column;
             align-items: center;
+        }
+
+        .lego-block {
+            width: 120px;
+            height: 40px;
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
             justify-content: center;
-            text-align: center;
-            font-size: 0.9rem;
+            font-size: 0.8rem;
             font-weight: bold;
+            margin-bottom: 4px;
+            position: relative;
         }
 
-        .team-circle.frontend { background: linear-gradient(135deg, #667eea, #764ba2); }
-        .team-circle.backend { background: linear-gradient(135deg, #4ecdc4, #44a08d); }
-        .team-circle.mobile { background: linear-gradient(135deg, #f093fb, #f5576c); }
-
-        .connection-line {
-            width: 60px;
-            height: 3px;
-            background: linear-gradient(90deg, transparent, #4ecdc4, transparent);
+        .lego-block::before {
+            content: '';
+            position: absolute;
+            top: -8px;
+            left: 20px;
+            width: 15px;
+            height: 8px;
+            background: inherit;
+            border-radius: 3px 3px 0 0;
         }
+
+        .lego-block::after {
+            content: '';
+            position: absolute;
+            top: -8px;
+            right: 20px;
+            width: 15px;
+            height: 8px;
+            background: inherit;
+            border-radius: 3px 3px 0 0;
+        }
+
+        .lego-block.red { background: #ff6b6b; }
+        .lego-block.blue { background: #667eea; }
+        .lego-block.green { background: #4ecdc4; }
+        .lego-block.purple { background: #a855f7; }
+        .lego-block.orange { background: #f97316; }
+        .lego-block.pink { background: #ec4899; }
+
+        /* E-commerce visual */
+        .ecommerce-diagram {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 20px;
+            padding: 30px;
+            margin-top: 30px;
+        }
+
+        .store-modules {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .store-module {
+            width: 140px;
+            padding: 20px;
+            border-radius: 15px;
+            text-align: center;
+            transition: transform 0.3s ease;
+        }
+
+        .store-module:hover {
+            transform: scale(1.05);
+        }
+
+        .store-module .module-icon {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        .store-module .module-name {
+            font-weight: bold;
+            font-size: 0.9rem;
+        }
+
+        .store-module .module-team {
+            font-size: 0.75rem;
+            color: #a0a0a0;
+            margin-top: 5px;
+        }
+
+        .module-cart { background: linear-gradient(135deg, rgba(78, 205, 196, 0.3), rgba(68, 160, 141, 0.2)); }
+        .module-payment { background: linear-gradient(135deg, rgba(102, 126, 234, 0.3), rgba(118, 75, 162, 0.2)); }
+        .module-inventory { background: linear-gradient(135deg, rgba(240, 147, 251, 0.3), rgba(245, 87, 108, 0.2)); }
+        .module-users { background: linear-gradient(135deg, rgba(79, 172, 254, 0.3), rgba(0, 242, 254, 0.2)); }
+        .module-search { background: linear-gradient(135deg, rgba(67, 233, 123, 0.3), rgba(56, 249, 215, 0.2)); }
+        .module-reviews { background: linear-gradient(135deg, rgba(250, 112, 154, 0.3), rgba(254, 225, 64, 0.2)); }
 
         /* Responsive */
         @media (max-width: 768px) {
@@ -556,11 +682,31 @@
             .comparison-container { gap: 30px; }
             .architecture-box { width: 100%; max-width: 350px; }
             .nav-dots { display: none; }
-            .timeline::before { left: 20px; }
-            .timeline-item { width: 100%; padding-left: 50px; padding-right: 0; }
-            .timeline-item:nth-child(even) { margin-left: 0; }
-            .timeline-item::after { left: 12px; right: auto; }
             .summary-grid { grid-template-columns: 1fr; }
+            .example-side { min-width: 300px; }
+            .building-visual { flex-direction: column; gap: 40px; }
+        }
+
+        /* Navigation hint */
+        .nav-hint {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255, 255, 255, 0.4);
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .nav-hint .arrow {
+            animation: bounce 2s infinite;
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(5px); }
         }
     </style>
 </head>
@@ -575,6 +721,8 @@
         <div class="nav-dot" onclick="scrollToSlide(5)"></div>
         <div class="nav-dot" onclick="scrollToSlide(6)"></div>
         <div class="nav-dot" onclick="scrollToSlide(7)"></div>
+        <div class="nav-dot" onclick="scrollToSlide(8)"></div>
+        <div class="nav-dot" onclick="scrollToSlide(9)"></div>
     </nav>
 
     <!-- Slide 1: Title -->
@@ -589,10 +737,65 @@
         <div style="margin-top: 40px; color: #a0a0a0;">
             <p>A Strategic Guide for Business Leaders</p>
         </div>
+        <div class="nav-hint">
+            <span>Scroll or use arrow keys to navigate</span>
+            <span class="arrow">↓</span>
+        </div>
     </section>
 
-    <!-- Slide 2: Visual Comparison -->
+    <!-- Slide 2: Simple Analogy - LEGO Blocks -->
     <section class="slide" id="slide-1">
+        <h2>Think of It Like Building Blocks</h2>
+        <p style="color: #a0a0a0; margin-bottom: 40px; text-align: center; max-width: 800px;">
+            Imagine building a house. Would you rather have one giant piece of concrete, or individual bricks you can arrange, replace, and reuse?
+        </p>
+        
+        <div class="building-visual">
+            <!-- Monolithic Building -->
+            <div class="building">
+                <svg width="150" height="180" viewBox="0 0 150 180">
+                    <rect x="10" y="10" width="130" height="160" rx="10" fill="url(#monoGrad)" />
+                    <text x="75" y="85" text-anchor="middle" fill="white" font-size="11" font-weight="bold">EVERYTHING</text>
+                    <text x="75" y="105" text-anchor="middle" fill="white" font-size="11" font-weight="bold">IN ONE</text>
+                    <text x="75" y="125" text-anchor="middle" fill="white" font-size="11" font-weight="bold">BLOCK</text>
+                    <defs>
+                        <linearGradient id="monoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" style="stop-color:#ff6b6b"/>
+                            <stop offset="100%" style="stop-color:#c92a2a"/>
+                        </linearGradient>
+                    </defs>
+                </svg>
+                <div class="building-label" style="color: #ff6b6b;">Monolithic</div>
+                <p style="color: #a0a0a0; font-size: 0.9rem; margin-top: 10px;">One piece - hard to change</p>
+            </div>
+            
+            <div style="font-size: 3rem; color: #ffd700;">VS</div>
+            
+            <!-- Modular Building -->
+            <div class="building">
+                <div class="lego-tower">
+                    <div class="lego-block pink">Reviews</div>
+                    <div class="lego-block orange">Search</div>
+                    <div class="lego-block purple">Users</div>
+                    <div class="lego-block green">Payments</div>
+                    <div class="lego-block blue">Cart</div>
+                </div>
+                <div class="building-label" style="color: #4ecdc4;">Modular</div>
+                <p style="color: #a0a0a0; font-size: 0.9rem; margin-top: 10px;">Building blocks - easy to swap</p>
+            </div>
+        </div>
+        
+        <div style="background: rgba(255,255,255,0.05); padding: 25px 40px; border-radius: 15px; max-width: 700px; text-align: center;">
+            <p style="font-size: 1.1rem;">
+                <strong style="color: #4ecdc4;">Key Insight:</strong> 
+                With modular architecture, if you need to upgrade the "Payments" block, 
+                you only touch that piece — everything else stays intact.
+            </p>
+        </div>
+    </section>
+
+    <!-- Slide 3: Visual Comparison -->
+    <section class="slide" id="slide-2">
         <h2>Monolithic vs Modular Architecture</h2>
         <div class="comparison-container">
             <div class="architecture-box monolithic">
@@ -605,7 +808,12 @@
                     </div>
                 </div>
                 <h3 style="color: #ff6b6b;">Monolithic</h3>
-                <p style="color: #a0a0a0;">Everything tightly coupled in one large codebase</p>
+                <p style="color: #a0a0a0; margin-bottom: 15px;">Everything tightly coupled in one large codebase</p>
+                <ul style="list-style: none; color: #b0b0b0; font-size: 0.9rem;">
+                    <li style="padding: 5px 0;">❌ Change one thing, test everything</li>
+                    <li style="padding: 5px 0;">❌ One bug can crash the whole system</li>
+                    <li style="padding: 5px 0;">❌ Teams wait for each other</li>
+                </ul>
             </div>
             
             <div style="font-size: 3rem; color: #4ecdc4;">→</div>
@@ -622,13 +830,179 @@
                     </div>
                 </div>
                 <h3>Modular</h3>
-                <p style="color: #a0a0a0;">Independent modules working together seamlessly</p>
+                <p style="color: #a0a0a0; margin-bottom: 15px;">Independent modules working together seamlessly</p>
+                <ul style="list-style: none; color: #b0b0b0; font-size: 0.9rem;">
+                    <li style="padding: 5px 0;">✅ Change one module, test only that</li>
+                    <li style="padding: 5px 0;">✅ Issues are isolated and contained</li>
+                    <li style="padding: 5px 0;">✅ Teams work in parallel</li>
+                </ul>
             </div>
         </div>
     </section>
 
-    <!-- Slide 3: Challenges with Monolithic -->
-    <section class="slide" id="slide-2">
+    <!-- Slide 4: Real-World Example - E-commerce -->
+    <section class="slide" id="slide-3">
+        <h2>Real Example: E-Commerce Platform</h2>
+        <p style="color: #a0a0a0; margin-bottom: 30px; text-align: center;">
+            Let's see how a shopping website benefits from modular architecture
+        </p>
+        
+        <div class="ecommerce-diagram">
+            <p style="text-align: center; margin-bottom: 25px; color: #ffd700; font-size: 1.2rem;">
+                🛒 ShopMart - Online Store Modules
+            </p>
+            <div class="store-modules">
+                <div class="store-module module-cart">
+                    <div class="module-icon">🛒</div>
+                    <div class="module-name">Shopping Cart</div>
+                    <div class="module-team">Team Alpha</div>
+                </div>
+                <div class="store-module module-payment">
+                    <div class="module-icon">💳</div>
+                    <div class="module-name">Payments</div>
+                    <div class="module-team">Team Beta</div>
+                </div>
+                <div class="store-module module-inventory">
+                    <div class="module-icon">📦</div>
+                    <div class="module-name">Inventory</div>
+                    <div class="module-team">Team Gamma</div>
+                </div>
+                <div class="store-module module-users">
+                    <div class="module-icon">👤</div>
+                    <div class="module-name">User Accounts</div>
+                    <div class="module-team">Team Delta</div>
+                </div>
+                <div class="store-module module-search">
+                    <div class="module-icon">🔍</div>
+                    <div class="module-name">Search</div>
+                    <div class="module-team">Team Epsilon</div>
+                </div>
+                <div class="store-module module-reviews">
+                    <div class="module-icon">⭐</div>
+                    <div class="module-name">Reviews</div>
+                    <div class="module-team">Team Zeta</div>
+                </div>
+            </div>
+        </div>
+        
+        <div style="display: flex; gap: 30px; margin-top: 30px; flex-wrap: wrap; justify-content: center;">
+            <div style="background: rgba(78, 205, 196, 0.1); padding: 20px; border-radius: 15px; max-width: 350px; border-left: 3px solid #4ecdc4;">
+                <strong style="color: #4ecdc4;">Example Scenario:</strong>
+                <p style="color: #a0a0a0; margin-top: 10px; font-size: 0.95rem;">
+                    Need to add Apple Pay? Only the <strong>Payments team</strong> works on it. 
+                    Cart, Search, and Reviews continue running normally. No coordination delays!
+                </p>
+            </div>
+            <div style="background: rgba(102, 126, 234, 0.1); padding: 20px; border-radius: 15px; max-width: 350px; border-left: 3px solid #667eea;">
+                <strong style="color: #667eea;">Black Friday Ready:</strong>
+                <p style="color: #a0a0a0; margin-top: 10px; font-size: 0.95rem;">
+                    Expecting 10x traffic on Search? Scale only the <strong>Search module</strong> 
+                    without touching anything else. Save money, stay fast!
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Slide 5: Before & After Scenario -->
+    <section class="slide" id="slide-4">
+        <h2>Before & After: A Day in Development</h2>
+        <p style="color: #a0a0a0; margin-bottom: 40px; text-align: center;">
+            How the same feature request plays out differently
+        </p>
+        
+        <div class="example-container">
+            <!-- Before: Monolithic -->
+            <div class="example-side">
+                <div class="example-header">
+                    <div class="icon" style="background: linear-gradient(135deg, #ff6b6b, #c92a2a);">😰</div>
+                    <div>
+                        <h3 style="color: #ff6b6b; margin-bottom: 5px;">BEFORE: Monolithic</h3>
+                        <p style="color: #a0a0a0; font-size: 0.9rem;">Adding a "Wishlist" feature</p>
+                    </div>
+                </div>
+                <ul class="scenario-list before-list">
+                    <li>
+                        <div class="icon-circle">1</div>
+                        <div>
+                            <strong>Wait for other teams</strong>
+                            <p style="color: #a0a0a0; font-size: 0.85rem;">3 teams working on same codebase - merge conflicts everywhere</p>
+                        </div>
+                    </li>
+                    <li>
+                        <div class="icon-circle">2</div>
+                        <div>
+                            <strong>Full system testing required</strong>
+                            <p style="color: #a0a0a0; font-size: 0.85rem;">Small change = test entire application (2 days)</p>
+                        </div>
+                    </li>
+                    <li>
+                        <div class="icon-circle">3</div>
+                        <div>
+                            <strong>Risky deployment</strong>
+                            <p style="color: #a0a0a0; font-size: 0.85rem;">Deploying affects all features, schedule for low-traffic window</p>
+                        </div>
+                    </li>
+                    <li>
+                        <div class="icon-circle">4</div>
+                        <div>
+                            <strong>Bug discovered → rollback ALL</strong>
+                            <p style="color: #a0a0a0; font-size: 0.85rem;">Issue in wishlist? Revert everyone's work</p>
+                        </div>
+                    </li>
+                </ul>
+                <div style="text-align: center; margin-top: 20px; padding: 15px; background: rgba(255, 107, 107, 0.15); border-radius: 10px;">
+                    <strong style="color: #ff6b6b;">Total Time: 3-4 Weeks</strong>
+                </div>
+            </div>
+            
+            <!-- After: Modular -->
+            <div class="example-side">
+                <div class="example-header">
+                    <div class="icon" style="background: linear-gradient(135deg, #4ecdc4, #44a08d);">😊</div>
+                    <div>
+                        <h3 style="color: #4ecdc4; margin-bottom: 5px;">AFTER: Modular</h3>
+                        <p style="color: #a0a0a0; font-size: 0.9rem;">Adding a "Wishlist" feature</p>
+                    </div>
+                </div>
+                <ul class="scenario-list after-list">
+                    <li>
+                        <div class="icon-circle">1</div>
+                        <div>
+                            <strong>Create new Wishlist module</strong>
+                            <p style="color: #a0a0a0; font-size: 0.85rem;">Work independently, no waiting for others</p>
+                        </div>
+                    </li>
+                    <li>
+                        <div class="icon-circle">2</div>
+                        <div>
+                            <strong>Test only wishlist module</strong>
+                            <p style="color: #a0a0a0; font-size: 0.85rem;">Focused testing in hours, not days</p>
+                        </div>
+                    </li>
+                    <li>
+                        <div class="icon-circle">3</div>
+                        <div>
+                            <strong>Deploy just wishlist</strong>
+                            <p style="color: #a0a0a0; font-size: 0.85rem;">Zero impact on cart, payments, or other features</p>
+                        </div>
+                    </li>
+                    <li>
+                        <div class="icon-circle">4</div>
+                        <div>
+                            <strong>Bug found → fix only wishlist</strong>
+                            <p style="color: #a0a0a0; font-size: 0.85rem;">Other teams unaffected, quick hotfix</p>
+                        </div>
+                    </li>
+                </ul>
+                <div style="text-align: center; margin-top: 20px; padding: 15px; background: rgba(78, 205, 196, 0.15); border-radius: 10px;">
+                    <strong style="color: #4ecdc4;">Total Time: 3-5 Days</strong>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Slide 6: Challenges with Monolithic -->
+    <section class="slide" id="slide-5">
         <h2>Challenges with Monolithic Architecture</h2>
         <p style="color: #a0a0a0; margin-bottom: 40px; text-align: center;">Why traditional approaches limit business growth</p>
         
@@ -637,7 +1011,7 @@
                 <div class="challenge-icon">📈</div>
                 <div>
                     <h4>Scalability Issues</h4>
-                    <p style="color: #a0a0a0; font-size: 0.9rem;">Difficult to scale individual components</p>
+                    <p style="color: #a0a0a0; font-size: 0.9rem;">Can't scale specific features independently</p>
                 </div>
             </div>
             <div class="challenge-item">
@@ -692,8 +1066,8 @@
         </div>
     </section>
 
-    <!-- Slide 4: Key Benefits -->
-    <section class="slide" id="slide-3">
+    <!-- Slide 7: Key Benefits -->
+    <section class="slide" id="slide-6">
         <h2>Benefits of Modular Architecture</h2>
         
         <div class="benefits-grid">
@@ -753,8 +1127,8 @@
         </div>
     </section>
 
-    <!-- Slide 5: Team Collaboration Visual -->
-    <section class="slide" id="slide-4">
+    <!-- Slide 8: Team Collaboration Visual -->
+    <section class="slide" id="slide-7">
         <h2>How Teams Work Together</h2>
         <p style="color: #a0a0a0; margin-bottom: 50px; text-align: center;">Each team owns their module, enabling parallel development</p>
         
@@ -834,8 +1208,8 @@
         </div>
     </section>
 
-    <!-- Slide 6: Business ROI -->
-    <section class="slide" id="slide-5">
+    <!-- Slide 9: Business ROI -->
+    <section class="slide" id="slide-8">
         <h2>Business Impact & ROI</h2>
         <p style="color: #a0a0a0; margin-bottom: 50px; text-align: center;">Measurable benefits for your organization</p>
         
@@ -873,99 +1247,54 @@
         </div>
     </section>
 
-    <!-- Slide 7: Implementation Roadmap -->
-    <section class="slide" id="slide-6">
-        <h2>Implementation Roadmap</h2>
-        <p style="color: #a0a0a0; margin-bottom: 50px; text-align: center;">A phased approach to transformation</p>
-        
-        <div class="flow-container">
-            <div class="flow-step">
-                <div class="step-number">1</div>
-                <div class="step-icon">🔍</div>
-                <h4>Assess</h4>
-                <p style="color: #a0a0a0; font-size: 0.9rem;">Analyze current codebase and identify module boundaries</p>
-            </div>
-            
-            <div class="flow-arrow">→</div>
-            
-            <div class="flow-step">
-                <div class="step-number">2</div>
-                <div class="step-icon">📐</div>
-                <h4>Design</h4>
-                <p style="color: #a0a0a0; font-size: 0.9rem;">Create module architecture and define interfaces</p>
-            </div>
-            
-            <div class="flow-arrow">→</div>
-            
-            <div class="flow-step">
-                <div class="step-number">3</div>
-                <div class="step-icon">🏗️</div>
-                <h4>Build</h4>
-                <p style="color: #a0a0a0; font-size: 0.9rem;">Incrementally extract and refactor modules</p>
-            </div>
-            
-            <div class="flow-arrow">→</div>
-            
-            <div class="flow-step">
-                <div class="step-number">4</div>
-                <div class="step-icon">✅</div>
-                <h4>Validate</h4>
-                <p style="color: #a0a0a0; font-size: 0.9rem;">Test, deploy, and iterate on the architecture</p>
-            </div>
-        </div>
-        
-        <div style="margin-top: 60px; display: flex; gap: 30px; flex-wrap: wrap; justify-content: center;">
-            <div style="background: rgba(255,255,255,0.05); padding: 25px; border-radius: 15px; max-width: 350px;">
-                <h4 style="color: #4ecdc4; margin-bottom: 10px;">✓ Quick Wins First</h4>
-                <p style="color: #a0a0a0;">Start with well-defined, low-risk modules to build momentum and learn</p>
-            </div>
-            <div style="background: rgba(255,255,255,0.05); padding: 25px; border-radius: 15px; max-width: 350px;">
-                <h4 style="color: #667eea; margin-bottom: 10px;">✓ Iterative Approach</h4>
-                <p style="color: #a0a0a0;">Gradually migrate while maintaining system stability</p>
-            </div>
-            <div style="background: rgba(255,255,255,0.05); padding: 25px; border-radius: 15px; max-width: 350px;">
-                <h4 style="color: #f093fb; margin-bottom: 10px;">✓ Continuous Improvement</h4>
-                <p style="color: #a0a0a0;">Refine module boundaries based on real-world usage</p>
-            </div>
-        </div>
-    </section>
-
-    <!-- Slide 8: Summary -->
-    <section class="slide" id="slide-7">
+    <!-- Slide 10: Summary -->
+    <section class="slide" id="slide-9">
         <h2>Key Takeaways</h2>
         
         <div class="summary-grid">
             <div class="summary-item">
                 <div class="summary-icon">🏗️</div>
                 <h3>Build Better</h3>
-                <p style="color: #a0a0a0;">Modular architecture enables cleaner, more maintainable code</p>
+                <p style="color: #a0a0a0;">Like LEGO blocks - swap, upgrade, or add pieces without rebuilding everything</p>
             </div>
             <div class="summary-item">
                 <div class="summary-icon">🚀</div>
                 <h3>Ship Faster</h3>
-                <p style="color: #a0a0a0;">Parallel development dramatically accelerates delivery</p>
+                <p style="color: #a0a0a0;">Teams work in parallel - what took weeks now takes days</p>
             </div>
             <div class="summary-item">
                 <div class="summary-icon">📈</div>
                 <h3>Scale Easily</h3>
-                <p style="color: #a0a0a0;">Grow your application and teams without growing pains</p>
+                <p style="color: #a0a0a0;">Grow specific features on demand - pay only for what you need</p>
             </div>
         </div>
         
-        <div style="margin-top: 60px; text-align: center;">
+        <div style="margin-top: 50px; max-width: 900px;">
+            <div style="background: rgba(255,255,255,0.05); padding: 30px; border-radius: 20px; text-align: left;">
+                <h3 style="color: #ffd700; margin-bottom: 20px; text-align: center;">Remember the E-Commerce Example</h3>
+                <div style="display: flex; gap: 30px; flex-wrap: wrap; justify-content: center;">
+                    <div style="flex: 1; min-width: 250px;">
+                        <p style="color: #ff6b6b; font-weight: bold; margin-bottom: 10px;">❌ Monolithic Way:</p>
+                        <p style="color: #a0a0a0;">"We need to add Apple Pay, but we have to wait for the Search team to finish their update first..."</p>
+                    </div>
+                    <div style="flex: 1; min-width: 250px;">
+                        <p style="color: #4ecdc4; font-weight: bold; margin-bottom: 10px;">✅ Modular Way:</p>
+                        <p style="color: #a0a0a0;">"Apple Pay? Our Payments module is independent. We'll have it live by Friday!"</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div style="margin-top: 40px; text-align: center;">
             <div style="background: linear-gradient(135deg, #4ecdc4, #44a08d); padding: 40px 60px; border-radius: 20px; display: inline-block;">
                 <h3 style="font-size: 1.8rem; margin-bottom: 15px;">Ready to Transform Your Codebase?</h3>
                 <p style="font-size: 1.1rem; opacity: 0.9;">Start your modular architecture journey today</p>
             </div>
         </div>
-        
-        <div style="margin-top: 40px; color: #a0a0a0; text-align: center;">
-            <p>Questions? Let's discuss how modular architecture can benefit your organization.</p>
-        </div>
     </section>
 
     <div class="slide-counter">
-        <span id="currentSlide">1</span> / 8
+        <span id="currentSlide">1</span> / 10
     </div>
 
     <script>
@@ -1026,7 +1355,7 @@
         const observer = new IntersectionObserver((entries) => {
             entries.forEach(entry => {
                 if (entry.isIntersecting) {
-                    entry.target.querySelectorAll('.benefit-card, .challenge-item, .roi-card, .flow-step').forEach((el, i) => {
+                    entry.target.querySelectorAll('.benefit-card, .challenge-item, .roi-card, .flow-step, .store-module, .lego-block').forEach((el, i) => {
                         el.style.opacity = '0';
                         el.style.transform = 'translateY(20px)';
                         setTimeout(() => {

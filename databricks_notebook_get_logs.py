@@ -28,8 +28,36 @@ JOB_ID = "133166337001904"
 JOB_RUN_ID = "584498514062775"
 TASK_RUN_ID = "87528399080853"
 
-# Get token from Databricks secrets
-TOKEN = dbutils.secrets.get(scope="generic-scope", key='databricks-admin-token-scrt')
+# ============================================================================
+# TOKEN CONFIGURATION - Choose ONE method below
+# ============================================================================
+
+# METHOD 1: Get token from Databricks secrets (uncomment if using secrets)
+# TOKEN = dbutils.secrets.get(scope="generic-scope", key='databricks-admin-token-scrt')
+
+# METHOD 2: Use the current notebook's context token (RECOMMENDED for same workspace)
+# This uses the token of the user/service principal running the notebook
+TOKEN = dbutils.notebook.entry_point.getDbutils().notebook().getContext().apiToken().get()
+
+# METHOD 3: Hardcode token for testing (NOT recommended for production)
+# TOKEN = "dapi..."  # Your personal access token
+
+# ============================================================================
+# TOKEN VALIDATION
+# ============================================================================
+print("=" * 80)
+print("TOKEN VALIDATION")
+print("=" * 80)
+
+if TOKEN:
+    # Show first and last few characters for verification (masked)
+    token_preview = f"{TOKEN[:5]}...{TOKEN[-4:]}" if len(TOKEN) > 10 else "***"
+    print(f"Token retrieved successfully: {token_preview}")
+    print(f"Token length: {len(TOKEN)} characters")
+else:
+    print("ERROR: Token is empty or None!")
+    print("Please check your token configuration above.")
+    raise ValueError("Token is required for API authentication")
 
 # COMMAND ----------
 
@@ -37,6 +65,65 @@ TOKEN = dbutils.secrets.get(scope="generic-scope", key='databricks-admin-token-s
 # MAGIC ## API Functions
 
 # COMMAND ----------
+
+def make_api_request(method, endpoint, workspace_url, token, params=None, payload=None):
+    """
+    Generic API request handler with detailed error logging
+    
+    Args:
+        method (str): HTTP method (GET, POST)
+        endpoint (str): API endpoint path
+        workspace_url (str): The Azure Databricks workspace URL
+        token (str): The Databricks API token
+        params (dict): Query parameters for GET requests
+        payload (dict): JSON payload for POST requests
+    
+    Returns:
+        dict: API response or None if failed
+    """
+    url = f"{workspace_url}{endpoint}"
+    
+    # Validate token
+    if not token or token.strip() == "":
+        print("ERROR: Token is empty or None!")
+        return None
+    
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
+    
+    try:
+        if method.upper() == "GET":
+            response = requests.get(url, headers=headers, params=params)
+        elif method.upper() == "POST":
+            response = requests.post(url, headers=headers, json=payload)
+        else:
+            print(f"Unsupported HTTP method: {method}")
+            return None
+        
+        response.raise_for_status()
+        return response.json()
+        
+    except requests.exceptions.RequestException as e:
+        print(f"API request failed: {str(e)}")
+        if hasattr(e, 'response') and e.response is not None:
+            print(f"Response content: {e.response.text}")
+            
+            # Additional debugging for 401 errors
+            if e.response.status_code == 401:
+                print("\n--- DEBUG INFO FOR 401 ERROR ---")
+                print(f"Token present: {bool(token)}")
+                print(f"Token length: {len(token) if token else 0}")
+                print(f"Auth header format: Bearer {token[:5]}...{token[-4:] if token and len(token) > 10 else '***'}")
+                print("Possible causes:")
+                print("  1. Token is expired - generate a new Personal Access Token")
+                print("  2. Token doesn't have required permissions (jobs:read)")
+                print("  3. Token is from a different workspace")
+                print("  4. Using service principal that lacks permissions")
+                print("-" * 35)
+        return None
+
 
 def get_job_run_output(run_id, workspace_url=WORKSPACE_URL, token=TOKEN):
     """
@@ -57,26 +144,13 @@ def get_job_run_output(run_id, workspace_url=WORKSPACE_URL, token=TOKEN):
             - error_trace: Stack trace if failed
             - metadata: Run metadata including run_page_url
     """
-    api_endpoint = f"{workspace_url}/api/2.1/jobs/runs/get-output"
-    
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json"
-    }
-    
-    params = {
-        "run_id": run_id
-    }
-    
-    try:
-        response = requests.get(api_endpoint, headers=headers, params=params)
-        response.raise_for_status()
-        return response.json()
-    except requests.exceptions.RequestException as e:
-        print(f"API request failed: {str(e)}")
-        if hasattr(e, 'response') and e.response is not None:
-            print(f"Response content: {e.response.text}")
-        return None
+    return make_api_request(
+        method="GET",
+        endpoint="/api/2.1/jobs/runs/get-output",
+        workspace_url=workspace_url,
+        token=token,
+        params={"run_id": run_id}
+    )
 
 # COMMAND ----------
 
@@ -94,26 +168,13 @@ def get_job_run_details(run_id, workspace_url=WORKSPACE_URL, token=TOKEN):
     Returns:
         dict: The job run details including state, tasks, cluster info
     """
-    api_endpoint = f"{workspace_url}/api/2.1/jobs/runs/get"
-    
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json"
-    }
-    
-    params = {
-        "run_id": run_id
-    }
-    
-    try:
-        response = requests.get(api_endpoint, headers=headers, params=params)
-        response.raise_for_status()
-        return response.json()
-    except requests.exceptions.RequestException as e:
-        print(f"API request failed: {str(e)}")
-        if hasattr(e, 'response') and e.response is not None:
-            print(f"Response content: {e.response.text}")
-        return None
+    return make_api_request(
+        method="GET",
+        endpoint="/api/2.1/jobs/runs/get",
+        workspace_url=workspace_url,
+        token=token,
+        params={"run_id": run_id}
+    )
 
 # COMMAND ----------
 
@@ -132,27 +193,13 @@ def get_cluster_events(cluster_id, workspace_url=WORKSPACE_URL, token=TOKEN, lim
     Returns:
         dict: The cluster events response
     """
-    api_endpoint = f"{workspace_url}/api/2.0/clusters/events"
-    
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json"
-    }
-    
-    payload = {
-        "cluster_id": cluster_id,
-        "limit": limit
-    }
-    
-    try:
-        response = requests.post(api_endpoint, headers=headers, json=payload)
-        response.raise_for_status()
-        return response.json()
-    except requests.exceptions.RequestException as e:
-        print(f"API request failed: {str(e)}")
-        if hasattr(e, 'response') and e.response is not None:
-            print(f"Response content: {e.response.text}")
-        return None
+    return make_api_request(
+        method="POST",
+        endpoint="/api/2.0/clusters/events",
+        workspace_url=workspace_url,
+        token=token,
+        payload={"cluster_id": cluster_id, "limit": limit}
+    )
 
 # COMMAND ----------
 
@@ -171,27 +218,13 @@ def export_run(run_id, workspace_url=WORKSPACE_URL, token=TOKEN, views_to_export
     Returns:
         dict: The exported run response with views
     """
-    api_endpoint = f"{workspace_url}/api/2.1/jobs/runs/export"
-    
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json"
-    }
-    
-    params = {
-        "run_id": run_id,
-        "views_to_export": views_to_export
-    }
-    
-    try:
-        response = requests.get(api_endpoint, headers=headers, params=params)
-        response.raise_for_status()
-        return response.json()
-    except requests.exceptions.RequestException as e:
-        print(f"API request failed: {str(e)}")
-        if hasattr(e, 'response') and e.response is not None:
-            print(f"Response content: {e.response.text}")
-        return None
+    return make_api_request(
+        method="GET",
+        endpoint="/api/2.1/jobs/runs/export",
+        workspace_url=workspace_url,
+        token=token,
+        params={"run_id": run_id, "views_to_export": views_to_export}
+    )
 
 # COMMAND ----------
 

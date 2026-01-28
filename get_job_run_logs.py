@@ -13,6 +13,98 @@ import json
 import time
 
 
+def validate_token(token):
+    """
+    Validate the token and print diagnostic information
+    
+    Args:
+        token (str): The Databricks API token
+    
+    Returns:
+        bool: True if token appears valid, False otherwise
+    """
+    if not token:
+        print("ERROR: Token is None or empty!")
+        return False
+    
+    if not isinstance(token, str):
+        print(f"ERROR: Token is not a string, got {type(token)}")
+        return False
+    
+    token = token.strip()
+    if len(token) == 0:
+        print("ERROR: Token is empty after stripping whitespace!")
+        return False
+    
+    # Show masked token for verification
+    token_preview = f"{token[:5]}...{token[-4:]}" if len(token) > 10 else "***"
+    print(f"Token preview: {token_preview}")
+    print(f"Token length: {len(token)} characters")
+    
+    return True
+
+
+def make_api_request(method, endpoint, workspace_url, token, params=None, payload=None):
+    """
+    Generic API request handler with detailed error logging
+    
+    Args:
+        method (str): HTTP method (GET, POST)
+        endpoint (str): API endpoint path
+        workspace_url (str): The Azure Databricks workspace URL
+        token (str): The Databricks API token
+        params (dict): Query parameters for GET requests
+        payload (dict): JSON payload for POST requests
+    
+    Returns:
+        dict: API response or None if failed
+    """
+    url = f"{workspace_url}{endpoint}"
+    
+    # Validate token
+    if not token or token.strip() == "":
+        print("ERROR: Token is empty or None!")
+        return None
+    
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
+    
+    try:
+        if method.upper() == "GET":
+            response = requests.get(url, headers=headers, params=params)
+        elif method.upper() == "POST":
+            response = requests.post(url, headers=headers, json=payload)
+        else:
+            print(f"Unsupported HTTP method: {method}")
+            return None
+        
+        response.raise_for_status()
+        return response.json()
+        
+    except requests.exceptions.RequestException as e:
+        print(f"API request failed: {str(e)}")
+        if hasattr(e, 'response') and e.response is not None:
+            print(f"Response content: {e.response.text}")
+            
+            # Additional debugging for 401 errors
+            if e.response.status_code == 401:
+                print("\n--- DEBUG INFO FOR 401 ERROR ---")
+                print(f"Token present: {bool(token)}")
+                print(f"Token length: {len(token) if token else 0}")
+                if token and len(token) > 10:
+                    print(f"Auth header format: Bearer {token[:5]}...{token[-4:]}")
+                print("Possible causes:")
+                print("  1. Token is expired - generate a new Personal Access Token")
+                print("  2. Token doesn't have required permissions (jobs:read)")
+                print("  3. Token is from a different workspace")
+                print("  4. Using service principal that lacks permissions")
+                print("  5. Secret scope/key name is incorrect")
+                print("-" * 35)
+        return None
+
+
 def get_job_run_output(job_run_id, workspace_url, token):
     """
     Get the output of a job run using the Databricks REST API
@@ -25,26 +117,13 @@ def get_job_run_output(job_run_id, workspace_url, token):
     Returns:
         dict: The job run output response
     """
-    api_endpoint = f"{workspace_url}/api/2.1/jobs/runs/get-output"
-    
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json"
-    }
-    
-    params = {
-        "run_id": job_run_id
-    }
-    
-    try:
-        response = requests.get(api_endpoint, headers=headers, params=params)
-        response.raise_for_status()
-        return response.json()
-    except requests.exceptions.RequestException as e:
-        print(f"API request failed: {str(e)}")
-        if hasattr(e, 'response') and e.response is not None:
-            print(f"Response content: {e.response.text}")
-        return None
+    return make_api_request(
+        method="GET",
+        endpoint="/api/2.1/jobs/runs/get-output",
+        workspace_url=workspace_url,
+        token=token,
+        params={"run_id": job_run_id}
+    )
 
 
 def get_job_run_details(job_run_id, workspace_url, token):
@@ -59,26 +138,13 @@ def get_job_run_details(job_run_id, workspace_url, token):
     Returns:
         dict: The job run details response
     """
-    api_endpoint = f"{workspace_url}/api/2.1/jobs/runs/get"
-    
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json"
-    }
-    
-    params = {
-        "run_id": job_run_id
-    }
-    
-    try:
-        response = requests.get(api_endpoint, headers=headers, params=params)
-        response.raise_for_status()
-        return response.json()
-    except requests.exceptions.RequestException as e:
-        print(f"API request failed: {str(e)}")
-        if hasattr(e, 'response') and e.response is not None:
-            print(f"Response content: {e.response.text}")
-        return None
+    return make_api_request(
+        method="GET",
+        endpoint="/api/2.1/jobs/runs/get",
+        workspace_url=workspace_url,
+        token=token,
+        params={"run_id": job_run_id}
+    )
 
 
 def get_cluster_events(cluster_id, workspace_url, token, limit=100):
@@ -94,27 +160,13 @@ def get_cluster_events(cluster_id, workspace_url, token, limit=100):
     Returns:
         dict: The cluster events response
     """
-    api_endpoint = f"{workspace_url}/api/2.0/clusters/events"
-    
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json"
-    }
-    
-    payload = {
-        "cluster_id": cluster_id,
-        "limit": limit
-    }
-    
-    try:
-        response = requests.post(api_endpoint, headers=headers, json=payload)
-        response.raise_for_status()
-        return response.json()
-    except requests.exceptions.RequestException as e:
-        print(f"API request failed: {str(e)}")
-        if hasattr(e, 'response') and e.response is not None:
-            print(f"Response content: {e.response.text}")
-        return None
+    return make_api_request(
+        method="POST",
+        endpoint="/api/2.0/clusters/events",
+        workspace_url=workspace_url,
+        token=token,
+        payload={"cluster_id": cluster_id, "limit": limit}
+    )
 
 
 def export_run(run_id, workspace_url, token, views_to_export="ALL"):
@@ -130,27 +182,13 @@ def export_run(run_id, workspace_url, token, views_to_export="ALL"):
     Returns:
         dict: The exported run response
     """
-    api_endpoint = f"{workspace_url}/api/2.1/jobs/runs/export"
-    
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json"
-    }
-    
-    params = {
-        "run_id": run_id,
-        "views_to_export": views_to_export
-    }
-    
-    try:
-        response = requests.get(api_endpoint, headers=headers, params=params)
-        response.raise_for_status()
-        return response.json()
-    except requests.exceptions.RequestException as e:
-        print(f"API request failed: {str(e)}")
-        if hasattr(e, 'response') and e.response is not None:
-            print(f"Response content: {e.response.text}")
-        return None
+    return make_api_request(
+        method="GET",
+        endpoint="/api/2.1/jobs/runs/export",
+        workspace_url=workspace_url,
+        token=token,
+        params={"run_id": run_id, "views_to_export": views_to_export}
+    )
 
 
 def get_job_run_logs(job_id, job_run_id, task_run_id, workspace_url, token):
@@ -366,10 +404,14 @@ def save_logs_to_file(logs, filename="job_run_logs.json"):
 # MAIN EXECUTION - FOR DATABRICKS NOTEBOOK
 # ============================================================================
 
-def main_databricks():
+def main_databricks(token_method="context"):
     """
     Main function for execution in Databricks notebook environment
-    Uses dbutils to get the token from secrets
+    
+    Args:
+        token_method (str): How to get the token:
+            - "context": Use the notebook context token (RECOMMENDED)
+            - "secret": Use dbutils.secrets.get()
     """
     # Configuration
     WORKSPACE_URL = "https://adb-5244115429641560.0.azuredatabricks.net"
@@ -377,8 +419,24 @@ def main_databricks():
     JOB_RUN_ID = "584498514062775"
     TASK_RUN_ID = "87528399080853"
     
-    # Get token from Databricks secrets
-    token = dbutils.secrets.get(scope="generic-scope", key='databricks-admin-token-scrt')
+    # Get token based on method
+    if token_method == "context":
+        # METHOD 1: Use the current notebook's context token (RECOMMENDED)
+        # This uses the token of the user/service principal running the notebook
+        print("Using notebook context token...")
+        token = dbutils.notebook.entry_point.getDbutils().notebook().getContext().apiToken().get()
+    elif token_method == "secret":
+        # METHOD 2: Get token from Databricks secrets
+        print("Using token from secrets...")
+        token = dbutils.secrets.get(scope="generic-scope", key='databricks-admin-token-scrt')
+    else:
+        raise ValueError(f"Unknown token_method: {token_method}. Use 'context' or 'secret'")
+    
+    # Validate token
+    print("\n--- Token Validation ---")
+    if not validate_token(token):
+        raise ValueError("Token validation failed!")
+    print("------------------------\n")
     
     # Retrieve logs
     logs = get_job_run_logs(
@@ -413,6 +471,12 @@ def main_standalone(token):
     JOB_RUN_ID = "584498514062775"
     TASK_RUN_ID = "87528399080853"
     
+    # Validate token
+    print("\n--- Token Validation ---")
+    if not validate_token(token):
+        raise ValueError("Token validation failed!")
+    print("------------------------\n")
+    
     # Retrieve logs
     logs = get_job_run_logs(
         job_id=JOB_ID,
@@ -430,17 +494,33 @@ def main_standalone(token):
 
 if __name__ == "__main__":
     import sys
+    import os
     
     print("Azure Databricks Job Run Logs Retriever")
     print("-" * 40)
     
+    # Try to get token from multiple sources
+    token = None
+    
+    # 1. Command line argument
     if len(sys.argv) > 1:
-        # Token provided as command line argument
         token = sys.argv[1]
+        print("Using token from command line argument")
+    
+    # 2. Environment variable
+    elif os.environ.get('DATABRICKS_TOKEN'):
+        token = os.environ.get('DATABRICKS_TOKEN')
+        print("Using token from DATABRICKS_TOKEN environment variable")
+    
+    if token:
         main_standalone(token)
     else:
         print("\nUsage:")
-        print("  Standalone: python get_job_run_logs.py <DATABRICKS_TOKEN>")
-        print("  Databricks: Run main_databricks() in a notebook cell")
-        print("\nFor Databricks notebook, copy the functions and run:")
-        print("  logs = main_databricks()")
+        print("  Option 1: python get_job_run_logs.py <DATABRICKS_TOKEN>")
+        print("  Option 2: export DATABRICKS_TOKEN=<your_token> && python get_job_run_logs.py")
+        print("\nFor Databricks notebook, use one of these methods:")
+        print("  # Method 1: Use notebook context token (RECOMMENDED)")
+        print("  logs = main_databricks(token_method='context')")
+        print("")
+        print("  # Method 2: Use token from secrets")
+        print("  logs = main_databricks(token_method='secret')")

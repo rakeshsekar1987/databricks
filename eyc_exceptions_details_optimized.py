@@ -96,6 +96,19 @@ spark.conf.set("spark.sql.adaptive.enabled", "true")
 spark.conf.set("spark.sql.adaptive.coalescePartitions.enabled", "true")
 spark.conf.set("spark.sql.adaptive.skewJoin.enabled", "true")
 
+# OPTIMIZATION: Reduce shuffle partitions - 21,000 tasks is way too many
+# Default is 200, but with large data this auto-scales too high
+# Set to a reasonable number based on cluster size (e.g., 2-4x number of cores)
+spark.conf.set("spark.sql.shuffle.partitions", "200")
+
+# OPTIMIZATION: Increase broadcast threshold to avoid large shuffles
+# Default is 10MB, increase to 100MB for larger dimension tables
+spark.conf.set("spark.sql.autoBroadcastJoinThreshold", "104857600")  # 100MB
+
+# OPTIMIZATION: Enable predicate pushdown for Delta tables
+spark.conf.set("spark.databricks.delta.optimizeWrite.enabled", "true")
+spark.conf.set("spark.databricks.delta.autoCompact.enabled", "true")
+
 # SQL WRITE SECTION
 mtdt_db_host=dbutils.secrets.get(scope = "generic-scope", key = "metadata-db-host")
 mtdt_db_db=dbutils.secrets.get(scope = "generic-scope", key = "metadata-db-db")
@@ -598,11 +611,22 @@ except:
 # union of both DMS and RRMS table
 exceptions_details_byfiling_df = exceptions_details_byfiling_df_dms.union(exceptions_details_byfiling_df_rrms.select(exceptions_details_byfiling_df_dms.columns))
 
+# OPTIMIZATION: Repartition after union to reduce partition count
+# The 21,000+ tasks in Spark UI indicate too many small partitions
+# Coalesce to a reasonable number (adjust based on data size and cluster)
+print("Repartitioning union DataFrame to reduce task count...")
+exceptions_details_byfiling_df = exceptions_details_byfiling_df.repartition(200)
+
 # COMMAND ----------
 
 # ==================================================================================
 # OPTIMIZATION #1: Replace subtract() with left_anti join on key columns
 # This is the PRIMARY fix for the 3+ hour CDC operation
+#
+# WHY THE ORIGINAL WAS SLOW (from Spark UI):
+# - Job 55: 20,600 tasks taking 3.6 hours (the subtract + count)
+# - Job 114: 20,800 tasks taking 3.6 hours (the delta write, recomputing everything)
+# - 21,000+ tasks indicates massive data shuffling across all partitions
 # ==================================================================================
 
 # Define the key columns that uniquely identify a record
@@ -663,6 +687,29 @@ print("New records : " + str(exceptions_details_byfiling_df_count))
 
 # Clean up the previous keys cache
 prev_keys_df.unpersist()
+
+# ==================================================================================
+# ALTERNATIVE APPROACH: Use Delta MERGE (even more efficient for large datasets)
+# Uncomment this section if the anti-join is still slow
+# ==================================================================================
+# from delta.tables import DeltaTable
+#
+# if DeltaTable.isDeltaTable(spark, exception_details_table_loc):
+#     deltaTable = DeltaTable.forPath(spark, exception_details_table_loc)
+#     
+#     # Add audit columns
+#     exceptions_details_byfiling_df_with_audit = exceptions_details_byfiling_df\
+#         .withColumn("auditingdt", lit(processing_datetime[0:10]))\
+#         .withColumn("auditingts", lit(processing_datetime))
+#     
+#     # MERGE - only inserts new records, skips existing ones
+#     deltaTable.alias("target").merge(
+#         exceptions_details_byfiling_df_with_audit.alias("source"),
+#         " AND ".join([f"target.{col} = source.{col}" for col in CDC_KEY_COLUMNS])
+#     ).whenNotMatchedInsertAll().execute()
+#     
+#     print("Delta MERGE completed")
+# ==================================================================================
 
 # COMMAND ----------
 

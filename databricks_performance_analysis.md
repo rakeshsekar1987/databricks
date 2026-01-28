@@ -176,6 +176,42 @@ df.write.format('delta')\
 
 ---
 
+---
+
+## Spark UI Analysis (From User's Screenshot)
+
+### Jobs Taking 3.6 Hours Each:
+
+| Job ID | Description | Duration | Tasks | Issue |
+|--------|-------------|----------|-------|-------|
+| **55** | `#CDC #Querying previous exceptions_details_byfi... count` | 3.6 h | 20,600/21,408 | `subtract()` + `count()` |
+| **114** | `DeltaInvariantCheckerExec.scala:85` | 3.6 h | 20,800/21,608 | Delta write (recomputing) |
+| 115, 116 | `broadcast exchange` | 3.6 h | 1/1 | Waiting on Job 114 |
+| 56, 57 | `broadcast exchange` | 3.6 h | 1/1 | Waiting on Job 55 |
+
+### Critical Finding: 21,000+ Tasks
+
+This indicates:
+- **Massive shuffle operations** - Data is being shuffled across 21K partitions
+- **No caching** - Same computation runs twice (Jobs 55 and 114)
+- **Poor partition strategy** - Too many small partitions
+
+### Recommended Spark Configurations
+
+```python
+# Reduce shuffle partitions (21K is excessive)
+spark.conf.set("spark.sql.shuffle.partitions", "200")
+
+# Increase broadcast threshold
+spark.conf.set("spark.sql.autoBroadcastJoinThreshold", "104857600")  # 100MB
+
+# Enable Delta optimizations
+spark.conf.set("spark.databricks.delta.optimizeWrite.enabled", "true")
+spark.conf.set("spark.databricks.delta.autoCompact.enabled", "true")
+```
+
+---
+
 ## Quick Wins (Implement First)
 
 1. **Add caching before count/write** - Immediate 50% improvement

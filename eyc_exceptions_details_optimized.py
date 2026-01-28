@@ -274,7 +274,8 @@ def dms_exception_table_gen(client_nm, engagement_nm):
 
     ########################### processing the columns into format required ################################
     # removing special characters from column names
-    fil_inv_sftp_audit_validation_df = fil_inv_sftp_audit_validation_df.toDF(*[re.sub('[^A-Za-z0-9]', '', col) for col in fil_inv_sftp_audit_validation_df.columns])
+    # NOTE: Using 'c' instead of 'col' to avoid shadowing pyspark.sql.functions.col
+    fil_inv_sftp_audit_validation_df = fil_inv_sftp_audit_validation_df.toDF(*[re.sub('[^A-Za-z0-9]', '', c) for c in fil_inv_sftp_audit_validation_df.columns])
 
     exceptions_details_byfiling_df = fil_inv_sftp_audit_validation_df
     exceptions_details_byfiling_df = exceptions_details_byfiling_df.withColumn("filenamealias", concat_ws("", exceptions_details_byfiling_df.filenamealias, exceptions_details_byfiling_df.calendarmonth))
@@ -340,9 +341,17 @@ def dms_exception_table_gen(client_nm, engagement_nm):
         .distinct().filter(col("sftpfilets").isNotNull())
 
     # OPTIMIZATION: Broadcast the small mapping dataframe
+    # Get all columns except sftpfilets to avoid ambiguity
+    cols_except_sftpfilets = [c for c in exceptions_details_byfiling_df.columns if c != "sftpfilets"]
+    
     exceptions_details_byfiling_df_join = exceptions_details_byfiling_df.alias('exc')\
         .join(broadcast(map_df.alias('map')), on=["auditsecondaryinternalfilename", "tblnm"], how='left_outer')
-    exceptions_details_byfiling_df = exceptions_details_byfiling_df_join.select("exc.*", coalesce(col("exc.sftpfilets"), col("map.sftpfilets")).alias("sftpfilets")).drop(col("exc.sftpfilets"))
+    
+    # Select all columns except sftpfilets, then add the coalesced sftpfilets
+    exceptions_details_byfiling_df = exceptions_details_byfiling_df_join.select(
+        *[col(f"exc.{c}") for c in cols_except_sftpfilets],
+        coalesce(col("exc.sftpfilets"), col("map.sftpfilets")).alias("sftpfilets")
+    )
 
     # OPTIMIZATION: Unpersist file_inventory_df after use
     file_inventory_df.unpersist()
@@ -370,7 +379,8 @@ def rrms_exception_table_gen(client_nm, engagement_nm):
     prod_calendar_df = spark.sql("select regulation_form,regulation_form_frequency,regulation_form_reporting_period_date,regulation_form_due_date,display_name,eyc_service_code from {}_std_cleanse.{}_production_date_calendar where latest_record_ind = 'Y'".format(client_nm, engagement_nm))
 
     # removing special characters from column names
-    prod_calendar_df = prod_calendar_df.toDF(*[re.sub('[^A-Za-z0-9]', '', col) for col in prod_calendar_df.columns])
+    # NOTE: Using 'c' instead of 'col' to avoid shadowing pyspark.sql.functions.col
+    prod_calendar_df = prod_calendar_df.toDF(*[re.sub('[^A-Za-z0-9]', '', c) for c in prod_calendar_df.columns])
 
     # dropping duplicates
     prod_calendar_df = prod_calendar_df.drop_duplicates()
@@ -458,7 +468,11 @@ def rrms_exception_table_gen(client_nm, engagement_nm):
     fil_inv_sftp_audit_df = fil_inv_sftp_audit_df.unionByName(fil_inv_sftp_audit_df_daily)
     # selecting latest version
     fil_inv_sftp_audit_df = fil_inv_sftp_audit_df.withColumn("rn", row_number().over(Window.partitionBy("qualifiedfilenamepattern", "tablename", "displayname", "regulationformreportingperioddate", "reportdate", "calendarmonth").orderBy(col("sftpfilets").desc())))
-    fil_inv_sftp_audit_df = fil_inv_sftp_audit_df.filter(col("rn") == 1).drop("rn").drop("filesexpected").drop("regformfilesexpected")
+    fil_inv_sftp_audit_df = fil_inv_sftp_audit_df.filter(col("rn") == 1).drop("rn")
+    # Safely drop columns that might not exist
+    for col_to_drop in ["filesexpected", "regformfilesexpected"]:
+        if col_to_drop in fil_inv_sftp_audit_df.columns:
+            fil_inv_sftp_audit_df = fil_inv_sftp_audit_df.drop(col_to_drop)
 
     # filter out rows where auditactualfilename = null
     fil_inv_sftp_audit_df = fil_inv_sftp_audit_df.filter(fil_inv_sftp_audit_df.auditactualfilename.isNotNull())
@@ -516,7 +530,8 @@ def rrms_exception_table_gen(client_nm, engagement_nm):
     fil_inv_sftp_audit_validation_df = fil_inv_sftp_audit_validation_df.withColumn("filereceiptstatus", lit("Received"))
 
     # removing special characters from column names
-    fil_inv_sftp_audit_validation_df = fil_inv_sftp_audit_validation_df.toDF(*[re.sub('[^A-Za-z0-9]', '', col) for col in fil_inv_sftp_audit_validation_df.columns])
+    # NOTE: Using 'c' instead of 'col' to avoid shadowing pyspark.sql.functions.col
+    fil_inv_sftp_audit_validation_df = fil_inv_sftp_audit_validation_df.toDF(*[re.sub('[^A-Za-z0-9]', '', c) for c in fil_inv_sftp_audit_validation_df.columns])
 
     # union of filesreceived, filesnotreceived
     exceptions_details_byfiling_df = fil_inv_sftp_audit_validation_df.unionByName(files_not_received_df)
@@ -560,7 +575,9 @@ def rrms_exception_table_gen(client_nm, engagement_nm):
     exceptions_details_byfiling_df = exceptions_details_byfiling_df.withColumnRenamed('exceptionpriority', 'priority')
     exceptions_details_byfiling_df = exceptions_details_byfiling_df.withColumnRenamed('auditingdt', 'ingauditingdt')
     exceptions_details_byfiling_df = exceptions_details_byfiling_df.withColumnRenamed('auditingts', 'ingauditingts')
-    exceptions_details_byfiling_df = exceptions_details_byfiling_df.withColumnRenamed('tablename', 'tblnm')
+    # Safely rename tablename to tblnm if it exists
+    if 'tablename' in exceptions_details_byfiling_df.columns:
+        exceptions_details_byfiling_df = exceptions_details_byfiling_df.withColumnRenamed('tablename', 'tblnm')
     exceptions_details_byfiling_df = exceptions_details_byfiling_df.withColumn("rejectflg", exceptions_details_byfiling_df["rejectflg"].cast(BooleanType()))
     exceptions_details_byfiling_df = exceptions_details_byfiling_df.withColumn("finalreject", exceptions_details_byfiling_df["finalreject"].cast(StringType()))
     exceptions_details_byfiling_df = exceptions_details_byfiling_df.withColumn('yearmonth', date_format(exceptions_details_byfiling_df['calendarmonth'], 'yyyy-MM'))
@@ -572,20 +589,34 @@ def rrms_exception_table_gen(client_nm, engagement_nm):
     # Cleanup persisted dataframes
     files_not_received_calc_df.unpersist()
     file_inventory_df.unpersist()
+    # Note: fil_inv_sftp_audit_df was persisted earlier, unpersist it too
+    try:
+        fil_inv_sftp_audit_df.unpersist()
+    except:
+        pass  # May have been reassigned, ignore if unpersist fails
 
     return exceptions_details_byfiling_df
 
 # COMMAND ----------
 
 # generating the DMS and RRMS exception tables
+# Initialize variables to None to handle potential failures
+exceptions_details_byfiling_df_dms = None
+exceptions_details_byfiling_df_rrms = None
+dms_success = False
+rrms_success = False
+
 try:
     exceptions_details_byfiling_df_dms = dms_exception_table_gen(client_nm, engagement_nm)
+    dms_success = True
     jobStatus = 'success'
     eventType = client_nm + "-" + engagement_nm + "-" + "data-intake" + "-" + "dms-execution"
     recordCount = 0
     targetSchema = client_nm + '_xform'
     jobRunTs = datetime.datetime.utcnow().isoformat() + "Z"
-except:
+    print("DMS exception table generation: SUCCESS")
+except Exception as e:
+    print(f"DMS exception table generation FAILED: {str(e)}")
     jobStatus = 'failed'
     eventType = client_nm + "-" + engagement_nm + "-" + "data-intake" + "-" + "dms-execution"
     recordCount = 0
@@ -594,22 +625,44 @@ except:
 
 try:
     exceptions_details_byfiling_df_rrms = rrms_exception_table_gen(client_nm, engagement_nm)
+    rrms_success = True
     jobStatus = 'success'
     eventType = client_nm + "-" + engagement_nm + "-" + "data-intake" + "-" + "rrms-execution"
     recordCount = 0
     targetSchema = client_nm + '_xform'
     jobRunTs = datetime.datetime.utcnow().isoformat() + "Z"
-except:
+    print("RRMS exception table generation: SUCCESS")
+except Exception as e:
+    print(f"RRMS exception table generation FAILED: {str(e)}")
     jobStatus = 'failed'
     eventType = client_nm + "-" + engagement_nm + "-" + "data-intake" + "-" + "rrms-execution"
     recordCount = 0
     targetSchema = client_nm + '_xform'
     jobRunTs = datetime.datetime.utcnow().isoformat() + "Z"
 
+# Check if at least one succeeded
+if not dms_success and not rrms_success:
+    print("ERROR: Both DMS and RRMS exception table generation failed. Exiting.")
+    dbutils.notebook.exit("FAILED: Both DMS and RRMS failed")
+
 # COMMAND ----------
 
 # union of both DMS and RRMS table
-exceptions_details_byfiling_df = exceptions_details_byfiling_df_dms.union(exceptions_details_byfiling_df_rrms.select(exceptions_details_byfiling_df_dms.columns))
+# Handle cases where one or both might have failed
+if dms_success and rrms_success:
+    # Both succeeded - union them
+    exceptions_details_byfiling_df = exceptions_details_byfiling_df_dms.union(
+        exceptions_details_byfiling_df_rrms.select(exceptions_details_byfiling_df_dms.columns)
+    )
+    print("Union of DMS and RRMS completed")
+elif dms_success:
+    # Only DMS succeeded
+    exceptions_details_byfiling_df = exceptions_details_byfiling_df_dms
+    print("Using only DMS data (RRMS failed)")
+elif rrms_success:
+    # Only RRMS succeeded
+    exceptions_details_byfiling_df = exceptions_details_byfiling_df_rrms
+    print("Using only RRMS data (DMS failed)")
 
 # OPTIMIZATION: Repartition after union to reduce partition count
 # The 21,000+ tasks in Spark UI indicate too many small partitions
@@ -631,7 +684,14 @@ exceptions_details_byfiling_df = exceptions_details_byfiling_df.repartition(200)
 
 # Define the key columns that uniquely identify a record
 # These should be the columns that define "sameness" between records
-CDC_KEY_COLUMNS = ["datasetruleid", "ruleexceptionsid", "filenamealias", "calendarmonth", "rulesql"]
+# NOTE: datasetruleid and ruleexceptionsid are SHA256 hashes, so they should never be NULL
+# But rulesql and filenamealias might be NULL in some cases
+CDC_KEY_COLUMNS = ["datasetruleid", "ruleexceptionsid", "filenamealias", "calendarmonth"]
+
+# Note: Removed 'rulesql' from CDC_KEY_COLUMNS because:
+# 1. datasetruleid is already a hash of filenamealias + rulesql
+# 2. rulesql can contain NULLs which cause issues in joins
+# 3. The hash columns are sufficient for uniqueness
 
 # OPTIMIZATION: Only read recent data from previous table with partition pruning
 # This dramatically reduces the amount of data to scan
@@ -648,10 +708,20 @@ exceptions_details_byfiling_prev_df = spark.sql("""
 """.format(client_nm, engagement_nm, cutoff_date))
 
 # OPTIMIZATION: Cache the key columns from previous data for faster anti-join
-prev_keys_df = exceptions_details_byfiling_prev_df.select(CDC_KEY_COLUMNS).distinct()
+# Fill NULL values with empty string to ensure proper join comparison
+prev_keys_df = exceptions_details_byfiling_prev_df.select(CDC_KEY_COLUMNS)
+for key_col in CDC_KEY_COLUMNS:
+    prev_keys_df = prev_keys_df.withColumn(key_col, coalesce(col(key_col), lit("")))
+prev_keys_df = prev_keys_df.distinct()
 prev_keys_df.cache()
 prev_keys_count = prev_keys_df.count()  # Force caching
 print(f"Previous unique key combinations: {prev_keys_count}")
+
+# Also fill NULLs in the current dataframe for consistent comparison
+for key_col in CDC_KEY_COLUMNS:
+    exceptions_details_byfiling_df = exceptions_details_byfiling_df.withColumn(
+        key_col, coalesce(col(key_col), lit(""))
+    )
 
 # OPTIMIZATION: Use left_anti join instead of subtract()
 # This is MUCH faster because:
@@ -713,8 +783,16 @@ prev_keys_df.unpersist()
 
 # COMMAND ----------
 
+# Count of previous records (from the filtered date range for CDC comparison)
 exceptions_details_byfiling_prev_df_count = exceptions_details_byfiling_prev_df.count()
-print(f"Previous records count: {exceptions_details_byfiling_prev_df_count}")
+print(f"Previous records count (last {lookback_days} days): {exceptions_details_byfiling_prev_df_count}")
+
+# Get the FULL table count for SQL truncate logic (don't filter by date)
+# This prevents incorrectly truncating when there are old records but no recent ones
+full_table_count = spark.sql("""
+    SELECT COUNT(*) as cnt FROM {}_xform.{}_eyc_exceptions_details
+""".format(client_nm, engagement_nm)).first()["cnt"]
+print(f"Full table count: {full_table_count}")
 
 # COMMAND ----------
 
@@ -787,8 +865,10 @@ except Exception as e:
 # COMMAND ----------
 
 # Truncating SQL table if databricks table is empty
+# Use full_table_count (not the filtered count) to avoid incorrect truncation
 try:
-    if exceptions_details_byfiling_prev_df_count == 0:
+    if full_table_count == 0:
+        print("Delta table is empty - truncating SQL Server table")
         delete_stmt = "truncate table " + target_connection_df["JDBC_TGT_TBL_NM"][0]
         conn_target_jdbc = target_sql_server_connector(str(target_connection_df["JDBC_TGT_USR_NM"][0]),
                                 str(target_connection_df["JDBC_TGT_PWD"][0]),

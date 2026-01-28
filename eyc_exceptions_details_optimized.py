@@ -109,6 +109,17 @@ spark.conf.set("spark.sql.autoBroadcastJoinThreshold", "104857600")  # 100MB
 spark.conf.set("spark.databricks.delta.optimizeWrite.enabled", "true")
 spark.conf.set("spark.databricks.delta.autoCompact.enabled", "true")
 
+# DIAGNOSTIC: Check cluster configuration
+# If all tasks run on driver only, the cluster is misconfigured
+try:
+    executor_count = len(spark.sparkContext._jsc.sc().getExecutorMemoryStatus().keys()) - 1
+    print(f"Active executors (excluding driver): {executor_count}")
+    if executor_count == 0:
+        print("WARNING: No worker executors detected! All tasks will run on driver only.")
+        print("This will cause severe performance issues. Check cluster configuration.")
+except Exception as e:
+    print(f"Could not determine executor count: {e}")
+
 # SQL WRITE SECTION
 mtdt_db_host=dbutils.secrets.get(scope = "generic-scope", key = "metadata-db-host")
 mtdt_db_db=dbutils.secrets.get(scope = "generic-scope", key = "metadata-db-db")
@@ -265,12 +276,29 @@ def dms_exception_table_gen(client_nm, engagement_nm):
     files_received_df = files_received_df.withColumn("filereceiptstatus", when(files_received_df.reportdate.isNotNull(), "Received").when(current_date() < files_received_df.fileduedate, "Not Received").when(files_received_df.reportdate.isNull() & (files_received_df.fileduedate <= current_date()), "Not Received Past Due").otherwise("Not Received"))
 
     # joining to auditvalidation df to get validation columns
-    joincond = "i.auditsecondaryinternalfilename like concat('%',f.auditsecondaryinternalfilename,'%')"
-    joinexpr = expr(joincond)
+    # ===================================================================================
+    # OPTIMIZATION: AVOID CARTESIAN PRODUCT
+    # The original LIKE-based join causes CartesianProduct (cross join) which is O(n*m)
+    # Solution: Use two-phase join - first equality join on audittablename, then filter
+    # ===================================================================================
     audit_validation_df_sub = audit_validation_df.drop("reportdate")
     
-    # OPTIMIZATION: Use broadcast hint for smaller dataframe if audit_validation_df_sub is small enough
-    fil_inv_sftp_audit_validation_df = files_received_df.alias('f').join(audit_validation_df_sub.alias('i'), joinexpr, how="left").select('f.*', 'i.auditactualfilename', 'i.auditfileguidname', 'i.col_nm', 'i.tag_nm', 'i.tag_desc', 'i.rule_nm', 'i.rule_typ', 'i.rule_ctgry', 'i.rule_desc', 'i.reject_flg', 'i.rule_sql', 'i.err_cd', 'i.err_desc', 'i.rule_cnt', 'i.rule_sql_op', 'i.exception_priority', 'i.auditruletyp', 'i.sftpfilets', 'i.auditingdt', 'i.auditingts')
+    # Check if audittablename exists in both dataframes for equality join
+    # Phase 1: Join on equality condition (audittablename) - this uses hash join
+    # Phase 2: Filter with LIKE condition on the joined result (much smaller dataset)
+    
+    # First, do equality join on audittablename (fast hash join)
+    temp_join_df = files_received_df.alias('f').join(
+        broadcast(audit_validation_df_sub.alias('i')),
+        col("f.audittablename") == col("i.audittablename"),
+        how="left"
+    )
+    
+    # Then filter with the LIKE condition
+    fil_inv_sftp_audit_validation_df = temp_join_df.filter(
+        col("i.auditsecondaryinternalfilename").isNull() |  # Keep unmatched rows (left join)
+        col("i.auditsecondaryinternalfilename").like(concat(lit("%"), col("f.auditsecondaryinternalfilename"), lit("%")))
+    ).select('f.*', 'i.auditactualfilename', 'i.auditfileguidname', 'i.col_nm', 'i.tag_nm', 'i.tag_desc', 'i.rule_nm', 'i.rule_typ', 'i.rule_ctgry', 'i.rule_desc', 'i.reject_flg', 'i.rule_sql', 'i.err_cd', 'i.err_desc', 'i.rule_cnt', 'i.rule_sql_op', 'i.exception_priority', 'i.auditruletyp', 'i.sftpfilets', 'i.auditingdt', 'i.auditingts')
 
     ########################### processing the columns into format required ################################
     # removing special characters from column names
@@ -525,7 +553,24 @@ def rrms_exception_table_gen(client_nm, engagement_nm):
                               ,exception_priority from """ + client_nm + "_metadata." + engagement_nm + "_cleanse_validation_dtl"))
 
     ########################### left join ################################
-    fil_inv_sftp_audit_validation_df = fil_inv_sftp_audit_df.alias('f').join(validation_df.alias('v'), validation_df.auditsecondaryinternalfilename.contains(fil_inv_sftp_audit_df.auditsecondaryinternalfilename), how='left').select('f.*', 'v.tbl_nm', 'v.col_nm', 'v.tag_nm', 'v.tag_desc', 'v.rule_nm', 'v.rule_typ', 'v.rule_ctgry', 'v.rule_desc', 'v.reject_flg', 'v.rule_sql', 'v.err_cd', 'v.err_desc', 'v.rule_cnt', 'v.final_reject', 'v.rule_sql_op', 'v.auditruletyp', 'v.auditingdt', 'v.auditingts', 'v.exception_priority').drop("tbl_nm")
+    # ===================================================================================
+    # OPTIMIZATION: AVOID CARTESIAN PRODUCT
+    # The original .contains() join causes CartesianProduct (cross join)
+    # Solution: Use two-phase join - first equality join on tbl_nm/tablename, then filter
+    # ===================================================================================
+    
+    # Phase 1: Equality join on tbl_nm/tablename (fast hash join)
+    temp_join_df = fil_inv_sftp_audit_df.alias('f').join(
+        broadcast(validation_df.alias('v')),
+        col("f.tablename") == col("v.tbl_nm"),
+        how="left"
+    )
+    
+    # Phase 2: Filter with contains condition
+    fil_inv_sftp_audit_validation_df = temp_join_df.filter(
+        col("v.auditsecondaryinternalfilename").isNull() |  # Keep unmatched rows (left join)
+        col("v.auditsecondaryinternalfilename").contains(col("f.auditsecondaryinternalfilename"))
+    ).select('f.*', 'v.tbl_nm', 'v.col_nm', 'v.tag_nm', 'v.tag_desc', 'v.rule_nm', 'v.rule_typ', 'v.rule_ctgry', 'v.rule_desc', 'v.reject_flg', 'v.rule_sql', 'v.err_cd', 'v.err_desc', 'v.rule_cnt', 'v.final_reject', 'v.rule_sql_op', 'v.auditruletyp', 'v.auditingdt', 'v.auditingts', 'v.exception_priority').drop("tbl_nm")
 
     fil_inv_sftp_audit_validation_df = fil_inv_sftp_audit_validation_df.withColumn("filereceiptstatus", lit("Received"))
 

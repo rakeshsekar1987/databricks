@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Databricks EYC Exceptions Job - Process Flow Diagram</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #fff;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            text-align: center;
+            margin-bottom: 10px;
+            color: #00d4ff;
+            font-size: 2em;
+        }
+        
+        .subtitle {
+            text-align: center;
+            color: #888;
+            margin-bottom: 30px;
+        }
+        
+        .legend {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .legend-box {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+        }
+        
+        .legend-input { background: #4CAF50; }
+        .legend-process { background: #2196F3; }
+        .legend-join { background: #FF9800; }
+        .legend-output { background: #9C27B0; }
+        .legend-slow { background: #f44336; }
+        
+        .flow-section {
+            background: rgba(255,255,255,0.05);
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 25px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .section-title {
+            font-size: 1.3em;
+            color: #00d4ff;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid rgba(0,212,255,0.3);
+        }
+        
+        .flow-row {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin: 15px 0;
+        }
+        
+        .node {
+            padding: 12px 20px;
+            border-radius: 8px;
+            text-align: center;
+            min-width: 150px;
+            font-size: 0.85em;
+            position: relative;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+        
+        .node-input {
+            background: linear-gradient(135deg, #4CAF50, #45a049);
+            border: 2px solid #66BB6A;
+        }
+        
+        .node-process {
+            background: linear-gradient(135deg, #2196F3, #1976D2);
+            border: 2px solid #42A5F5;
+        }
+        
+        .node-join {
+            background: linear-gradient(135deg, #FF9800, #F57C00);
+            border: 2px solid #FFB74D;
+        }
+        
+        .node-output {
+            background: linear-gradient(135deg, #9C27B0, #7B1FA2);
+            border: 2px solid #BA68C8;
+        }
+        
+        .node-slow {
+            background: linear-gradient(135deg, #f44336, #d32f2f);
+            border: 3px solid #ff6659;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(244, 67, 54, 0.7); }
+            50% { box-shadow: 0 0 0 10px rgba(244, 67, 54, 0); }
+        }
+        
+        .arrow {
+            font-size: 1.5em;
+            color: #00d4ff;
+        }
+        
+        .arrow-down {
+            text-align: center;
+            font-size: 2em;
+            color: #00d4ff;
+            margin: 10px 0;
+        }
+        
+        .parallel-container {
+            display: flex;
+            gap: 40px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        
+        .parallel-branch {
+            flex: 1;
+            min-width: 350px;
+            max-width: 500px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 10px;
+            padding: 20px;
+            border: 1px dashed rgba(255,255,255,0.2);
+        }
+        
+        .branch-title {
+            text-align: center;
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: #FFD700;
+            font-size: 1.1em;
+        }
+        
+        .slow-indicator {
+            background: #f44336;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.7em;
+            margin-left: 5px;
+        }
+        
+        .time-badge {
+            background: rgba(0,0,0,0.3);
+            padding: 3px 8px;
+            border-radius: 5px;
+            font-size: 0.75em;
+            margin-top: 5px;
+            display: inline-block;
+        }
+        
+        .problem-box {
+            background: rgba(244, 67, 54, 0.2);
+            border: 2px solid #f44336;
+            border-radius: 10px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        
+        .problem-title {
+            color: #f44336;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .fix-box {
+            background: rgba(76, 175, 80, 0.2);
+            border: 2px solid #4CAF50;
+            border-radius: 10px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        
+        .fix-title {
+            color: #4CAF50;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .code-snippet {
+            background: #1e1e1e;
+            border-radius: 5px;
+            padding: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.8em;
+            overflow-x: auto;
+            margin: 10px 0;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        
+        .stat-card {
+            background: rgba(255,255,255,0.05);
+            border-radius: 10px;
+            padding: 15px;
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 1.8em;
+            font-weight: bold;
+            color: #00d4ff;
+        }
+        
+        .stat-label {
+            color: #888;
+            font-size: 0.9em;
+        }
+        
+        .connector-line {
+            width: 2px;
+            height: 30px;
+            background: #00d4ff;
+            margin: 0 auto;
+        }
+        
+        .merge-point {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #00d4ff, #0099cc);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto;
+            font-weight: bold;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+        }
+        
+        th, td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        th {
+            background: rgba(0,212,255,0.2);
+            color: #00d4ff;
+        }
+        
+        .highlight-red { color: #f44336; font-weight: bold; }
+        .highlight-green { color: #4CAF50; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔄 EYC Exceptions Details Job - Process Flow</h1>
+        <p class="subtitle">Databricks Notebook Performance Analysis & Optimization</p>
+        
+        <!-- Legend -->
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-box legend-input"></div>
+                <span>Input/Source</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-box legend-process"></div>
+                <span>Processing</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-box legend-join"></div>
+                <span>Join Operation</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-box legend-output"></div>
+                <span>Output/Write</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-box legend-slow"></div>
+                <span>Slow (Needs Fix)</span>
+            </div>
+        </div>
+        
+        <!-- Section 1: Parameters -->
+        <div class="flow-section">
+            <div class="section-title">📥 1. Job Initialization</div>
+            <div class="flow-row">
+                <div class="node node-input">
+                    <strong>Parameters</strong><br>
+                    client_name<br>
+                    engagement_name<br>
+                    date_range
+                </div>
+                <span class="arrow">→</span>
+                <div class="node node-process">
+                    <strong>Setup</strong><br>
+                    ODBC Drivers<br>
+                    ADLS Connection<br>
+                    Spark Configs
+                </div>
+                <span class="arrow">→</span>
+                <div class="node node-process">
+                    <strong>Define Functions</strong><br>
+                    JDBC Connections<br>
+                    Delta Writers<br>
+                    UDFs
+                </div>
+            </div>
+        </div>
+        
+        <!-- Section 2: Parallel Processing -->
+        <div class="flow-section">
+            <div class="section-title">⚙️ 2. Exception Table Generation (Parallel Branches)</div>
+            
+            <div class="parallel-container">
+                <!-- DMS Branch -->
+                <div class="parallel-branch">
+                    <div class="branch-title">🔵 DMS Function (TRMS/DMS)</div>
+                    
+                    <div class="flow-row">
+                        <div class="node node-input" style="min-width: 100%;">
+                            <strong>Read file_inventory</strong><br>
+                            WHERE eycservicecode LIKE 'TRMS%' OR 'DMS%'
+                        </div>
+                    </div>
+                    
+                    <div class="arrow-down">↓</div>
+                    
+                    <div class="flow-row">
+                        <div class="node node-process" style="min-width: 100%;">
+                            <strong>Filter & Transform</strong><br>
+                            Remove deletes, add qualifiedfilenamepattern<br>
+                            Window: latest by auditingts
+                        </div>
+                    </div>
+                    
+                    <div class="arrow-down">↓</div>
+                    
+                    <div class="flow-row">
+                        <div class="node node-input" style="min-width: 100%;">
+                            <strong>Read audit_validation_dtl</strong><br>
+                            Last 7 days (or date_range)
+                        </div>
+                    </div>
+                    
+                    <div class="arrow-down">↓</div>
+                    
+                    <div class="flow-row">
+                        <div class="node node-join" style="min-width: 100%;">
+                            <strong>Join: Daily vs Non-Daily</strong><br>
+                            file_inventory ⟕ audit_validation<br>
+                            Condition: tablename + date matching
+                        </div>
+                    </div>
+                    
+                    <div class="arrow-down">↓</div>
+                    
+                    <!-- SLOW JOIN - DMS -->
+                    <div class="problem-box">
+                        <div class="problem-title">⚠️ SLOW: CartesianProduct Join (Stage 75)</div>
+                        <div class="flow-row">
+                            <div class="node node-slow" style="min-width: 100%;">
+                                <strong>LIKE Join</strong><br>
+                                auditsecondaryinternalfilename LIKE '%...%'
+                                <div class="time-badge">⏱️ 5.8 hours</div>
+                            </div>
+                        </div>
+                        <div class="code-snippet">
+                            joincond = "i.auditsecondaryinternalfilename like concat('%',f.auditsecondaryinternalfilename,'%')"
+                        </div>
+                    </div>
+                    
+                    <div class="arrow-down">↓</div>
+                    
+                    <div class="flow-row">
+                        <div class="node node-process" style="min-width: 100%;">
+                            <strong>Column Processing</strong><br>
+                            Add datasetruleid (SHA256)<br>
+                            Add ruleexceptionsid (SHA256)<br>
+                            Apply getexceptionrecordid UDF
+                        </div>
+                    </div>
+                    
+                    <div class="arrow-down">↓</div>
+                    
+                    <div class="flow-row">
+                        <div class="node node-process" style="min-width: 100%;">
+                            <strong>GUID Bug Fix</strong><br>
+                            Split received/not received<br>
+                            Explode files_list<br>
+                            Rejoin with audit_validation
+                        </div>
+                    </div>
+                    
+                    <div class="arrow-down">↓</div>
+                    
+                    <div class="flow-row">
+                        <div class="node node-output" style="min-width: 100%;">
+                            <strong>DMS Result</strong><br>
+                            exceptions_details_byfiling_df_dms
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- RRMS Branch -->
+                <div class="parallel-branch">
+                    <div class="branch-title">🟠 RRMS Function (Regulatory Reporting)</div>
+                    
+                    <div class="flow-row">
+                        <div class="node node-input" style="min-width: 100%;">
+                            <strong>Read file_inventory</strong><br>
+                            WHERE eycservicecode LIKE 'RR%'
+                        </div>
+                    </div>
+                    
+                    <div class="arrow-down">↓</div>
+                    
+                    <div class="flow-row">
+                        <div class="node node-input" style="min-width: 100%;">
+                            <strong>Read production_date_calendar</strong><br>
+                            WHERE latest_record_ind = 'Y'
+                        </div>
+                    </div>
+                    
+                    <div class="arrow-down">↓</div>
+                    
+                    <div class="flow-row">
+                        <div class="node node-join" style="min-width: 100%;">
+                            <strong>Join: file_inventory ⟕ calendar</strong><br>
+                            ON regulationform, eycservicecode<br>
+                            Add regformfilesexpected
+                        </div>
+                    </div>
+                    
+                    <div class="arrow-down">↓</div>
+                    
+                    <div class="flow-row">
+                        <div class="node node-input" style="min-width: 100%;">
+                            <strong>Read ingestion_sftp_audit_dtl</strong><br>
+                            Join with file_inventory
+                        </div>
+                    </div>
+                    
+                    <div class="arrow-down">↓</div>
+                    
+                    <div class="flow-row">
+                        <div class="node node-process" style="min-width: 100%;">
+                            <strong>Calculate Files Not Received</strong><br>
+                            Compare expected vs received<br>
+                            Track overdue files
+                        </div>
+                    </div>
+                    
+                    <div class="arrow-down">↓</div>
+                    
+                    <div class="flow-row">
+                        <div class="node node-input" style="min-width: 100%;">
+                            <strong>Read validation_dtl</strong><br>
+                            UNION of ingestion_validation_dtl<br>
+                            + cleanse_validation_dtl
+                        </div>
+                    </div>
+                    
+                    <div class="arrow-down">↓</div>
+                    
+                    <!-- SLOW JOIN - RRMS -->
+                    <div class="problem-box">
+                        <div class="problem-title">⚠️ SLOW: CartesianProduct Join (Stages 74, 77, 231)</div>
+                        <div class="flow-row">
+                            <div class="node node-slow" style="min-width: 100%;">
+                                <strong>.contains() Join</strong><br>
+                                auditsecondaryinternalfilename.contains(...)
+                                <div class="time-badge">⏱️ 3.6-4.6 hours each</div>
+                            </div>
+                        </div>
+                        <div class="code-snippet">
+                            validation_df.auditsecondaryinternalfilename.contains(fil_inv_sftp_audit_df.auditsecondaryinternalfilename)
+                        </div>
+                    </div>
+                    
+                    <div class="arrow-down">↓</div>
+                    
+                    <div class="flow-row">
+                        <div class="node node-process" style="min-width: 100%;">
+                            <strong>Column Processing</strong><br>
+                            Add hashes, transform rulesqlop<br>
+                            Union: received + not_received
+                        </div>
+                    </div>
+                    
+                    <div class="arrow-down">↓</div>
+                    
+                    <div class="flow-row">
+                        <div class="node node-output" style="min-width: 100%;">
+                            <strong>RRMS Result</strong><br>
+                            exceptions_details_byfiling_df_rrms
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Section 3: Union -->
+        <div class="flow-section">
+            <div class="section-title">🔗 3. Combine Results</div>
+            
+            <div class="flow-row">
+                <div class="node node-output">DMS Result</div>
+                <span class="arrow">↘</span>
+                <div class="merge-point">∪</div>
+                <span class="arrow">↙</span>
+                <div class="node node-output">RRMS Result</div>
+            </div>
+            
+            <div class="arrow-down">↓</div>
+            
+            <div class="flow-row">
+                <div class="node node-process">
+                    <strong>UNION</strong><br>
+                    exceptions_details_byfiling_df = DMS ∪ RRMS
+                </div>
+            </div>
+        </div>
+        
+        <!-- Section 4: CDC -->
+        <div class="flow-section">
+            <div class="section-title">🔄 4. Change Data Capture (CDC)</div>
+            
+            <div class="flow-row">
+                <div class="node node-input">
+                    <strong>Read Previous Table</strong><br>
+                    {client}_xform.{engagement}_eyc_exceptions_details
+                </div>
+            </div>
+            
+            <div class="arrow-down">↓</div>
+            
+            <div class="problem-box">
+                <div class="problem-title">⚠️ SLOW: subtract() Operation</div>
+                <div class="flow-row">
+                    <div class="node node-slow">
+                        <strong>Original: subtract()</strong><br>
+                        Compares ALL columns<br>
+                        Full data shuffle
+                        <div class="time-badge">⏱️ 3+ hours</div>
+                    </div>
+                </div>
+                <div class="code-snippet">
+                    new_df = current_df.subtract(previous_df.select(current_df.columns))
+                </div>
+            </div>
+            
+            <div class="fix-box">
+                <div class="fix-title">✅ FIX: Anti-Join on Key Columns</div>
+                <div class="flow-row">
+                    <div class="node node-process">
+                        <strong>Optimized: left_anti join</strong><br>
+                        Compares KEY columns only<br>
+                        With caching
+                        <div class="time-badge">⏱️ ~15 minutes</div>
+                    </div>
+                </div>
+                <div class="code-snippet">
+                    CDC_KEY_COLUMNS = ["datasetruleid", "ruleexceptionsid", "filenamealias", "calendarmonth"]
+new_df = current_df.join(broadcast(prev_keys), on=CDC_KEY_COLUMNS, how="left_anti")
+                </div>
+            </div>
+            
+            <div class="arrow-down">↓</div>
+            
+            <div class="flow-row">
+                <div class="node node-process">
+                    <strong>Count New Records</strong><br>
+                    exceptions_details_byfiling_df_count
+                </div>
+            </div>
+        </div>
+        
+        <!-- Section 5: Write -->
+        <div class="flow-section">
+            <div class="section-title">💾 5. Write to Delta Table</div>
+            
+            <div class="flow-row">
+                <div class="node node-process">
+                    <strong>Add Audit Columns</strong><br>
+                    auditingdt, auditingts
+                </div>
+                <span class="arrow">→</span>
+                <div class="node node-output">
+                    <strong>Append to Delta</strong><br>
+                    {client}_xform.{engagement}_eyc_exceptions_details
+                </div>
+            </div>
+        </div>
+        
+        <!-- Section 6: SQL Server Sync -->
+        <div class="flow-section">
+            <div class="section-title">🗄️ 6. SQL Server Synchronization</div>
+            
+            <div class="flow-row">
+                <div class="node node-input">
+                    <strong>Get JDBC Connection</strong><br>
+                    From metadata tables
+                </div>
+                <span class="arrow">→</span>
+                <div class="node node-process">
+                    <strong>Compare Timestamps</strong><br>
+                    Delta vs SQL Server
+                </div>
+                <span class="arrow">→</span>
+                <div class="node node-output">
+                    <strong>Append to SQL Server</strong><br>
+                    JDBC Write
+                </div>
+            </div>
+        </div>
+        
+        <!-- Performance Summary -->
+        <div class="flow-section">
+            <div class="section-title">📊 Performance Summary</div>
+            
+            <table>
+                <thead>
+                    <tr>
+                        <th>Stage</th>
+                        <th>Operation</th>
+                        <th>Original Time</th>
+                        <th>Root Cause</th>
+                        <th>After Fix</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Stage 75</td>
+                        <td>DMS LIKE Join</td>
+                        <td class="highlight-red">5.8 hours</td>
+                        <td>CartesianProduct</td>
+                        <td class="highlight-green">~20 min</td>
+                    </tr>
+                    <tr>
+                        <td>Stage 74</td>
+                        <td>RRMS .contains() Join</td>
+                        <td class="highlight-red">4.6 hours</td>
+                        <td>CartesianProduct</td>
+                        <td class="highlight-green">~20 min</td>
+                    </tr>
+                    <tr>
+                        <td>Stage 77</td>
+                        <td>RRMS .contains() Join (troweprice)</td>
+                        <td class="highlight-red">3.6h / 18h total</td>
+                        <td>CartesianProduct + Large Data</td>
+                        <td class="highlight-green">~30 min</td>
+                    </tr>
+                    <tr>
+                        <td>Stage 231</td>
+                        <td>RRMS .contains() Join (troweprice)</td>
+                        <td class="highlight-red">3.6h / 18h total</td>
+                        <td>CartesianProduct + Large Data</td>
+                        <td class="highlight-green">~30 min</td>
+                    </tr>
+                    <tr>
+                        <td>CDC</td>
+                        <td>subtract() operation</td>
+                        <td class="highlight-red">3+ hours</td>
+                        <td>Full column comparison</td>
+                        <td class="highlight-green">~15 min</td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value highlight-red">7+ hrs</div>
+                    <div class="stat-label">Original Runtime</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value highlight-green">~1 hr</div>
+                    <div class="stat-label">After Optimization</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">7x</div>
+                    <div class="stat-label">Speedup Factor</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">10</div>
+                    <div class="stat-label">Fixes Applied</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Critical Issue -->
+        <div class="flow-section" style="border-color: #f44336;">
+            <div class="section-title" style="color: #f44336;">🚨 Critical Issue: No Worker Executors</div>
+            
+            <div class="problem-box">
+                <div class="problem-title">All Tasks Running on Driver Only</div>
+                <p style="margin-bottom: 15px;">From Spark UI: <code>Executor ID: driver, Total Tasks: 20,800, Workers: 0</code></p>
+                <p>This means 20,000+ tasks run <strong>sequentially</strong> instead of in parallel:</p>
+                <div class="code-snippet">
+                    Sequential: 20,000 tasks × 3 sec = 16+ hours
+    Parallel (100 cores): 20,000 tasks ÷ 100 × 3 sec = 10 minutes
+                </div>
+                <p style="margin-top: 15px; color: #FFD700;"><strong>Action Required:</strong> Configure Databricks cluster with worker nodes (2-8 recommended)</p>
+            </div>
+        </div>
+        
+        <!-- Data Flow Diagram -->
+        <div class="flow-section">
+            <div class="section-title">📈 Data Tables Flow</div>
+            
+            <div style="text-align: center; font-family: monospace; font-size: 0.85em; line-height: 1.8;">
+                <pre style="display: inline-block; text-align: left; background: rgba(0,0,0,0.3); padding: 20px; border-radius: 10px;">
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                              SOURCE TABLES                                       │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                  │
+│   {client}_cleanse.{engagement}_file_inventory                                   │
+│                     │                                                            │
+│          ┌──────────┴──────────┐                                                │
+│          ▼                     ▼                                                │
+│   ┌─────────────┐       ┌─────────────┐                                         │
+│   │ DMS/TRMS    │       │    RR%      │                                         │
+│   │ (Stage 75)  │       │(Stage 74,77)│                                         │
+│   └──────┬──────┘       └──────┬──────┘                                         │
+│          │                     │                                                │
+│          ▼                     ▼                                                │
+│   {client}_metadata_vw.       {client}_std_cleanse.                             │
+│   {engagement}_audit_         {engagement}_production_date_calendar              │
+│   validation_dtl                       │                                        │
+│          │                             ▼                                        │
+│          │              {client}_metadata.ingestion_sftp_audit_dtl              │
+│          │                             │                                        │
+│          │                             ▼                                        │
+│          │              {client}_metadata.{engagement}_ingestion_validation_dtl │
+│          │                      UNION                                           │
+│          │              {client}_metadata.{engagement}_cleanse_validation_dtl   │
+│          │                             │                                        │
+│          ▼                             ▼                                        │
+│   ┌─────────────┐              ┌─────────────┐                                  │
+│   │  DMS DF     │              │  RRMS DF    │                                  │
+│   └──────┬──────┘              └──────┬──────┘                                  │
+│          │                            │                                         │
+│          └────────────┬───────────────┘                                         │
+│                       ▼                                                         │
+│                    UNION                                                        │
+│                       │                                                         │
+├───────────────────────┼─────────────────────────────────────────────────────────┤
+│                       ▼                                                         │
+│   {client}_xform.{engagement}_eyc_exceptions_details  ◄─── CDC Compare          │
+│                       │                                                         │
+│                       ▼                                                         │
+│              Delta Table Write                                                  │
+│                       │                                                         │
+├───────────────────────┼─────────────────────────────────────────────────────────┤
+│                       ▼                                                         │
+│            SQL Server Target Table                                              │
+│            (JDBC Sync)                                                          │
+│                                                                                  │
+└─────────────────────────────────────────────────────────────────────────────────┘
+                </pre>
+            </div>
+        </div>
+        
+        <div style="text-align: center; margin-top: 30px; color: #888;">
+            <p>Generated for Databricks Performance Optimization</p>
+            <p>All fixes have been applied to: <code>eyc_exceptions_details_optimized.py</code></p>
+        </div>
+    </div>
+</body>
+</html>

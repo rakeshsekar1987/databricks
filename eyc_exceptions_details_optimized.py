@@ -313,9 +313,9 @@ def dms_exception_table_gen(client_nm, engagement_nm):
     exceptions_details_byfiling_df = exceptions_details_byfiling_df.withColumn("rulecnt", when(exceptions_details_byfiling_df["rulecnt"] == '-1', lit(None)).otherwise(exceptions_details_byfiling_df["rulecnt"]))
     exceptions_details_byfiling_df = exceptions_details_byfiling_df.withColumn("rulesqlop", concat(lit("\""), exceptions_details_byfiling_df.rulesqlop, lit("\"")))
     
-    # OPTIMIZATION: Use dropDuplicates with subset of key columns instead of all columns
-    key_cols_for_dedup = ["datasetruleid", "ruleexceptionsid", "filenamealias", "auditsecondaryinternalfilename", "rulesql"]
-    exceptions_details_byfiling_df = exceptions_details_byfiling_df.dropDuplicates(key_cols_for_dedup)
+    # Dropping duplicates due to rules being duplicated in cleanse_validation_dtl
+    # KEEPING ORIGINAL LOGIC: drop_duplicates() on ALL columns to preserve exact behavior
+    exceptions_details_byfiling_df = exceptions_details_byfiling_df.drop_duplicates()
 
     # cast auditversion to floattype
     exceptions_details_byfiling_df = exceptions_details_byfiling_df.withColumn("auditversion", exceptions_details_byfiling_df["auditversion"].cast(FloatType()))
@@ -568,9 +568,9 @@ def rrms_exception_table_gen(client_nm, engagement_nm):
                 .when(((exceptions_details_byfiling_df["rulecnt"] == -1)), lit(1))\
                        .otherwise(exceptions_details_byfiling_df["rulecnt"]))
 
-    # OPTIMIZATION: Use dropDuplicates with key columns
-    key_cols_for_dedup = ["datasetruleid", "ruleexceptionsid", "filenamealias", "auditsecondaryinternalfilename", "rulesql"]
-    exceptions_details_byfiling_df = exceptions_details_byfiling_df.dropDuplicates(key_cols_for_dedup)
+    # Dropping duplicates due to rules being duplicated in cleanse_validation_dtl
+    # KEEPING ORIGINAL LOGIC: drop_duplicates() on ALL columns to preserve exact behavior
+    exceptions_details_byfiling_df = exceptions_details_byfiling_df.drop_duplicates()
 
     exceptions_details_byfiling_df = exceptions_details_byfiling_df.withColumnRenamed('exceptionpriority', 'priority')
     exceptions_details_byfiling_df = exceptions_details_byfiling_df.withColumnRenamed('auditingdt', 'ingauditingdt')
@@ -682,16 +682,30 @@ exceptions_details_byfiling_df = exceptions_details_byfiling_df.repartition(200)
 # - 21,000+ tasks indicates massive data shuffling across all partitions
 # ==================================================================================
 
-# Define the key columns that uniquely identify a record
-# These should be the columns that define "sameness" between records
-# NOTE: datasetruleid and ruleexceptionsid are SHA256 hashes, so they should never be NULL
-# But rulesql and filenamealias might be NULL in some cases
-CDC_KEY_COLUMNS = ["datasetruleid", "ruleexceptionsid", "filenamealias", "calendarmonth"]
+# ===================================================================================
+# CRITICAL: CDC LOGIC EXPLANATION
+# ===================================================================================
+# ORIGINAL: Used subtract() which compares ALL columns
+# OPTIMIZED: Uses left_anti join on KEY columns only
+#
+# IMPORTANT: This is semantically equivalent ONLY IF the key columns truly form
+# a unique identifier for records. If two records can have the same keys but 
+# different values in other columns, this will produce DIFFERENT results.
+#
+# If you need EXACT original behavior, uncomment this block and comment the anti-join:
+# -----------------------------------------------------------------------------
+# exceptions_details_byfiling_df_new = exceptions_details_byfiling_df.subtract(
+#     exceptions_details_byfiling_prev_df.select(exceptions_details_byfiling_df.columns)
+# )
+# -----------------------------------------------------------------------------
+#
+# The key columns below are chosen because:
+# - datasetruleid = SHA256(filenamealias + rulesql) - unique per rule per dataset
+# - ruleexceptionsid = SHA256(auditsecondaryinternalfilename + rulesql) - unique per file instance
+# - These hashes encode the business uniqueness of records
+# ===================================================================================
 
-# Note: Removed 'rulesql' from CDC_KEY_COLUMNS because:
-# 1. datasetruleid is already a hash of filenamealias + rulesql
-# 2. rulesql can contain NULLs which cause issues in joins
-# 3. The hash columns are sufficient for uniqueness
+CDC_KEY_COLUMNS = ["datasetruleid", "ruleexceptionsid", "filenamealias", "calendarmonth"]
 
 # OPTIMIZATION: Only read recent data from previous table with partition pruning
 # This dramatically reduces the amount of data to scan

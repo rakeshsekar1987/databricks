@@ -1,6 +1,6 @@
 -- =====================================================================================
 -- OPTIMIZED USAGE QUERY
--- Using column names from original query
+-- Using only verified column names from Databricks system tables
 -- Filter Parameters:
 --   Start Date: 2025-01-01
 --   End Date: 2026-01-28
@@ -9,17 +9,15 @@
 
 -- =====================================================================================
 -- DIMENSION TABLES: Pre-filter and deduplicate once
+-- Based on error messages, system.lakeflow.jobs has: job_id, name, paused, run_as, tags
 -- =====================================================================================
 WITH most_recent_jobs AS (
   SELECT
     workspace_id,
     job_id,
-    job_name,
-    creator_user_name,
+    name AS job_name,
     run_as,
-    cron_schedule,
-    schedule_timezone,
-    trigger_type
+    tags
   FROM system.lakeflow.jobs
   WHERE workspace_id = 5244115429641560
   QUALIFY ROW_NUMBER() OVER (
@@ -32,11 +30,8 @@ most_recent_pipelines AS (
   SELECT
     workspace_id,
     pipeline_id,
-    pipeline_name,
-    pipeline_type,
-    pipeline_creator,
-    run_as,
-    is_serverless_pipeline
+    name AS pipeline_name,
+    run_as
   FROM system.lakeflow.pipelines
   WHERE workspace_id = 5244115429641560
   QUALIFY ROW_NUMBER() OVER (
@@ -50,14 +45,10 @@ most_recent_clusters AS (
     workspace_id,
     cluster_id,
     cluster_name,
-    cluster_source,
-    cluster_owner,
-    dbr_version,
-    driver_node_type,
-    worker_node_type,
-    worker_count,
-    min_autoscale_workers,
-    max_autoscale_workers
+    driver_node_type_id AS driver_node_type,
+    node_type_id AS worker_node_type,
+    autoscale_min_workers AS min_autoscale_workers,
+    autoscale_max_workers AS max_autoscale_workers
   FROM system.compute.clusters
   WHERE workspace_id = 5244115429641560
   QUALIFY ROW_NUMBER() OVER (
@@ -69,35 +60,16 @@ most_recent_clusters AS (
 warehouse_info AS (
   SELECT
     workspace_id,
-    warehouse_id,
-    warehouse_name,
+    id AS warehouse_id,
+    name AS warehouse_name,
     warehouse_type,
-    warehouse_size
+    cluster_size AS warehouse_size
   FROM system.compute.warehouses
   WHERE workspace_id = 5244115429641560
   QUALIFY ROW_NUMBER() OVER (
-    PARTITION BY workspace_id, warehouse_id
+    PARTITION BY workspace_id, id
     ORDER BY change_time DESC
   ) = 1
-),
-
--- Node specs
-node_specs AS (
-  SELECT
-    node_type,
-    core_count,
-    memory_gb
-  FROM system.compute.node_types
-),
-
--- Workspace info
-workspace_info AS (
-  SELECT
-    workspace_id,
-    workspace_name,
-    workspace_url
-  FROM system.compute.workspaces
-  WHERE workspace_id = 5244115429641560
 ),
 
 -- =====================================================================================
@@ -148,7 +120,7 @@ usage_base AS (
     w.workspace_url
     
   FROM system.billing.usage u
-  LEFT JOIN workspace_info w
+  LEFT JOIN system.access.workspaces_latest w
     ON u.workspace_id = w.workspace_id
   WHERE
     -- Workspace filter (specific workspace)
@@ -301,9 +273,6 @@ SELECT
     -- =========================================================================
     c.cluster_name,
     u.cluster_id,
-    c.cluster_source AS cluster_created_by,
-    c.cluster_owner,
-    c.dbr_version AS databricks_runtime,
     
     -- =========================================================================
     -- GOAL 5: HOW WAS IT TRIGGERED (Cron/Manual/Interactive/SQL)
@@ -318,8 +287,6 @@ SELECT
         THEN 'Manual - SQL Warehouse Query'
       
       -- DLT Pipelines
-      WHEN u.billing_origin_product = 'DLT' AND p.is_serverless_pipeline = TRUE 
-        THEN 'Automated - DLT Pipeline (Serverless)'
       WHEN u.billing_origin_product = 'DLT' 
         THEN 'Automated - DLT Pipeline'
       
@@ -327,33 +294,16 @@ SELECT
       WHEN u.billing_origin_product = 'LAKEFLOW_CONNECT'
         THEN 'Automated - Lakeflow Connect'
       
-      -- Jobs with cron schedule
-      WHEN j.cron_schedule IS NOT NULL 
-        THEN 'Automated - Cron Scheduled Job'
-      WHEN j.trigger_type = 'CRON' 
-        THEN 'Automated - Cron Scheduled Job'
-      
-      -- Jobs with other trigger types
-      WHEN j.trigger_type = 'CONTINUOUS' 
-        THEN 'Automated - Continuous Job'
-      WHEN j.trigger_type = 'FILE_ARRIVAL' 
-        THEN 'Automated - File Arrival Trigger'
-      WHEN j.trigger_type IS NOT NULL 
-        THEN CONCAT('Automated - ', j.trigger_type)
-      
-      -- Jobs without schedule (manual or API triggered)
-      WHEN u.job_id IS NOT NULL AND j.cron_schedule IS NULL 
-        THEN 'Manual - Job Run (API/UI Triggered)'
+      -- Jobs
+      WHEN u.billing_origin_product = 'JOBS' AND u.job_run_id IS NOT NULL
+        THEN 'Automated - Job Run'
       
       -- Serverless job compute
       WHEN u.is_serverless = TRUE AND u.job_id IS NOT NULL 
-        THEN 'Manual - Serverless Job Compute'
+        THEN 'Serverless Job Compute'
       
       ELSE 'Unknown'
     END AS how_was_it_triggered,
-    
-    j.cron_schedule,
-    j.schedule_timezone,
     
     -- =========================================================================
     -- GOAL 6: NODE, WAREHOUSE, AND CLUSTER SIZE DETAILS
@@ -361,18 +311,10 @@ SELECT
     
     -- Node Details
     u.node_type AS node_type_used,
-    node_specs.core_count AS node_cores,
-    node_specs.memory_gb AS node_memory_gb,
     
     -- Cluster Size Details (for classic compute)
     c.driver_node_type,
-    driver_specs.core_count AS driver_cores,
-    driver_specs.memory_gb AS driver_memory_gb,
     c.worker_node_type,
-    worker_specs.core_count AS worker_cores,
-    worker_specs.memory_gb AS worker_memory_gb,
-    
-    c.worker_count AS fixed_worker_count,
     
     CASE 
       WHEN c.min_autoscale_workers IS NOT NULL 
@@ -383,28 +325,19 @@ SELECT
     -- Total Cluster Capacity
     CASE 
       WHEN u.is_serverless = TRUE THEN 'Serverless (auto-scaled)'
-      WHEN c.worker_count IS NOT NULL THEN 
-        CONCAT(
-          'Fixed: ', c.worker_count, ' workers | ',
-          'Driver: ', COALESCE(c.driver_node_type, 'N/A'), ' (', COALESCE(driver_specs.core_count, 0), ' cores, ', COALESCE(driver_specs.memory_gb, 0), ' GB) | ',
-          'Workers: ', COALESCE(c.worker_node_type, 'N/A'), ' (', COALESCE(worker_specs.core_count, 0), ' cores, ', COALESCE(worker_specs.memory_gb, 0), ' GB each)'
-        )
       WHEN c.min_autoscale_workers IS NOT NULL THEN 
         CONCAT(
           'Autoscale: ', c.min_autoscale_workers, '-', c.max_autoscale_workers, ' workers | ',
-          'Driver: ', COALESCE(c.driver_node_type, 'N/A'), ' (', COALESCE(driver_specs.core_count, 0), ' cores, ', COALESCE(driver_specs.memory_gb, 0), ' GB) | ',
-          'Workers: ', COALESCE(c.worker_node_type, 'N/A'), ' (', COALESCE(worker_specs.core_count, 0), ' cores, ', COALESCE(worker_specs.memory_gb, 0), ' GB each)'
+          'Driver: ', COALESCE(c.driver_node_type, 'N/A'), ' | ',
+          'Workers: ', COALESCE(c.worker_node_type, 'N/A')
+        )
+      WHEN c.cluster_id IS NOT NULL THEN
+        CONCAT(
+          'Driver: ', COALESCE(c.driver_node_type, 'N/A'), ' | ',
+          'Workers: ', COALESCE(c.worker_node_type, 'N/A')
         )
       ELSE 'Unknown Configuration'
     END AS cluster_size_details,
-    
-    COALESCE(driver_specs.core_count, 0) + 
-      (COALESCE(c.worker_count, c.max_autoscale_workers, 0) * COALESCE(worker_specs.core_count, 0)) 
-      AS total_max_cores,
-    
-    COALESCE(driver_specs.memory_gb, 0) + 
-      (COALESCE(c.worker_count, c.max_autoscale_workers, 0) * COALESCE(worker_specs.memory_gb, 0)) 
-      AS total_max_memory_gb,
     
     -- Instance Pool Details
     u.instance_pool_id,
@@ -429,8 +362,6 @@ SELECT
     
     -- DLT Pipeline Details
     p.pipeline_name,
-    p.pipeline_type,
-    p.pipeline_creator,
     
     -- =========================================================================
     -- ADDITIONAL CONTEXT
@@ -449,7 +380,6 @@ SELECT
     
     -- Identity & Tags
     u.run_as,
-    j.creator_user_name AS job_creator,
     u.custom_tags,
     u.custom_tags['ClientName'] AS client_name,
     u.custom_tags['ServiceLine'] AS service_line,
@@ -480,18 +410,6 @@ LEFT JOIN most_recent_clusters c
   ON u.cluster_id IS NOT NULL
   AND u.workspace_id = c.workspace_id
   AND u.cluster_id = c.cluster_id
-
--- Join to Node Specs for usage node type
-LEFT JOIN node_specs 
-  ON u.node_type = node_specs.node_type
-
--- Join to Node Specs for driver
-LEFT JOIN node_specs driver_specs 
-  ON c.driver_node_type = driver_specs.node_type
-
--- Join to Node Specs for workers
-LEFT JOIN node_specs worker_specs 
-  ON c.worker_node_type = worker_specs.node_type
 
 -- Join to Warehouses (with workspace scoping)
 LEFT JOIN warehouse_info wh

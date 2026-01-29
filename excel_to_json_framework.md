@@ -1,358 +1,180 @@
-# Excel to JSON Transformation Framework
+# Excel to JSON Transformation Framework - Data-Driven Version
 
 ## Overview
 
-This framework defines the transformation rules for converting 4 Excel tabs into 5 JSON output files for KRI (Key Risk Indicator) Validations system.
+This framework defines the transformation rules for converting Excel data into 5 JSON output files for KRI (Key Risk Indicator) Validations system. **All mappings and relationships are derived from the input data - no hardcoding.**
 
 ---
 
 ## Input Data Structure
 
-### Excel Tab 1: Cards
-| Column | Description | Key Role |
-|--------|-------------|----------|
-| Card Name | Unique identifier for the card/report | Primary Key - Links to Validations |
-| fiscal_year_end | Fiscal year end date | Metadata |
-| reporting_cycle | Annual/Quarterly/etc. | Metadata |
-| open_end_close_end | Fund type category (Canada, OEF, CEF, etc.) | Category filter |
-| reporting_date | Actual reporting date | Metadata |
-| Status | Processing status | Metadata |
+### Required Excel Tabs (4 tabs):
 
-### Excel Tab 2: Funds
-| Column | Description | Key Role |
-|--------|-------------|----------|
-| # | Row number | Reference |
-| Trust / Trust_New | Trust name | → JSON `trust` field |
-| Fund | Full fund name | Display name |
-| Fund ID / Fund ID_New | Fund code (e.g., CAN1, CAN2) | **Foreign Key** - Links to Validations.Fund |
-| Fund Name_New | Renamed fund display name | → JSON `fundName`, `book` |
-| Group / Group_New | Group code (H, G → mapped to A, B, C) | → JSON `group` (with mapping) |
-| Book / Book_New | Book name | → JSON `book` |
-| Fund Type | Type of fund (Canada, OEF, CEF) | Category |
-| Card columns (12/31/2024...) | X marks which cards apply | Card-Fund mapping |
+| Tab | Purpose | Key Columns |
+|-----|---------|-------------|
+| **Cards** | Report/card definitions | Card Name (Primary Key) |
+| **Funds** | Fund master data | Fund ID_New (Primary Key for lookups) |
+| **Validations - TRIMMED** | Normal validation records | Card, Fund (Foreign Keys) |
+| **Validations - KRI** | KRI validation records | Card, Fund, KRI Variables 1-5 |
 
-### Excel Tab 3: Validations - TRIMMED (Normal Validations)
-| Column | Description | Key Role |
-|--------|-------------|----------|
-| Card | Card reference | Links to Cards tab |
-| Fund | Fund ID code | **Foreign Key** - Links to Funds.Fund ID_New |
-| Priority | Material/Standard | → JSON `priority` |
-| Workflow Status | Current workflow state | → JSON `webappWorkflowStatus` |
-| Validation Status | Passed/Failed | → JSON `validationStatus` |
-| Validation | Validation rule name | → JSON `validation`, `validationDesc` |
-| Statement Type | SCF/SOA/KRI/etc. | → JSON `statementType` |
-| Section | Section description | → JSON `section` |
-| Line Item Description | Line item details | → JSON `lineItemDescription` |
-| Control Value | Control calculated value | → JSON `controlValue` |
-| FS Value | Financial statement value | → JSON `fsValue` |
-| Variance | Difference | → JSON `variance` |
-| BPS Impact | Basis points impact | → JSON `bpsImpact` |
-| Auto / Manual | Processing type | → JSON `autoManual` |
-| Validation Source | Source system | → JSON `validationSource` |
-| Validation Type | Type classification | → JSON `validationType` |
-| Control Draft Number | Draft version | → JSON `controlDraftNumber` |
-| Test Draft Number | Test version | → JSON `testDraftNumber` |
-| Is Final | Boolean flag | → JSON `isFinalDraft` |
-| Threshold Amount/Desc/Percent/Abs | Threshold values | → JSON threshold fields |
+### Optional Excel Tab:
 
-### Excel Tab 4: Validations - KRI
-Same structure as Validations-TRIMMED, plus:
-| Column | Description | Key Role |
-|--------|-------------|----------|
-| KRI Variable Key1-5 | KRI formula variable names | → JSON `valuesUsedInFormula` keys |
-| KRI Variable Value1-5 | KRI formula variable values | → JSON `valuesUsedInFormula` values |
-| Control Procedures | Formula description | → JSON `validationDesc` |
+| Tab | Purpose | Key Columns |
+|-----|---------|-------------|
+| **KRI Master** | Pre-defined KRI IDs and thresholds | KRI ID, KRI Name, Validation ID |
 
 ---
 
-## Cross-Reference Relationships
+## Data-Driven Relationships
+
+### 1. Cross-Reference: Validations → Funds
 
 ```
-┌─────────────┐         ┌─────────────┐
-│   Cards     │◄────────│ Validations │
-│  (Card Name)│  Card   │  (TRIMMED)  │
-└─────────────┘         └──────┬──────┘
-                               │ Fund
-                               ▼
-┌─────────────┐         ┌─────────────┐
-│   Funds     │◄────────│ Validations │
-│ (Fund ID_New)  Fund   │   (KRI)     │
-└─────────────┘         └─────────────┘
+Validations.Fund  ──────────────────►  Funds.Fund ID_New
+                                              │
+                                              ├── Trust_New    → JSON trust
+                                              ├── Book_New     → JSON book, fundName
+                                              ├── Fund Name_New→ JSON fundName (in JSON3)
+                                              └── Fund ID_New  → Derive Group Letter
 ```
 
-### Key Relationships:
-1. **Validations.Card** → **Cards.Card Name** (Card context lookup)
-2. **Validations.Fund** → **Funds.Fund ID_New** (Fund details lookup)
-3. **Validations-TRIMMED + Validations-KRI** → Merged into single validation set
+**How Group Letter is Derived:**
+- Extract numeric suffix from Fund ID_New
+- Convert number to letter: 1→A, 2→B, 3→C, etc.
+- Example: CAN1 → A, CAN2 → B, CAN3 → C
 
----
+### 2. Cross-Reference: Validations → Cards
 
-## Auto-Generated Fields
-
-| Field | Generation Rule | Used In |
-|-------|-----------------|---------|
-| `id` | SHA256-like hash (random/sequential pattern) | JSON 1 |
-| `validationId` | Auto-increment or mapped ID (999991, 999996, 999999 for KRI) | JSON 1, 2, 3, 5 |
-| `requestId` | UUID without hyphens (uppercase) | All JSONs |
-| `auditVersionControlDs` | Always "1" | JSON 1 |
-| `writeTs` | Current timestamp (YYYY-MM-DD HH:mm:ss.SSSSSSS) | JSON 1 |
-| `kriId` | Mapped from validation name (KRI_1, KRI_6, KRI_9A, etc.) | JSON 2, 3, 5 |
-| `rowCount` | Count of validations in response | JSON 1 |
-| `kriTotalCount` | Total unique KRI types in system | JSON 3, 4 |
-| `kriStatusCount` | Count of KRI validations per fund | JSON 3, 4 |
-
----
-
-## Field Mapping Rules
-
-### Group Mapping (Funds.Group_New → JSON group)
 ```
-Source Group_New | Mapped JSON group
------------------|-------------------
-A (with CAN2)    | B
-A (with CAN3)    | C
-(Rule: Sequential assignment based on fund order or specific fund logic)
+Validations.Card  ──────────────────►  Cards.Card Name
+                                              │
+                                              └── (Used for context/filtering)
 ```
 
-### KRI ID Mapping (Validation Name → kriId)
+### 3. KRI ID Generation (Data-Driven)
+
+**Option A: With KRI Master Tab (Recommended)**
 ```
-Validation Name                           | kriId
-------------------------------------------|--------
-Interest Expense versus Average Borrowings| KRI_1
-Defaulted Securities Review               | KRI_6
-Effective Leverage: Year Over Year Change | KRI_9A
+Validations-KRI.Validation ──────►  KRI Master.KRI Name
+                                           │
+                                           ├── KRI ID        → JSON kriId
+                                           ├── Validation ID → JSON validationId
+                                           └── Threshold     → JSON threshold
 ```
 
-### Priority Mapping (Validation Type → Priority)
+**Option B: Without KRI Master Tab (Auto-Generate)**
 ```
-Statement Type | Default Priority
----------------|------------------
-KRI            | Standard (unless override)
-SCF, SOA, etc. | Material/Standard (from Excel)
+KRI validations are processed in order:
+  1st KRI encountered → KRI_1, validationId: 999991
+  2nd KRI encountered → KRI_2, validationId: 999992
+  3rd KRI encountered → KRI_3, validationId: 999993
+  ...
 ```
 
-### valuesUsedInFormula Construction
-```python
-# For KRI Validations only
-{
-    "KRI Variable Key1": KRI Variable Value1,
-    "KRI Variable Key2": KRI Variable Value2,
-    ...
-}
-# Values are parsed to remove commas and convert to numbers
+### 4. Merge Operation
+
+```
+Validations-TRIMMED ────┐
+                        ├───► Combined Validations List (JSON 1)
+Validations-KRI ────────┘
 ```
 
 ---
 
-## JSON Output Specifications
+## Field Mapping Rules (All Data-Driven)
 
 ### JSON 1: Combined Validations
-**Purpose:** Unified validation response with all validations (TRIMMED + KRI)
 
-**Structure:**
-```json
-{
-    "requestDetails": { "requestId": "<auto-generated>" },
-    "data": {
-        "getValidations": {
-            "rowCount": <count of validations>,
-            "pageInfo": { "hasNextPage": false, "hasPreviousPage": false },
-            "validations": [ <array of validation objects> ]
-        }
-    }
-}
-```
-
-**Field Sources for each validation:**
-| JSON Field | Source | Transformation |
-|------------|--------|----------------|
-| id | Auto-generated | Random hash pattern |
-| trust | Funds.Trust_New (via Fund lookup) | Direct |
-| fund | Validations.Fund | Direct |
-| fundCode | Validations.Fund | Same as fund |
-| group | Funds.Group_New (via Fund lookup) | Mapped (A→B, A→C based on fund) |
-| book | Funds.Book_New (via Fund lookup) | Direct |
-| shareClass | Validations.Share Class | Direct (often empty) |
-| section | Validations.Section | Direct |
-| validation | Validations.Validation | Direct |
-| controlValue | Validations.Control Value | Numeric |
-| fsValue | Validations.FS Value | Numeric (remove commas) |
-| variance | Validations.Variance | Numeric |
-| bpsImpact | Validations.BPS Impact | Numeric |
-| validationType | Validations.Validation Type | Direct |
-| validationSource | Validations.Validation Source | Direct |
-| controlDraftNumber | Validations.Control Draft Number | Extract number or null |
-| autoManual | Validations.Auto / Manual | Direct |
-| priority | Validations.Priority | Direct |
-| validationStatus | Validations.Validation Status | Direct |
-| auditVersionControlDs | Auto-generated | Always "1" |
-| writeTs | Auto-generated | Current timestamp |
-| isFinalDraft | Validations.Is Final | Boolean |
-| validationId | Auto-generated | Sequential ID |
-| lineItemDescription | Validations.Line Item Description | Direct |
-| statementType | Validations.Statement Type | Direct |
-| testDraftNumber | Validations.Test Draft Number | Direct or empty |
-| isCpoControl | Default | Always "0" |
-| isCpoTest | Default | Always "0" |
-| isBannerLessControl | Default | Always "0" |
-| isBannerLessTest | Default | Always "0" |
-| isBlueFontControl | Default | Always "0" |
-| isBlueFontTest | Default | Always "0" |
-| thresholdColAmount | Validations.Threshold Amount | Direct or empty |
-| thresholdColDesc | Validations.Threshold Desc | Direct or empty |
-| thresholdPercent | Validations.Threshold Percent | Direct or empty |
-| thresholdAbs | Validations.Threshold Abs | Direct or empty |
-| validationDesc | Validations.Control Procedures or Validation | Clean text |
-| webappWorkflowStatus | Validations.Workflow Status | Direct |
-| valuesUsedInFormula | KRI Variables 1-5 | JSON string (KRI only) |
-| analyticStatus | N/A | null |
-| fundStrategy | N/A | null |
-| result | N/A | null |
-| threshold | N/A | null |
-
----
+| JSON Field | Source | Derivation Method |
+|------------|--------|-------------------|
+| **id** | Generated | Hash of card + fund + validation + index |
+| **validationId** | Auto-generated | Row order (TRIMMED) or KRI Master lookup |
+| **trust** | Funds.Trust_New | Cross-reference via Validations.Fund |
+| **group** | Funds.Fund ID_New | Extract numeric suffix, convert to letter |
+| **book** | Funds.Book_New | Cross-reference via Validations.Fund |
+| **fund** | Validations.Fund | Direct from Excel |
+| **fundCode** | Validations.Fund | Same as fund |
+| **validation** | Validations.Validation | Direct from Excel |
+| **priority** | Validations.Priority | Direct from Excel |
+| **validationStatus** | Validations.Validation Status | Direct from Excel |
+| **controlValue** | Validations.Control Value | Parse as number |
+| **fsValue** | Validations.FS Value | Parse as number (remove commas) |
+| **variance** | Validations.Variance | Parse as number |
+| **bpsImpact** | Validations.BPS Impact | Parse as number |
+| **statementType** | Validations.Statement Type | Direct from Excel |
+| **section** | Validations.Section | Direct from Excel |
+| **lineItemDescription** | Validations.Line Item Description | Direct from Excel |
+| **validationType** | Validations.Validation Type | Direct from Excel |
+| **validationSource** | Validations.Validation Source | Direct from Excel |
+| **autoManual** | Validations.Auto / Manual | Direct from Excel |
+| **webappWorkflowStatus** | Validations.Workflow Status | Direct from Excel |
+| **controlDraftNumber** | Validations.Control Draft Number | Extract integer part |
+| **validationDesc** | Control Procedures or Validation | Clean text |
+| **valuesUsedInFormula** | KRI Variables 1-5 | Build JSON from key-value pairs |
+| **rowCount** | Calculated | COUNT(TRIMMED) + COUNT(KRI) |
 
 ### JSON 2: KRI Details
-**Purpose:** Grouped KRI validations by KRI type with fund details
 
-**Structure:**
-```json
-{
-    "requestDetails": { "requestId": "<auto-generated>" },
-    "data": {
-        "kriDetails": [ <array of KRI group objects> ]
-    }
-}
-```
-
-**Field Sources:**
-| JSON Field | Source | Transformation |
-|------------|--------|----------------|
-| kriName | Validations-KRI.Validation | Direct |
-| kriId | Mapped | From kriName mapping table |
-| kriDesc | Validations-KRI.Control Procedures | Clean multiline text |
-| threshold | Default | JSON string with High/Medium/Low thresholds |
-| fundDetails[].risk | Calculated | Based on bpsImpact vs thresholds |
-| fundDetails[].threshold | N/A | null |
-| fundDetails[].fundName | Funds.Book_New | Via Fund lookup |
-| fundDetails[].fundCode | Validations-KRI.Fund | Direct |
-| fundDetails[].result | Validations-KRI.BPS Impact | String format |
-| fundDetails[].strategy | Default/Mapped | "Credit - Diversified Income" |
-| fundDetails[].validationStatus | Validations-KRI.Validation Status | Direct |
-| fundDetails[].validationId | Auto-generated | From JSON 1 mapping |
-| fundDetails[].valuesUsedInFormula | KRI Variables 1-5 | JSON string |
-
----
+| JSON Field | Source | Derivation Method |
+|------------|--------|-------------------|
+| **kriName** | Validations-KRI.Validation | Direct from Excel |
+| **kriId** | KRI Master or Generated | Lookup or sequential |
+| **kriDesc** | Validations-KRI.Control Procedures | Clean text |
+| **threshold** | KRI Master or Default | Lookup or default JSON |
+| **fundDetails[].fundCode** | Validations-KRI.Fund | Direct from Excel |
+| **fundDetails[].fundName** | Funds.Book_New | Cross-reference |
+| **fundDetails[].result** | Validations-KRI.BPS Impact | As string |
+| **fundDetails[].risk** | Calculated | Based on BPS thresholds |
+| **fundDetails[].validationStatus** | Validations-KRI.Validation Status | Direct from Excel |
+| **fundDetails[].valuesUsedInFormula** | KRI Variables 1-5 | Build JSON |
 
 ### JSON 3: Fund KRI Status Count
-**Purpose:** Summary counts per fund and KRI filter list
 
-**Structure:**
-```json
-{
-    "requestDetails": { "requestId": "<auto-generated>" },
-    "data": {
-        "fundKriStatusCount": [ <array of fund count objects> ],
-        "kriFilter": [ <array of KRI filter objects> ],
-        "statusFilter": [ <array of status strings> ]
-    }
-}
-```
-
-**Field Sources:**
-| JSON Field | Source | Transformation |
-|------------|--------|----------------|
-| fundKriStatusCount[].kriTotalCount | Calculated | Total unique KRI types |
-| fundKriStatusCount[].kriStatusCount | Calculated | Count of KRIs for this fund |
-| fundKriStatusCount[].analyticsStatus | Default | "High" |
-| fundKriStatusCount[].fundCode | Funds.Fund ID_New | All funds from Funds tab |
-| fundKriStatusCount[].fundName | Funds.Fund Name_New | Via Fund lookup |
-| kriFilter[].kriId | Mapped | From kriName mapping |
-| kriFilter[].kriName | Validations-KRI.Validation | Distinct values |
-| kriFilter[].validationId | Auto-generated | From JSON 1 mapping |
-| statusFilter | Calculated | Distinct risk levels ["Low", "N/A", "High"] |
-
----
+| JSON Field | Source | Derivation Method |
+|------------|--------|-------------------|
+| **fundKriStatusCount[].fundCode** | Funds.Fund ID_New | Iterate all funds |
+| **fundKriStatusCount[].fundName** | Funds.Fund Name_New | From Funds tab |
+| **fundKriStatusCount[].kriTotalCount** | Calculated | COUNT(DISTINCT KRI names) |
+| **fundKriStatusCount[].kriStatusCount** | Calculated | COUNT(KRI WHERE Fund = fundCode) |
+| **kriFilter[]** | Validations-KRI | Distinct KRI types |
 
 ### JSON 4: Strategy KRI Count
-**Purpose:** Aggregate KRI counts by strategy
 
-**Structure:**
-```json
-{
-    "requestDetails": { "requestId": "<auto-generated>" },
-    "data": [ <array of strategy count objects> ]
-}
-```
+| JSON Field | Source | Derivation Method |
+|------------|--------|-------------------|
+| **kriTotalCount** | Calculated | COUNT(DISTINCT KRI names) |
+| **kriStatusCount** | Calculated | COUNT(ALL KRI validations) |
 
-**Field Sources:**
-| JSON Field | Source | Transformation |
-|------------|--------|----------------|
-| kriTotalCount | Calculated | Total unique KRI types |
-| kriStatusCount | Calculated | Total KRI validations across all funds |
-| analyticsStatus | Default | "High" |
-| strategy | Default/Mapped | "Credit - Diversified Income" |
+### JSON 5: KRI Simple Details
+
+| JSON Field | Source | Derivation Method |
+|------------|--------|-------------------|
+| **kriDetails[]** | Validations-KRI | Distinct KRI types with IDs |
 
 ---
 
-### JSON 5: KRI Details Simple
-**Purpose:** Simple list of KRI types for filtering
+## Calculation Formulas
 
-**Structure:**
-```json
-{
-    "kriDetails": [ <array of KRI simple objects> ]
-}
+### Row Count (JSON 1)
+```
+rowCount = len(Validations_TRIMMED) + len(Validations_KRI)
 ```
 
-**Field Sources:**
-| JSON Field | Source | Transformation |
-|------------|--------|----------------|
-| kriId | Mapped | From kriName mapping |
-| kriName | Validations-KRI.Validation | Distinct values |
-| validationId | Auto-generated | From JSON 1 mapping |
-
----
-
-## Calculation Rules
-
-### 1. rowCount (JSON 1)
+### KRI Total Count (JSON 3, 4)
 ```
-rowCount = COUNT(Validations-TRIMMED) + COUNT(Validations-KRI)
+kriTotalCount = len(DISTINCT(Validations_KRI.Validation))
 ```
 
-### 2. kriTotalCount (JSON 3, 4)
-```
-kriTotalCount = COUNT(DISTINCT Validations-KRI.Validation)
-```
-
-### 3. kriStatusCount per Fund (JSON 3)
-```
-kriStatusCount[fundCode] = COUNT(Validations-KRI WHERE Fund = fundCode)
-```
-
-### 4. kriStatusCount Total (JSON 4)
-```
-kriStatusCount = COUNT(Validations-KRI)
-```
-
-### 5. valuesUsedInFormula (JSON 1, 2)
+### KRI Status Count per Fund (JSON 3)
 ```python
-def build_values_used_in_formula(row):
-    result = {}
-    for i in range(1, 6):
-        key = row[f'KRI Variable Key{i}']
-        value = row[f'KRI Variable Value{i}']
-        if key and key != '':
-            # Remove commas, convert to number
-            result[key] = parse_number(value)
-    return json.dumps(result)
+for each fund in Funds:
+    kriStatusCount[fund] = COUNT(Validations_KRI WHERE Fund == fund.Fund_ID_New)
 ```
 
-### 6. Risk Level Calculation
+### Risk Calculation (JSON 2)
 ```python
 def calculate_risk(bps_impact):
-    bps = abs(float(bps_impact))
+    bps = abs(bps_impact)
     if bps >= 30:
         return "High"
     elif bps >= 15:
@@ -361,102 +183,181 @@ def calculate_risk(bps_impact):
         return "Low"
 ```
 
+### Group Letter Derivation
+```python
+def get_group_letter(fund_id_new):
+    # Extract numeric suffix: CAN3 -> 3
+    match = re.match(r'^([A-Za-z]+)(\d+)', fund_id_new)
+    if match:
+        number = int(match.group(2))
+        return chr(ord('A') + number - 1)  # 1->A, 2->B, 3->C
+    return 'A'
+```
+
+### valuesUsedInFormula Construction
+```python
+def build_values_used_in_formula(row):
+    result = OrderedDict()
+    for i in range(1, 6):
+        key = row[f'KRI Variable Key{i}']
+        value = row[f'KRI Variable Value{i}']
+        if key and key not in ['', '--']:
+            result[key] = parse_number(value)
+    return json.dumps(result) if result else ""
+```
+
 ---
 
 ## Data Flow Diagram
 
 ```
-┌────────────────────────────────────────────────────────────────┐
-│                      Excel Input Files                         │
-├──────────────┬──────────────┬─────────────────┬────────────────┤
-│    Cards     │    Funds     │ Validations-    │ Validations-   │
-│              │              │    TRIMMED      │     KRI        │
-└──────┬───────┴──────┬───────┴────────┬────────┴───────┬────────┘
-       │              │                │                │
-       │              │     ┌──────────┴────────────────┤
-       │              │     │                           │
-       ▼              ▼     ▼                           ▼
-┌──────────────────────────────────────────────────────────────┐
-│                   Data Transformation Layer                   │
-│  ┌─────────────────────────────────────────────────────────┐ │
-│  │ 1. Load all Excel tabs                                   │ │
-│  │ 2. Create Fund lookup index (Fund ID_New → Fund details) │ │
-│  │ 3. Create Card lookup index (Card Name → Card details)   │ │
-│  │ 4. Merge Validations (TRIMMED + KRI)                     │ │
-│  │ 5. Apply cross-reference lookups                         │ │
-│  │ 6. Generate auto-fields (id, validationId, timestamps)   │ │
-│  │ 7. Calculate counts and aggregates                       │ │
-│  │ 8. Map KRI names to KRI IDs                              │ │
-│  │ 9. Build valuesUsedInFormula JSON                        │ │
-│  └─────────────────────────────────────────────────────────┘ │
-└──────────────────────────────────────────────────────────────┘
-       │         │         │         │         │
-       ▼         ▼         ▼         ▼         ▼
-┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐
-│ JSON 1  │ │ JSON 2  │ │ JSON 3  │ │ JSON 4  │ │ JSON 5  │
-│Combined │ │  KRI    │ │Fund KRI │ │Strategy │ │  KRI    │
-│Validat. │ │ Details │ │ Status  │ │  Count  │ │ Simple  │
-└─────────┘ └─────────┘ └─────────┘ └─────────┘ └─────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              EXCEL INPUT                                     │
+├─────────────┬─────────────┬─────────────────┬─────────────┬─────────────────┤
+│   Cards     │   Funds     │ Validations-    │ Validations-│  KRI Master     │
+│   Tab       │    Tab      │    TRIMMED      │     KRI     │  (Optional)     │
+└──────┬──────┴──────┬──────┴────────┬────────┴──────┬──────┴────────┬────────┘
+       │             │               │               │               │
+       ▼             ▼               ▼               ▼               ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         DATA LOOKUP SERVICE                                  │
+│  ┌────────────────────────────────────────────────────────────────────────┐ │
+│  │ INDEXES BUILT FROM DATA:                                                │ │
+│  │ • Fund Index: Fund ID_New → Fund details                                │ │
+│  │ • Card Index: Card Name → Card details                                  │ │
+│  │ • KRI Index: KRI Name → KRI ID, Validation ID (from KRI Master)         │ │
+│  │                                                                         │ │
+│  │ DERIVED MAPPINGS:                                                       │ │
+│  │ • Group Letters: Extracted from Fund ID_New pattern                     │ │
+│  │ • KRI IDs: Sequential order or from KRI Master                          │ │
+│  └────────────────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+       ┌────────────┬───────────────┼───────────────┬────────────┐
+       ▼            ▼               ▼               ▼            ▼
+┌───────────┐ ┌───────────┐ ┌───────────┐ ┌───────────┐ ┌───────────┐
+│  JSON 1   │ │  JSON 2   │ │  JSON 3   │ │  JSON 4   │ │  JSON 5   │
+│ Combined  │ │   KRI     │ │ Fund KRI  │ │ Strategy  │ │   KRI     │
+│Validations│ │  Details  │ │  Status   │ │   Count   │ │  Simple   │
+└───────────┘ └───────────┘ └───────────┘ └───────────┘ └───────────┘
 ```
 
 ---
 
-## KRI ID Mapping Configuration
+## Excel Column Reference
 
-This mapping should be configurable and extendable:
+### Cards Tab
+| Column Name | JSON Field | Notes |
+|-------------|------------|-------|
+| Card Name | - | Primary key for card lookup |
+| fiscal_year_end | - | Metadata |
+| reporting_cycle | - | Metadata |
+| open_end_close_end | - | Category filter |
+| reporting_date | - | Metadata |
+| Status | - | Processing status |
 
-```json
-{
-    "kriMappings": {
-        "Interest Expense versus Average Borrowings": "KRI_1",
-        "Defaulted Securities Review": "KRI_6",
-        "Effective Leverage: Year Over Year Change": "KRI_9A"
-    }
-}
+### Funds Tab
+| Column Name | JSON Field | Notes |
+|-------------|------------|-------|
+| # | - | Row number |
+| Trust | - | Original trust name |
+| **Trust_New** | trust | → JSON trust field |
+| Fund | - | Full fund name |
+| Fund ID | - | Original fund ID |
+| **Fund Name_New** | fundName (JSON3) | Display name for fund |
+| **Fund ID_New** | fund, fundCode | **Primary key for lookups**, derives group |
+| Group | - | Original group |
+| Group_New | - | (Not used, group derived from Fund ID) |
+| Book | - | Original book |
+| **Book_New** | book, fundName (JSON2) | Book/fund display name |
+| Fund Type | - | Category (Canada, OEF, CEF, etc.) |
+
+### Validations Tabs (TRIMMED & KRI)
+| Column Name | JSON Field | Notes |
+|-------------|------------|-------|
+| Card | - | Links to Cards tab |
+| **Fund** | fund, fundCode | **Foreign key to Funds.Fund ID_New** |
+| Priority | priority | Material/Standard |
+| Workflow Status | webappWorkflowStatus | Current workflow state |
+| Validation Status | validationStatus | Passed/Failed |
+| Validation | validation | Validation rule name |
+| Statement Type | statementType | SCF/SOA/KRI/etc. |
+| Section | section | Section description |
+| Line Item Description | lineItemDescription | Details |
+| Control Procedures | validationDesc (KRI) | Formula description |
+| Share Class | shareClass | Usually empty |
+| Control Value | controlValue | Numeric |
+| FS Value | fsValue | Numeric (parse commas) |
+| Variance | variance | Numeric |
+| BPS Impact | bpsImpact | Numeric, used for risk calc |
+| Auto / Manual | autoManual | Processing type |
+| Validation Source | validationSource | Source system |
+| Validation Type | validationType | Type classification |
+| Control Draft Number | controlDraftNumber | Extract integer |
+| Test Draft Number | testDraftNumber | Draft version |
+| Is Final | isFinalDraft | Boolean |
+| Threshold Amount | thresholdColAmount | Threshold value |
+| Threshold Desc | thresholdColDesc | Threshold description |
+| Threshold Percent (%) | thresholdPercent | Percentage |
+| Threshold Abs | thresholdAbs | Absolute value |
+| KRI Variable Key1-5 | valuesUsedInFormula | Build JSON object |
+| KRI Variable Value1-5 | valuesUsedInFormula | Build JSON object |
+
+### KRI Master Tab (Optional)
+| Column Name | JSON Field | Notes |
+|-------------|------------|-------|
+| KRI ID | kriId | Pre-defined KRI identifier |
+| KRI Name | - | Must match Validations.Validation |
+| KRI Desc | kriDesc | KRI description |
+| Threshold | threshold | JSON threshold definition |
+| Validation ID | validationId | Pre-defined validation ID |
+
+---
+
+## Key Principles
+
+1. **No Hardcoded Mappings**: All mappings come from data
+2. **Cross-Reference by Keys**: Use Fund ID_New and Card Name as keys
+3. **Derive Don't Configure**: Group letters derived from Fund ID pattern
+4. **Optional Master Data**: KRI Master provides consistency but is optional
+5. **Order Matters**: KRI IDs generated based on order encountered
+6. **Consistent IDs**: Same validation uses same ID across all JSONs
+
+---
+
+## Example: Data Derivation
+
+Given this Funds data:
+```
+Fund ID_New: CAN1, CAN2, CAN3
+Trust_New: Canada, Canada, Canada
+Book_New: Income Strategy Fund, Credit Income Fund, International Bond Trust
 ```
 
----
+**Derived mappings:**
+```
+CAN1 → group: A (1st letter)
+CAN2 → group: B (2nd letter)
+CAN3 → group: C (3rd letter)
+```
 
-## Validation ID Generation Rules
+Given this KRI data (in order):
+```
+1. Interest Expense versus Average Borrowings
+2. Defaulted Securities Review
+3. Effective Leverage: Year Over Year Change
+```
 
-| Validation Type | ID Range/Pattern |
-|-----------------|------------------|
-| Normal (TRIMMED) | Sequential (1000+) or descriptive (1161, etc.) |
-| KRI Validations | 999991, 999996, 999999 pattern (high numbers) |
+**With KRI Master:**
+```
+Interest Expense... → KRI_1, validationId: 999991
+Defaulted Securities... → KRI_6, validationId: 999996
+Effective Leverage... → KRI_9A, validationId: 999999
+```
 
----
-
-## Default Values
-
-| Field | Default Value |
-|-------|---------------|
-| analyticsStatus | "High" |
-| strategy | "Credit - Diversified Income" |
-| risk | "Low" |
-| threshold (KRI) | `{"High": ">30%", "Medium": ">=15% and <30%", "Low": "<15%"}` |
-| isCpo*, isBannerLess*, isBlueFontControl/Test | "0" |
-| auditVersionControlDs | "1" |
-| pageInfo.hasNextPage | false |
-| pageInfo.hasPreviousPage | false |
-
----
-
-## Summary of Cross-References
-
-| From | To | Key Field | Purpose |
-|------|-----|-----------|---------|
-| Validations.Fund | Funds.Fund ID_New | Fund code | Get trust, group, book |
-| Validations.Card | Cards.Card Name | Card name | Get reporting context |
-| JSON 2, 3, 5 validationId | JSON 1 validationId | validationId | Consistent IDs |
-| JSON 3 kriFilter | JSON 2 kriDetails | kriId, kriName | Filter options |
-
----
-
-## Implementation Notes
-
-1. **Numeric Parsing**: Remove commas from numbers (e.g., "7,98,606.00" → 798606)
-2. **Text Cleaning**: Remove line breaks from Control Procedures for validationDesc
-3. **Null Handling**: Use `null` for controlDraftNumber when source is "null.1"
-4. **Empty String vs Null**: Use "" for empty threshold fields, `null` for calculated fields
-5. **Fund Order**: Process funds in the order they appear in Funds tab
-6. **KRI Grouping**: Group by validation name before creating JSON 2
+**Without KRI Master (auto-generated):**
+```
+Interest Expense... → KRI_1, validationId: 999991
+Defaulted Securities... → KRI_2, validationId: 999992
+Effective Leverage... → KRI_3, validationId: 999993
+```

@@ -1,0 +1,152 @@
+{
+    "version": "1.0.0",
+    "description": "Configuration for Excel to JSON Transformation Framework",
+    
+    "kriMappings": {
+        "description": "Maps KRI Validation names to KRI IDs",
+        "mappings": {
+            "Interest Expense versus Average Borrowings": "KRI_1",
+            "Defaulted Securities Review": "KRI_6",
+            "Effective Leverage: Year Over Year Change": "KRI_9A"
+        }
+    },
+    
+    "groupMappings": {
+        "description": "Maps Fund codes to Group letters for JSON output",
+        "mappings": {
+            "CAN1": "A",
+            "CAN2": "B",
+            "CAN3": "C"
+        }
+    },
+    
+    "validationIdRanges": {
+        "description": "Defines validation ID ranges for different validation types",
+        "normalValidations": {
+            "startId": 1161,
+            "description": "Sequential IDs for normal (TRIMMED) validations"
+        },
+        "kriValidations": {
+            "baseId": 999990,
+            "description": "Base ID + KRI number for KRI validations (e.g., KRI_1 → 999991)"
+        }
+    },
+    
+    "defaults": {
+        "analyticsStatus": "High",
+        "strategy": "Credit - Diversified Income",
+        "risk": "Low",
+        "auditVersionControlDs": "1",
+        "threshold": "{\"High\": \">30%\",\"Medium\": \">=15% and <30%\",\"Low\":\"<15%\"}",
+        "statusFilter": ["Low", "N/A", "High"]
+    },
+    
+    "riskThresholds": {
+        "description": "Thresholds for calculating risk level from BPS impact",
+        "high": {
+            "minBps": 30,
+            "description": "BPS impact >= 30%"
+        },
+        "medium": {
+            "minBps": 15,
+            "maxBps": 30,
+            "description": "BPS impact >= 15% and < 30%"
+        },
+        "low": {
+            "maxBps": 15,
+            "description": "BPS impact < 15%"
+        }
+    },
+    
+    "fieldMappings": {
+        "description": "Maps Excel column names to JSON field names",
+        
+        "validations": {
+            "Card": "card",
+            "Fund": "fund",
+            "Priority": "priority",
+            "Workflow Status": "webappWorkflowStatus",
+            "Validation Status": "validationStatus",
+            "Validation": "validation",
+            "Statement Type": "statementType",
+            "Section": "section",
+            "Line Item Description": "lineItemDescription",
+            "Control Procedures": "controlProcedures",
+            "Share Class": "shareClass",
+            "Control Value": "controlValue",
+            "FS Value": "fsValue",
+            "Variance": "variance",
+            "BPS Impact": "bpsImpact",
+            "Auto / Manual": "autoManual",
+            "Validation Source": "validationSource",
+            "Validation Type": "validationType",
+            "Control Draft Number": "controlDraftNumber",
+            "Test Draft Number": "testDraftNumber",
+            "Is Final": "isFinalDraft",
+            "Threshold Amount": "thresholdColAmount",
+            "Threshold Desc": "thresholdColDesc",
+            "Threshold Percent (%)": "thresholdPercent",
+            "Threshold Abs": "thresholdAbs"
+        },
+        
+        "funds": {
+            "#": "rowNum",
+            "Trust": "trust",
+            "Trust_New": "trustNew",
+            "Fund": "fund",
+            "Fund ID": "fundId",
+            "Fund Name_New": "fundNameNew",
+            "Fund ID_New": "fundIdNew",
+            "Group": "group",
+            "Group_New": "groupNew",
+            "Book": "book",
+            "Book_New": "bookNew",
+            "Fund Type": "fundType"
+        },
+        
+        "cards": {
+            "Card Name": "cardName",
+            "fiscal_year_end": "fiscalYearEnd",
+            "reporting_cycle": "reportingCycle",
+            "open_end_close_end": "openEndCloseEnd",
+            "reporting_date": "reportingDate",
+            "Status": "status"
+        }
+    },
+    
+    "kriVariableColumns": {
+        "description": "Column names for KRI variable key-value pairs",
+        "keys": ["KRI Variable Key1", "KRI Variable Key2", "KRI Variable Key3", "KRI Variable Key4", "KRI Variable Key5"],
+        "values": ["KRI Variable Value1", "KRI Variable Value2", "KRI Variable Value3", "KRI Variable Value4", "KRI Variable Value5"]
+    },
+    
+    "outputFiles": {
+        "json1": {
+            "filename": "validations_combined.json",
+            "description": "Combined validations from TRIMMED and KRI tabs"
+        },
+        "json2": {
+            "filename": "kri_details.json",
+            "description": "KRI details grouped by KRI type with fund details"
+        },
+        "json3": {
+            "filename": "fund_kri_status.json",
+            "description": "Fund KRI status counts and filters"
+        },
+        "json4": {
+            "filename": "strategy_kri_count.json",
+            "description": "Strategy-level KRI aggregation"
+        },
+        "json5": {
+            "filename": "kri_simple.json",
+            "description": "Simple KRI details list for filtering"
+        }
+    },
+    
+    "numberFormatting": {
+        "description": "Rules for parsing and formatting numbers",
+        "removeCommas": true,
+        "handleIndianFormat": true,
+        "nullValues": ["", "--", "null", "null.1"]
+    }
+}

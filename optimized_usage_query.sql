@@ -1,5 +1,6 @@
 -- =====================================================================================
--- OPTIMIZED USAGE QUERY (FIXED)
+-- OPTIMIZED USAGE QUERY
+-- Using column names from original query
 -- Filter Parameters:
 --   Start Date: 2025-01-01
 --   End Date: 2026-01-28
@@ -13,11 +14,12 @@ WITH most_recent_jobs AS (
   SELECT
     workspace_id,
     job_id,
-    name,
+    job_name,
     creator_user_name,
     run_as,
-    job_type,
-    tags
+    cron_schedule,
+    schedule_timezone,
+    trigger_type
   FROM system.lakeflow.jobs
   WHERE workspace_id = 5244115429641560
   QUALIFY ROW_NUMBER() OVER (
@@ -30,11 +32,11 @@ most_recent_pipelines AS (
   SELECT
     workspace_id,
     pipeline_id,
-    name,
+    pipeline_name,
     pipeline_type,
-    creator_user_name,
+    pipeline_creator,
     run_as,
-    serverless
+    is_serverless_pipeline
   FROM system.lakeflow.pipelines
   WHERE workspace_id = 5244115429641560
   QUALIFY ROW_NUMBER() OVER (
@@ -49,13 +51,13 @@ most_recent_clusters AS (
     cluster_id,
     cluster_name,
     cluster_source,
-    creator_user_name AS owner,
-    spark_version AS dbr_version,
-    driver_node_type_id AS driver_node_type,
-    node_type_id AS worker_node_type,
-    num_workers,
-    autoscale_min_workers AS min_autoscale_workers,
-    autoscale_max_workers AS max_autoscale_workers
+    cluster_owner,
+    dbr_version,
+    driver_node_type,
+    worker_node_type,
+    worker_count,
+    min_autoscale_workers,
+    max_autoscale_workers
   FROM system.compute.clusters
   WHERE workspace_id = 5244115429641560
   QUALIFY ROW_NUMBER() OVER (
@@ -68,9 +70,9 @@ warehouse_info AS (
   SELECT
     workspace_id,
     warehouse_id,
-    name AS warehouse_name,
+    warehouse_name,
     warehouse_type,
-    cluster_size AS warehouse_size
+    warehouse_size
   FROM system.compute.warehouses
   WHERE workspace_id = 5244115429641560
   QUALIFY ROW_NUMBER() OVER (
@@ -79,13 +81,23 @@ warehouse_info AS (
   ) = 1
 ),
 
--- Node specs - small table, will be broadcast
+-- Node specs
 node_specs AS (
   SELECT
-    node_type_id AS node_type,
-    num_cores AS core_count,
-    memory_mb / 1024.0 AS memory_gb
+    node_type,
+    core_count,
+    memory_gb
   FROM system.compute.node_types
+),
+
+-- Workspace info
+workspace_info AS (
+  SELECT
+    workspace_id,
+    workspace_name,
+    workspace_url
+  FROM system.compute.workspaces
+  WHERE workspace_id = 5244115429641560
 ),
 
 -- =====================================================================================
@@ -136,7 +148,7 @@ usage_base AS (
     w.workspace_url
     
   FROM system.billing.usage u
-  LEFT JOIN system.access.workspaces_latest w
+  LEFT JOIN workspace_info w
     ON u.workspace_id = w.workspace_id
   WHERE
     -- Workspace filter (specific workspace)
@@ -212,14 +224,14 @@ SELECT
     u.workspace_name,
     u.sku_name,
 
-    -- Entity URL
+    -- Entity URL (clickable link for dashboards)
     CASE 
       WHEN u.job_id IS NOT NULL THEN 
         CONCAT('<a href="', u.workspace_url, '/jobs/', u.job_id, '" target="_blank">', 
-               COALESCE(j.name, u.job_name_from_usage, u.job_id), '</a>')
+               COALESCE(j.job_name, u.job_name_from_usage, u.job_id), '</a>')
       WHEN u.dlt_pipeline_id IS NOT NULL THEN 
         CONCAT('<a href="', u.workspace_url, '/pipelines/', u.dlt_pipeline_id, '" target="_blank">', 
-               COALESCE(p.name, u.dlt_pipeline_id), '</a>')
+               COALESCE(p.pipeline_name, u.dlt_pipeline_id), '</a>')
       WHEN u.warehouse_id IS NOT NULL THEN 
         CONCAT('<a href="', u.workspace_url, '/sql/warehouses/', u.warehouse_id, '" target="_blank">', 
                COALESCE(wh.warehouse_name, u.warehouse_id), '</a>')
@@ -229,136 +241,213 @@ SELECT
       ELSE NULL
     END AS entity_url,
 
-    -- Cost metrics
+    -- =========================================================================
+    -- GOAL 1: JOB RUN COST (Cost of single job run)
+    -- =========================================================================
     ROUND(u.total_list_cost, 2) AS total_list_cost_usd,
     ROUND(u.total_dbu, 4) AS total_dbu_consumed,
     
-    -- Execution time
+    -- =========================================================================
+    -- GOAL 2: TOTAL EXECUTION TIME
+    -- =========================================================================
     ROUND((UNIX_TIMESTAMP(u.execution_end_time) - UNIX_TIMESTAMP(u.execution_start_time)) / 60.0, 2) AS execution_time_minutes,
     ROUND((UNIX_TIMESTAMP(u.execution_end_time) - UNIX_TIMESTAMP(u.execution_start_time)) / 3600.0, 2) AS execution_time_hours,
-    
-    -- Formatted execution time
     CASE 
       WHEN u.execution_start_time IS NULL THEN 'N/A'
-      ELSE
-        CONCAT(
-          IF(FLOOR((UNIX_TIMESTAMP(u.execution_end_time) - UNIX_TIMESTAMP(u.execution_start_time)) / 86400) > 0,
-            CONCAT(CAST(FLOOR((UNIX_TIMESTAMP(u.execution_end_time) - UNIX_TIMESTAMP(u.execution_start_time)) / 86400) AS STRING), 'd '), ''),
-          IF(FLOOR(MOD((UNIX_TIMESTAMP(u.execution_end_time) - UNIX_TIMESTAMP(u.execution_start_time)), 86400) / 3600) > 0,
-            CONCAT(CAST(FLOOR(MOD((UNIX_TIMESTAMP(u.execution_end_time) - UNIX_TIMESTAMP(u.execution_start_time)), 86400) / 3600) AS STRING), 'h '), ''),
-          CAST(FLOOR(MOD((UNIX_TIMESTAMP(u.execution_end_time) - UNIX_TIMESTAMP(u.execution_start_time)), 3600) / 60) AS STRING), 'm'
-        )
+      WHEN (UNIX_TIMESTAMP(u.execution_end_time) - UNIX_TIMESTAMP(u.execution_start_time)) / 60.0 >= 1440 THEN 
+        CONCAT(FLOOR((UNIX_TIMESTAMP(u.execution_end_time) - UNIX_TIMESTAMP(u.execution_start_time)) / 86400), 'd ', 
+               FLOOR(MOD((UNIX_TIMESTAMP(u.execution_end_time) - UNIX_TIMESTAMP(u.execution_start_time)), 86400) / 3600), 'h ', 
+               CAST(FLOOR(MOD((UNIX_TIMESTAMP(u.execution_end_time) - UNIX_TIMESTAMP(u.execution_start_time)), 3600) / 60) AS INT), 'm')
+      WHEN (UNIX_TIMESTAMP(u.execution_end_time) - UNIX_TIMESTAMP(u.execution_start_time)) / 60.0 >= 60 THEN 
+        CONCAT(FLOOR((UNIX_TIMESTAMP(u.execution_end_time) - UNIX_TIMESTAMP(u.execution_start_time)) / 3600), 'h ', 
+               CAST(FLOOR(MOD((UNIX_TIMESTAMP(u.execution_end_time) - UNIX_TIMESTAMP(u.execution_start_time)), 3600) / 60) AS INT), 'm')
+      ELSE CONCAT(ROUND((UNIX_TIMESTAMP(u.execution_end_time) - UNIX_TIMESTAMP(u.execution_start_time)) / 60.0, 1), 'm')
     END AS execution_time_formatted,
     u.execution_start_time,
     u.execution_end_time,
     
-    -- Executed from
+    -- =========================================================================
+    -- GOAL 3: WHERE WAS IT EXECUTED FROM (Job/Pipeline/Personal Notebook/SQL)
+    -- =========================================================================
     CASE 
-      WHEN u.billing_origin_product = 'JOBS' AND u.job_run_id IS NOT NULL THEN 'Scheduled/Automated Job'
-      WHEN u.billing_origin_product = 'JOBS' THEN 'Job Cluster (Ad-hoc)'
-      WHEN u.billing_origin_product = 'ALL_PURPOSE' AND u.notebook_path IS NOT NULL THEN 'Personal Notebook (Interactive Cluster)'
-      WHEN u.billing_origin_product = 'ALL_PURPOSE' THEN 'Interactive Cluster Session'
-      WHEN u.billing_origin_product = 'SQL' THEN 'SQL Warehouse Query'
-      WHEN u.billing_origin_product = 'DLT' THEN 'DLT Pipeline Run'
-      WHEN u.billing_origin_product = 'LAKEFLOW_CONNECT' THEN 'Lakeflow Connect Pipeline'
+      WHEN u.billing_origin_product = 'JOBS' AND u.job_run_id IS NOT NULL 
+        THEN 'Scheduled/Automated Job'
+      WHEN u.billing_origin_product = 'JOBS' AND u.job_run_id IS NULL 
+        THEN 'Job Cluster (Ad-hoc)'
+      WHEN u.billing_origin_product = 'ALL_PURPOSE' AND u.notebook_path IS NOT NULL 
+        THEN 'Personal Notebook (Interactive Cluster)'
+      WHEN u.billing_origin_product = 'ALL_PURPOSE' AND u.notebook_path IS NULL 
+        THEN 'Interactive Cluster Session'
+      WHEN u.billing_origin_product = 'SQL' 
+        THEN 'SQL Warehouse Query'
+      WHEN u.billing_origin_product = 'DLT' 
+        THEN 'DLT Pipeline Run'
+      WHEN u.billing_origin_product = 'LAKEFLOW_CONNECT'
+        THEN 'Lakeflow Connect Pipeline'
       ELSE u.billing_origin_product
     END AS executed_from,
     
     u.notebook_path,
-    COALESCE(j.name, u.job_name_from_usage, p.name) AS job_or_pipeline_name,
+    
+    -- Job/Pipeline Name & ID
+    COALESCE(j.job_name, u.job_name_from_usage, p.pipeline_name) AS job_or_pipeline_name,
     u.job_id,
     u.job_run_id,
     u.dlt_pipeline_id,
     u.dlt_update_id,
     
-    -- Cluster info
+    -- =========================================================================
+    -- GOAL 4: WHICH CLUSTER WAS USED
+    -- =========================================================================
     c.cluster_name,
     u.cluster_id,
     c.cluster_source AS cluster_created_by,
-    c.owner AS cluster_owner,
+    c.cluster_owner,
     c.dbr_version AS databricks_runtime,
     
-    -- Trigger type (simplified without schedule/trigger columns)
+    -- =========================================================================
+    -- GOAL 5: HOW WAS IT TRIGGERED (Cron/Manual/Interactive/SQL)
+    -- =========================================================================
     CASE
-      WHEN u.billing_origin_product = 'ALL_PURPOSE' THEN 'Manual - Personal Interactive Cluster'
-      WHEN u.billing_origin_product = 'SQL' THEN 'Manual - SQL Warehouse Query'
-      WHEN u.billing_origin_product = 'DLT' THEN 
-        IF(p.serverless, 'Automated - DLT Pipeline (Serverless)', 'Automated - DLT Pipeline')
-      WHEN u.billing_origin_product = 'LAKEFLOW_CONNECT' THEN 'Automated - Lakeflow Connect'
-      WHEN u.billing_origin_product = 'JOBS' AND u.job_run_id IS NOT NULL THEN 'Automated - Job Run'
-      WHEN u.is_serverless AND u.job_id IS NOT NULL THEN 'Serverless Job Compute'
+      -- Interactive cluster usage (personal notebook)
+      WHEN u.billing_origin_product = 'ALL_PURPOSE' 
+        THEN 'Manual - Personal Interactive Cluster'
+      
+      -- SQL Warehouse queries
+      WHEN u.billing_origin_product = 'SQL' 
+        THEN 'Manual - SQL Warehouse Query'
+      
+      -- DLT Pipelines
+      WHEN u.billing_origin_product = 'DLT' AND p.is_serverless_pipeline = TRUE 
+        THEN 'Automated - DLT Pipeline (Serverless)'
+      WHEN u.billing_origin_product = 'DLT' 
+        THEN 'Automated - DLT Pipeline'
+      
+      -- Lakeflow Connect
+      WHEN u.billing_origin_product = 'LAKEFLOW_CONNECT'
+        THEN 'Automated - Lakeflow Connect'
+      
+      -- Jobs with cron schedule
+      WHEN j.cron_schedule IS NOT NULL 
+        THEN 'Automated - Cron Scheduled Job'
+      WHEN j.trigger_type = 'CRON' 
+        THEN 'Automated - Cron Scheduled Job'
+      
+      -- Jobs with other trigger types
+      WHEN j.trigger_type = 'CONTINUOUS' 
+        THEN 'Automated - Continuous Job'
+      WHEN j.trigger_type = 'FILE_ARRIVAL' 
+        THEN 'Automated - File Arrival Trigger'
+      WHEN j.trigger_type IS NOT NULL 
+        THEN CONCAT('Automated - ', j.trigger_type)
+      
+      -- Jobs without schedule (manual or API triggered)
+      WHEN u.job_id IS NOT NULL AND j.cron_schedule IS NULL 
+        THEN 'Manual - Job Run (API/UI Triggered)'
+      
+      -- Serverless job compute
+      WHEN u.is_serverless = TRUE AND u.job_id IS NOT NULL 
+        THEN 'Manual - Serverless Job Compute'
+      
       ELSE 'Unknown'
     END AS how_was_it_triggered,
     
-    -- Job type instead of schedule
-    j.job_type,
+    j.cron_schedule,
+    j.schedule_timezone,
     
-    -- Node specs
+    -- =========================================================================
+    -- GOAL 6: NODE, WAREHOUSE, AND CLUSTER SIZE DETAILS
+    -- =========================================================================
+    
+    -- Node Details
     u.node_type AS node_type_used,
-    ns.core_count AS node_cores,
-    ns.memory_gb AS node_memory_gb,
+    node_specs.core_count AS node_cores,
+    node_specs.memory_gb AS node_memory_gb,
     
-    -- Cluster sizing
+    -- Cluster Size Details (for classic compute)
     c.driver_node_type,
-    ds.core_count AS driver_cores,
-    ds.memory_gb AS driver_memory_gb,
+    driver_specs.core_count AS driver_cores,
+    driver_specs.memory_gb AS driver_memory_gb,
     c.worker_node_type,
-    ws.core_count AS worker_cores,
-    ws.memory_gb AS worker_memory_gb,
-    c.num_workers AS fixed_worker_count,
+    worker_specs.core_count AS worker_cores,
+    worker_specs.memory_gb AS worker_memory_gb,
     
-    IF(c.min_autoscale_workers IS NOT NULL,
-      CONCAT(CAST(c.min_autoscale_workers AS STRING), ' to ', CAST(c.max_autoscale_workers AS STRING)),
-      NULL
-    ) AS autoscale_worker_range,
+    c.worker_count AS fixed_worker_count,
     
-    -- Cluster size summary
     CASE 
-      WHEN u.is_serverless THEN 'Serverless (auto-scaled)'
-      WHEN c.num_workers IS NOT NULL THEN 
-        CONCAT('Fixed: ', CAST(c.num_workers AS STRING), ' workers | Driver: ', 
-          COALESCE(c.driver_node_type, 'N/A'), ' | Workers: ', COALESCE(c.worker_node_type, 'N/A'))
+      WHEN c.min_autoscale_workers IS NOT NULL 
+        THEN CONCAT(c.min_autoscale_workers, ' to ', c.max_autoscale_workers)
+      ELSE NULL
+    END AS autoscale_worker_range,
+    
+    -- Total Cluster Capacity
+    CASE 
+      WHEN u.is_serverless = TRUE THEN 'Serverless (auto-scaled)'
+      WHEN c.worker_count IS NOT NULL THEN 
+        CONCAT(
+          'Fixed: ', c.worker_count, ' workers | ',
+          'Driver: ', COALESCE(c.driver_node_type, 'N/A'), ' (', COALESCE(driver_specs.core_count, 0), ' cores, ', COALESCE(driver_specs.memory_gb, 0), ' GB) | ',
+          'Workers: ', COALESCE(c.worker_node_type, 'N/A'), ' (', COALESCE(worker_specs.core_count, 0), ' cores, ', COALESCE(worker_specs.memory_gb, 0), ' GB each)'
+        )
       WHEN c.min_autoscale_workers IS NOT NULL THEN 
-        CONCAT('Autoscale: ', CAST(c.min_autoscale_workers AS STRING), '-', CAST(c.max_autoscale_workers AS STRING), 
-          ' workers | Driver: ', COALESCE(c.driver_node_type, 'N/A'), ' | Workers: ', COALESCE(c.worker_node_type, 'N/A'))
+        CONCAT(
+          'Autoscale: ', c.min_autoscale_workers, '-', c.max_autoscale_workers, ' workers | ',
+          'Driver: ', COALESCE(c.driver_node_type, 'N/A'), ' (', COALESCE(driver_specs.core_count, 0), ' cores, ', COALESCE(driver_specs.memory_gb, 0), ' GB) | ',
+          'Workers: ', COALESCE(c.worker_node_type, 'N/A'), ' (', COALESCE(worker_specs.core_count, 0), ' cores, ', COALESCE(worker_specs.memory_gb, 0), ' GB each)'
+        )
       ELSE 'Unknown Configuration'
     END AS cluster_size_details,
     
-    -- Total capacity
-    COALESCE(ds.core_count, 0) + 
-      (COALESCE(c.num_workers, c.max_autoscale_workers, 0) * COALESCE(ws.core_count, 0)) AS total_max_cores,
-    COALESCE(ds.memory_gb, 0) + 
-      (COALESCE(c.num_workers, c.max_autoscale_workers, 0) * COALESCE(ws.memory_gb, 0)) AS total_max_memory_gb,
+    COALESCE(driver_specs.core_count, 0) + 
+      (COALESCE(c.worker_count, c.max_autoscale_workers, 0) * COALESCE(worker_specs.core_count, 0)) 
+      AS total_max_cores,
     
-    -- Instance pool
+    COALESCE(driver_specs.memory_gb, 0) + 
+      (COALESCE(c.worker_count, c.max_autoscale_workers, 0) * COALESCE(worker_specs.memory_gb, 0)) 
+      AS total_max_memory_gb,
+    
+    -- Instance Pool Details
     u.instance_pool_id,
-    IF(u.instance_pool_id IS NOT NULL, 'Yes - Using Instance Pool', 'No - On-Demand/Serverless') AS uses_instance_pool,
+    CASE 
+      WHEN u.instance_pool_id IS NOT NULL THEN 'Yes - Using Instance Pool'
+      ELSE 'No - On-Demand/Serverless'
+    END AS uses_instance_pool,
     
-    -- Warehouse info
+    -- SQL Warehouse Details
     u.warehouse_id,
     wh.warehouse_name,
     wh.warehouse_type,
     wh.warehouse_size,
-    IF(wh.warehouse_id IS NOT NULL,
-      CONCAT('Type: ', COALESCE(wh.warehouse_type, 'N/A'), ' | Size: ', COALESCE(wh.warehouse_size, 'N/A')),
-      NULL
-    ) AS warehouse_details,
-    
-    -- Pipeline info
-    p.name AS pipeline_name,
-    p.pipeline_type,
-    p.creator_user_name AS pipeline_creator,
-    
-    -- Compute type
-    u.entity_type,
     CASE 
-      WHEN u.is_serverless THEN 'Serverless'
+      WHEN wh.warehouse_id IS NOT NULL THEN
+        CONCAT(
+          'Type: ', COALESCE(wh.warehouse_type, 'N/A'), ' | ',
+          'Size: ', COALESCE(wh.warehouse_size, 'N/A')
+        )
+      ELSE NULL
+    END AS warehouse_details,
+    
+    -- DLT Pipeline Details
+    p.pipeline_name,
+    p.pipeline_type,
+    p.pipeline_creator,
+    
+    -- =========================================================================
+    -- ADDITIONAL CONTEXT
+    -- =========================================================================
+    
+    -- Entity Type
+    u.entity_type,
+    
+    -- Compute Type
+    CASE 
+      WHEN u.is_serverless = TRUE THEN 'Serverless'
       WHEN u.instance_pool_id IS NOT NULL THEN 'Pool-based'
       WHEN u.warehouse_id IS NOT NULL THEN 'SQL Warehouse'
       ELSE 'On-Demand Cluster'
     END AS compute_type,
     
-    -- Identity & tags
+    -- Identity & Tags
     u.run_as,
     j.creator_user_name AS job_creator,
     u.custom_tags,
@@ -370,31 +459,47 @@ SELECT
 
 FROM usage_agg u
 
--- Dimension joins with workspace scoping
+-- =====================================================================================
+-- JOINS: Using workspace_id for proper scoping
+-- =====================================================================================
+
+-- Join to Jobs (with workspace scoping)
 LEFT JOIN most_recent_jobs j
   ON u.entity_type LIKE '%JOB%'
   AND u.workspace_id = j.workspace_id
   AND u.job_id = CAST(j.job_id AS STRING)
 
+-- Join to Pipelines (with workspace scoping)
 LEFT JOIN most_recent_pipelines p
   ON u.entity_type LIKE '%PIPELINE%'
   AND u.workspace_id = p.workspace_id
   AND u.dlt_pipeline_id = p.pipeline_id
 
-LEFT JOIN most_recent_clusters c
+-- Join to Clusters (with workspace scoping)
+LEFT JOIN most_recent_clusters c 
   ON u.cluster_id IS NOT NULL
   AND u.workspace_id = c.workspace_id
   AND u.cluster_id = c.cluster_id
 
+-- Join to Node Specs for usage node type
+LEFT JOIN node_specs 
+  ON u.node_type = node_specs.node_type
+
+-- Join to Node Specs for driver
+LEFT JOIN node_specs driver_specs 
+  ON c.driver_node_type = driver_specs.node_type
+
+-- Join to Node Specs for workers
+LEFT JOIN node_specs worker_specs 
+  ON c.worker_node_type = worker_specs.node_type
+
+-- Join to Warehouses (with workspace scoping)
 LEFT JOIN warehouse_info wh
   ON u.warehouse_id IS NOT NULL
   AND u.workspace_id = wh.workspace_id
   AND u.warehouse_id = wh.warehouse_id
 
--- Node specs joins (small tables - will be broadcast)
-LEFT JOIN node_specs ns ON u.node_type = ns.node_type
-LEFT JOIN node_specs ds ON c.driver_node_type = ds.node_type
-LEFT JOIN node_specs ws ON c.worker_node_type = ws.node_type
-
-ORDER BY u.total_list_cost DESC, u.execution_start_time DESC
+ORDER BY 
+  u.total_list_cost DESC, 
+  u.execution_start_time DESC
 LIMIT 100000;

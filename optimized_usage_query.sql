@@ -1,5 +1,5 @@
 -- =====================================================================================
--- OPTIMIZED USAGE QUERY
+-- OPTIMIZED USAGE QUERY (FIXED)
 -- Filter Parameters:
 --   Start Date: 2025-01-01
 --   End Date: 2026-01-28
@@ -16,8 +16,8 @@ WITH most_recent_jobs AS (
     name,
     creator_user_name,
     run_as,
-    schedule,
-    trigger
+    job_type,
+    tags
   FROM system.lakeflow.jobs
   WHERE workspace_id = 5244115429641560
   QUALIFY ROW_NUMBER() OVER (
@@ -49,13 +49,13 @@ most_recent_clusters AS (
     cluster_id,
     cluster_name,
     cluster_source,
-    owner,
-    dbr_version,
-    driver_node_type,
-    worker_node_type,
+    creator_user_name AS owner,
+    spark_version AS dbr_version,
+    driver_node_type_id AS driver_node_type,
+    node_type_id AS worker_node_type,
     num_workers,
-    min_autoscale_workers,
-    max_autoscale_workers
+    autoscale_min_workers AS min_autoscale_workers,
+    autoscale_max_workers AS max_autoscale_workers
   FROM system.compute.clusters
   WHERE workspace_id = 5244115429641560
   QUALIFY ROW_NUMBER() OVER (
@@ -68,9 +68,9 @@ warehouse_info AS (
   SELECT
     workspace_id,
     warehouse_id,
-    warehouse_name,
+    name AS warehouse_name,
     warehouse_type,
-    warehouse_size
+    cluster_size AS warehouse_size
   FROM system.compute.warehouses
   WHERE workspace_id = 5244115429641560
   QUALIFY ROW_NUMBER() OVER (
@@ -82,8 +82,8 @@ warehouse_info AS (
 -- Node specs - small table, will be broadcast
 node_specs AS (
   SELECT
-    node_type,
-    core_count,
+    node_type_id AS node_type,
+    num_cores AS core_count,
     memory_mb / 1024.0 AS memory_gb
   FROM system.compute.node_types
 ),
@@ -278,21 +278,20 @@ SELECT
     c.owner AS cluster_owner,
     c.dbr_version AS databricks_runtime,
     
-    -- Trigger type
+    -- Trigger type (simplified without schedule/trigger columns)
     CASE
       WHEN u.billing_origin_product = 'ALL_PURPOSE' THEN 'Manual - Personal Interactive Cluster'
       WHEN u.billing_origin_product = 'SQL' THEN 'Manual - SQL Warehouse Query'
       WHEN u.billing_origin_product = 'DLT' THEN 
         IF(p.serverless, 'Automated - DLT Pipeline (Serverless)', 'Automated - DLT Pipeline')
       WHEN u.billing_origin_product = 'LAKEFLOW_CONNECT' THEN 'Automated - Lakeflow Connect'
-      WHEN j.schedule IS NOT NULL THEN 'Automated - Scheduled Job'
-      WHEN j.trigger IS NOT NULL THEN 'Automated - Triggered Job'
-      WHEN u.job_id IS NOT NULL THEN 'Manual - Job Run (API/UI Triggered)'
-      WHEN u.is_serverless AND u.job_id IS NOT NULL THEN 'Manual - Serverless Job Compute'
+      WHEN u.billing_origin_product = 'JOBS' AND u.job_run_id IS NOT NULL THEN 'Automated - Job Run'
+      WHEN u.is_serverless AND u.job_id IS NOT NULL THEN 'Serverless Job Compute'
       ELSE 'Unknown'
     END AS how_was_it_triggered,
     
-    j.schedule AS job_schedule,
+    -- Job type instead of schedule
+    j.job_type,
     
     -- Node specs
     u.node_type AS node_type_used,

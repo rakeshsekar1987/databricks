@@ -1,0 +1,91 @@
+{
+  "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.16/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.16",
+  "version": "1.0.0",
+  "id": "{{BOT_ID}}",
+  "packageName": "com.company.timesheetreminder",
+  "developer": {
+    "name": "Your Company Name",
+    "websiteUrl": "https://your-company.com",
+    "privacyUrl": "https://your-company.com/privacy",
+    "termsOfUseUrl": "https://your-company.com/terms"
+  },
+  "name": {
+    "short": "Timesheet Reminder",
+    "full": "Timesheet Reminder Bot with SSO"
+  },
+  "description": {
+    "short": "Reminds you to complete your timesheet",
+    "full": "A Microsoft Teams bot that sends weekly reminders to complete your timesheet. Features include SSO authentication, manager notifications, and direct links to your timesheet system."
+  },
+  "icons": {
+    "color": "color.png",
+    "outline": "outline.png"
+  },
+  "accentColor": "#0078D4",
+  "bots": [
+    {
+      "botId": "{{BOT_ID}}",
+      "scopes": ["personal", "team", "groupChat"],
+      "supportsFiles": false,
+      "isNotificationOnly": false,
+      "commandLists": [
+        {
+          "scopes": ["personal"],
+          "commands": [
+            {
+              "title": "status",
+              "description": "Check your current timesheet status"
+            },
+            {
+              "title": "remind",
+              "description": "Send yourself a reminder preview"
+            },
+            {
+              "title": "subscribe",
+              "description": "Subscribe to weekly reminders"
+            },
+            {
+              "title": "unsubscribe",
+              "description": "Unsubscribe from reminders"
+            },
+            {
+              "title": "settings",
+              "description": "Configure your reminder preferences"
+            },
+            {
+              "title": "help",
+              "description": "Show available commands"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "permissions": ["identity", "messageTeamMembers"],
+  "validDomains": ["{{BOT_DOMAIN}}", "token.botframework.com", "login.microsoftonline.com"],
+  "webApplicationInfo": {
+    "id": "{{AAD_APP_CLIENT_ID}}",
+    "resource": "api://{{BOT_DOMAIN}}/{{AAD_APP_CLIENT_ID}}"
+  },
+  "authorization": {
+    "permissions": {
+      "resourceSpecific": [
+        {
+          "name": "User.Read.All",
+          "type": "Application"
+        },
+        {
+          "name": "User.ReadBasic.All",
+          "type": "Delegated"
+        }
+      ]
+    }
+  },
+  "showLoadingIndicator": true,
+  "defaultInstallScope": "personal",
+  "defaultGroupCapability": {
+    "groupChat": "bot",
+    "team": "bot"
+  }
+}

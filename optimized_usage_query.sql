@@ -1,14 +1,9 @@
 -- =====================================================================================
 -- OPTIMIZED USAGE QUERY
--- Performance optimizations applied:
--- 1. Use QUALIFY instead of subquery for deduplication (more efficient)
--- 2. Reduce columns in intermediate CTEs (column pruning)
--- 3. Push filters early (predicate pushdown)
--- 4. Combine CTEs where possible
--- 5. Use broadcast hints for small dimension tables
--- 6. Avoid redundant CASE statements
--- 7. Optimize GROUP BY with minimal columns
--- 8. Use EXISTS instead of IS NOT NULL where beneficial
+-- Filter Parameters:
+--   Start Date: 2025-01-01
+--   End Date: 2026-01-28
+--   Workspace ID: 5244115429641560
 -- =====================================================================================
 
 -- =====================================================================================
@@ -24,6 +19,7 @@ WITH most_recent_jobs AS (
     schedule,
     trigger
   FROM system.lakeflow.jobs
+  WHERE workspace_id = 5244115429641560
   QUALIFY ROW_NUMBER() OVER (
     PARTITION BY workspace_id, job_id
     ORDER BY change_time DESC
@@ -40,6 +36,7 @@ most_recent_pipelines AS (
     run_as,
     serverless
   FROM system.lakeflow.pipelines
+  WHERE workspace_id = 5244115429641560
   QUALIFY ROW_NUMBER() OVER (
     PARTITION BY workspace_id, pipeline_id
     ORDER BY change_time DESC
@@ -60,6 +57,7 @@ most_recent_clusters AS (
     min_autoscale_workers,
     max_autoscale_workers
   FROM system.compute.clusters
+  WHERE workspace_id = 5244115429641560
   QUALIFY ROW_NUMBER() OVER (
     PARTITION BY workspace_id, cluster_id
     ORDER BY change_time DESC
@@ -74,6 +72,7 @@ warehouse_info AS (
     warehouse_type,
     warehouse_size
   FROM system.compute.warehouses
+  WHERE workspace_id = 5244115429641560
   QUALIFY ROW_NUMBER() OVER (
     PARTITION BY workspace_id, warehouse_id
     ORDER BY change_time DESC
@@ -90,7 +89,7 @@ node_specs AS (
 ),
 
 -- =====================================================================================
--- USAGE DATA: Filter early, aggregate efficiently
+-- USAGE DATA: Filter early with specific workspace and date range
 -- =====================================================================================
 usage_base AS (
   SELECT
@@ -132,7 +131,7 @@ usage_base AS (
     -- Tags
     u.custom_tags,
     
-    -- Workspace info (joined early for filter)
+    -- Workspace info
     w.workspace_name,
     w.workspace_url
     
@@ -140,13 +139,15 @@ usage_base AS (
   LEFT JOIN system.access.workspaces_latest w
     ON u.workspace_id = w.workspace_id
   WHERE
+    -- Workspace filter (specific workspace)
+    u.workspace_id = 5244115429641560
     -- Product filter (include all relevant products)
-    (
+    AND (
       u.billing_origin_product IN ('JOBS', 'DLT', 'LAKEFLOW_CONNECT')
       OR (u.billing_origin_product = 'SQL' AND u.usage_metadata.dlt_pipeline_id IS NOT NULL)
     )
     -- Date filter - CRITICAL for partition pruning
-    AND u.usage_date BETWEEN :param_start_date AND :param_end_date
+    AND u.usage_date BETWEEN '2025-01-01' AND '2026-01-28'
 ),
 
 -- =====================================================================================
@@ -212,29 +213,21 @@ SELECT
     u.sku_name,
 
     -- Entity URL
-    COALESCE(
-      CONCAT('<a href="', u.workspace_url, 
-        CASE 
-          WHEN u.job_id IS NOT NULL THEN CONCAT('/jobs/', u.job_id)
-          WHEN u.dlt_pipeline_id IS NOT NULL THEN CONCAT('/pipelines/', u.dlt_pipeline_id)
-          WHEN u.warehouse_id IS NOT NULL THEN CONCAT('/sql/warehouses/', u.warehouse_id)
-          WHEN u.cluster_id IS NOT NULL THEN CONCAT('/compute/clusters/', u.cluster_id)
-        END,
-        '" target="_blank">',
-        COALESCE(
-          j.name, 
-          u.job_name_from_usage, 
-          p.name, 
-          wh.warehouse_name, 
-          c.cluster_name,
-          u.job_id,
-          u.dlt_pipeline_id,
-          u.warehouse_id,
-          u.cluster_id
-        ),
-        '</a>'
-      )
-    ) AS entity_url,
+    CASE 
+      WHEN u.job_id IS NOT NULL THEN 
+        CONCAT('<a href="', u.workspace_url, '/jobs/', u.job_id, '" target="_blank">', 
+               COALESCE(j.name, u.job_name_from_usage, u.job_id), '</a>')
+      WHEN u.dlt_pipeline_id IS NOT NULL THEN 
+        CONCAT('<a href="', u.workspace_url, '/pipelines/', u.dlt_pipeline_id, '" target="_blank">', 
+               COALESCE(p.name, u.dlt_pipeline_id), '</a>')
+      WHEN u.warehouse_id IS NOT NULL THEN 
+        CONCAT('<a href="', u.workspace_url, '/sql/warehouses/', u.warehouse_id, '" target="_blank">', 
+               COALESCE(wh.warehouse_name, u.warehouse_id), '</a>')
+      WHEN u.cluster_id IS NOT NULL THEN 
+        CONCAT('<a href="', u.workspace_url, '/compute/clusters/', u.cluster_id, '" target="_blank">', 
+               COALESCE(c.cluster_name, u.cluster_id), '</a>')
+      ELSE NULL
+    END AS entity_url,
 
     -- Cost metrics
     ROUND(u.total_list_cost, 2) AS total_list_cost_usd,
@@ -250,10 +243,10 @@ SELECT
       ELSE
         CONCAT(
           IF(FLOOR((UNIX_TIMESTAMP(u.execution_end_time) - UNIX_TIMESTAMP(u.execution_start_time)) / 86400) > 0,
-            CONCAT(FLOOR((UNIX_TIMESTAMP(u.execution_end_time) - UNIX_TIMESTAMP(u.execution_start_time)) / 86400), 'd '), ''),
+            CONCAT(CAST(FLOOR((UNIX_TIMESTAMP(u.execution_end_time) - UNIX_TIMESTAMP(u.execution_start_time)) / 86400) AS STRING), 'd '), ''),
           IF(FLOOR(MOD((UNIX_TIMESTAMP(u.execution_end_time) - UNIX_TIMESTAMP(u.execution_start_time)), 86400) / 3600) > 0,
-            CONCAT(FLOOR(MOD((UNIX_TIMESTAMP(u.execution_end_time) - UNIX_TIMESTAMP(u.execution_start_time)), 86400) / 3600), 'h '), ''),
-          CAST(FLOOR(MOD((UNIX_TIMESTAMP(u.execution_end_time) - UNIX_TIMESTAMP(u.execution_start_time)), 3600) / 60) AS INT), 'm'
+            CONCAT(CAST(FLOOR(MOD((UNIX_TIMESTAMP(u.execution_end_time) - UNIX_TIMESTAMP(u.execution_start_time)), 86400) / 3600) AS STRING), 'h '), ''),
+          CAST(FLOOR(MOD((UNIX_TIMESTAMP(u.execution_end_time) - UNIX_TIMESTAMP(u.execution_start_time)), 3600) / 60) AS STRING), 'm'
         )
     END AS execution_time_formatted,
     u.execution_start_time,
@@ -301,7 +294,7 @@ SELECT
     
     j.schedule AS job_schedule,
     
-    -- Node specs (using broadcast join hint)
+    -- Node specs
     u.node_type AS node_type_used,
     ns.core_count AS node_cores,
     ns.memory_gb AS node_memory_gb,
@@ -316,7 +309,7 @@ SELECT
     c.num_workers AS fixed_worker_count,
     
     IF(c.min_autoscale_workers IS NOT NULL,
-      CONCAT(c.min_autoscale_workers, ' to ', c.max_autoscale_workers),
+      CONCAT(CAST(c.min_autoscale_workers AS STRING), ' to ', CAST(c.max_autoscale_workers AS STRING)),
       NULL
     ) AS autoscale_worker_range,
     
@@ -324,10 +317,10 @@ SELECT
     CASE 
       WHEN u.is_serverless THEN 'Serverless (auto-scaled)'
       WHEN c.num_workers IS NOT NULL THEN 
-        CONCAT('Fixed: ', c.num_workers, ' workers | Driver: ', 
+        CONCAT('Fixed: ', CAST(c.num_workers AS STRING), ' workers | Driver: ', 
           COALESCE(c.driver_node_type, 'N/A'), ' | Workers: ', COALESCE(c.worker_node_type, 'N/A'))
       WHEN c.min_autoscale_workers IS NOT NULL THEN 
-        CONCAT('Autoscale: ', c.min_autoscale_workers, '-', c.max_autoscale_workers, 
+        CONCAT('Autoscale: ', CAST(c.min_autoscale_workers AS STRING), '-', CAST(c.max_autoscale_workers AS STRING), 
           ' workers | Driver: ', COALESCE(c.driver_node_type, 'N/A'), ' | Workers: ', COALESCE(c.worker_node_type, 'N/A'))
       ELSE 'Unknown Configuration'
     END AS cluster_size_details,

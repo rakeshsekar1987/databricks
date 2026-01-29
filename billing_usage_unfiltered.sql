@@ -1,162 +1,176 @@
--- Unfiltered billing usage query
+-- Optimized Unfiltered Billing Usage Query
 -- Workspace ID: 5244115429641560
 -- Date range: 2025-01-01 to 2026-01-28
 
-WITH usage_with_restrictions AS (
+WITH 
+-- Step 1: Get usage data with only required columns (avoid SELECT *)
+usage_base AS (
   SELECT
-    t1.*,
-    t2.workspace_name,
-    t2.workspace_url,
-    concat_ws(
-      " ",
-      CASE
-        WHEN product_features.is_serverless THEN "SERVERLESS"
-        ELSE ""
-      END,
-      CASE
-        WHEN billing_origin_product = "JOBS" THEN "JOB"
-        ELSE "PIPELINE"
-      END
-    ) as entity_type
-  FROM
-    system.billing.usage t1 
-    LEFT JOIN system.access.workspaces_latest t2 USING (workspace_id)
-  WHERE
-    (
-      billing_origin_product IN ("JOBS", "DLT", "LAKEFLOW_CONNECT")
-      OR (
-        billing_origin_product = "SQL"
-        AND usage_metadata.dlt_pipeline_id IS NOT NULL
-      )
-    )
+    workspace_id,
+    cloud,
+    sku_name,
+    usage_quantity,
+    usage_start_time,
+    usage_end_time,
+    usage_metadata.job_id,
+    usage_metadata.job_run_id,
+    usage_metadata.dlt_pipeline_id,
+    usage_metadata.job_name,
+    identity_metadata.run_as,
+    custom_tags,
+    product_features.is_serverless,
+    billing_origin_product
+  FROM system.billing.usage
+  WHERE 
+    workspace_id = 5244115429641560
     AND usage_date BETWEEN '2025-01-01' AND '2026-01-28'
-    AND workspace_id = 5244115429641560
+    AND (
+      billing_origin_product IN ('JOBS', 'DLT', 'LAKEFLOW_CONNECT')
+      OR (billing_origin_product = 'SQL' AND usage_metadata.dlt_pipeline_id IS NOT NULL)
+    )
 ),
-list_cost_per_job AS (
+
+-- Step 2: Pre-filter list prices to reduce join size
+filtered_prices AS (
+  SELECT 
+    cloud,
+    sku_name,
+    price_start_time,
+    price_end_time,
+    pricing.default as unit_price
+  FROM system.billing.list_prices
+  WHERE price_start_time <= '2026-01-28'
+    AND (price_end_time >= '2025-01-01' OR price_end_time IS NULL)
+),
+
+-- Step 3: Calculate costs per entity with optimized entity_type
+list_cost_per_entity AS (
   SELECT
-    t1.workspace_id,
-    t1.workspace_name,
-    t1.workspace_url,
-    entity_type,
-    coalesce(
-      t1.usage_metadata.job_id,
-      t1.usage_metadata.dlt_pipeline_id
-    ) as entity_id,
-    CASE
-      WHEN entity_type RLIKE "JOB" THEN COUNT(DISTINCT usage_metadata.job_run_id)
-      ELSE COUNT(DISTINCT usage_metadata.dlt_pipeline_id)
-    END as runs,
-    SUM(t1.usage_quantity * list_prices.pricing.default) as list_cost,
-    first(identity_metadata.run_as, true) as run_as,
-    first(t1.custom_tags, true) as custom_tags,
-    first(usage_metadata.job_name, true) as name,
-    MAX(t1.usage_end_time) as last_seen_date
-  FROM
-    usage_with_restrictions t1
-    INNER JOIN system.billing.list_prices list_prices 
-      ON t1.cloud = list_prices.cloud
-      AND t1.sku_name = list_prices.sku_name
-      AND t1.usage_start_time >= list_prices.price_start_time
-      AND (
-        t1.usage_end_time <= list_prices.price_end_time
-        OR list_prices.price_end_time IS NULL
-      )
-  GROUP BY
-    ALL
+    u.workspace_id,
+    -- Simplified entity_type: use boolean flag for faster comparisons later
+    u.is_serverless,
+    (u.billing_origin_product = 'JOBS') as is_job,
+    COALESCE(u.job_id, u.dlt_pipeline_id) as entity_id,
+    -- Conditional aggregation based on entity type
+    COUNT(DISTINCT CASE WHEN u.billing_origin_product = 'JOBS' THEN u.job_run_id END) as job_runs,
+    COUNT(DISTINCT CASE WHEN u.billing_origin_product != 'JOBS' THEN u.dlt_pipeline_id END) as pipeline_runs,
+    SUM(u.usage_quantity * p.unit_price) as list_cost,
+    MAX(u.run_as) as run_as,
+    MAX(u.custom_tags) as custom_tags,
+    MAX(u.job_name) as name,
+    MAX(u.usage_end_time) as last_seen_date
+  FROM usage_base u
+  INNER JOIN filtered_prices p 
+    ON u.cloud = p.cloud
+    AND u.sku_name = p.sku_name
+    AND u.usage_start_time >= p.price_start_time
+    AND (u.usage_end_time <= p.price_end_time OR p.price_end_time IS NULL)
+  GROUP BY 
+    u.workspace_id,
+    u.is_serverless,
+    u.billing_origin_product = 'JOBS',
+    COALESCE(u.job_id, u.dlt_pipeline_id)
 ),
+
+-- Step 4: Get most recent jobs (filtered by workspace early)
 most_recent_jobs AS (
   SELECT
-    *,
-    ROW_NUMBER() OVER(
-      PARTITION BY workspace_id, job_id
-      ORDER BY change_time DESC
-    ) as rn
-  FROM
-    system.lakeflow.jobs 
-  QUALIFY rn = 1
+    workspace_id,
+    job_id,
+    name,
+    run_as
+  FROM (
+    SELECT
+      workspace_id,
+      job_id,
+      name,
+      run_as,
+      ROW_NUMBER() OVER(PARTITION BY workspace_id, job_id ORDER BY change_time DESC) as rn
+    FROM system.lakeflow.jobs
+    WHERE workspace_id = 5244115429641560
+  )
+  WHERE rn = 1
 ),
+
+-- Step 5: Get most recent pipelines (filtered by workspace early)
 most_recent_pipelines AS (
   SELECT
-    *,
-    ROW_NUMBER() OVER(
-      PARTITION BY workspace_id, pipeline_id
-      ORDER BY change_time DESC
-    ) as rn
-  FROM
-    system.lakeflow.pipelines 
-  QUALIFY rn = 1
+    workspace_id,
+    pipeline_id,
+    name,
+    run_as
+  FROM (
+    SELECT
+      workspace_id,
+      pipeline_id,
+      name,
+      run_as,
+      ROW_NUMBER() OVER(PARTITION BY workspace_id, pipeline_id ORDER BY change_time DESC) as rn
+    FROM system.lakeflow.pipelines
+    WHERE workspace_id = 5244115429641560
+  )
+  WHERE rn = 1
 ),
-output AS (
+
+-- Step 6: Combine with job/pipeline metadata
+enriched_data AS (
   SELECT
-    t1.workspace_id,
-    t1.workspace_name,
-    t1.workspace_url,
-    t1.entity_type,
-    coalesce(t3.name, t2.name, t1.name) as name,
-    t1.entity_id,
-    runs,
-    coalesce(t1.run_as, t2.run_as, t3.run_as) as run_as,
-    t1.custom_tags,
-    SUM(list_cost) as list_cost,
-    t1.last_seen_date
-  FROM
-    list_cost_per_job t1
-    LEFT JOIN most_recent_jobs t2 ON (
-      t1.entity_type LIKE "%JOB%"
-      AND t1.workspace_id = t2.workspace_id
-      AND t1.entity_id = t2.job_id
-    )
-    LEFT JOIN most_recent_pipelines t3 ON (
-      t1.entity_type LIKE "%PIPELINE%"
-      AND t1.workspace_id = t3.workspace_id
-      AND t1.entity_id = t3.pipeline_id
-    )
-  GROUP BY
-    ALL
-  ORDER BY
-    list_cost DESC
+    c.workspace_id,
+    c.is_serverless,
+    c.is_job,
+    CONCAT_WS(' ', 
+      IF(c.is_serverless, 'SERVERLESS', ''), 
+      IF(c.is_job, 'JOB', 'PIPELINE')
+    ) as entity_type,
+    c.entity_id,
+    IF(c.is_job, c.job_runs, c.pipeline_runs) as runs,
+    COALESCE(p.name, j.name, c.name) as name,
+    COALESCE(c.run_as, j.run_as, p.run_as) as run_as,
+    c.custom_tags,
+    c.list_cost,
+    c.last_seen_date
+  FROM list_cost_per_entity c
+  LEFT JOIN most_recent_jobs j 
+    ON c.is_job 
+    AND c.workspace_id = j.workspace_id 
+    AND c.entity_id = j.job_id
+  LEFT JOIN most_recent_pipelines p 
+    ON NOT c.is_job 
+    AND c.workspace_id = p.workspace_id 
+    AND c.entity_id = p.pipeline_id
+),
+
+-- Step 7: Get workspace info (single lookup)
+workspace_info AS (
+  SELECT workspace_id, workspace_name, workspace_url
+  FROM system.access.workspaces_latest
+  WHERE workspace_id = 5244115429641560
 )
+
+-- Final output with HTML formatting
 SELECT
-  coalesce(
-    CONCAT(
-      "<a href='",
-      workspace_url,
-      "' target='_blank'>",
-      workspace_name,
-      "</a>"
-    ), 
-    CAST(workspace_id AS STRING)
+  COALESCE(
+    CONCAT('<a href="', w.workspace_url, '" target="_blank">', w.workspace_name, '</a>'),
+    CAST(e.workspace_id AS STRING)
   ) as workspace,
-  CASE 
-    WHEN entity_type LIKE '%JOB%' THEN 
-      CONCAT(
-        "<a href='",
-        workspace_url,
-        "/jobs/",
-        entity_id,
-        "' target='_blank'>",
-        COALESCE(name, entity_id),
-        "</a>"
-      )
-    ELSE
-      CONCAT(
-        "<a href='", 
-        workspace_url, 
-        "/pipelines/",
-        entity_id,
-        "' target='_blank'>",
-        COALESCE(name, entity_id),
-        "</a>"
-      )
-  END as entity_url,
-  workspace_id,
-  entity_type,
-  name,
-  entity_id,
-  runs,
-  run_as,
-  custom_tags,
-  list_cost,
-  last_seen_date
-FROM output
-ORDER BY list_cost DESC;
+  CONCAT(
+    '<a href="', 
+    w.workspace_url, 
+    IF(e.is_job, '/jobs/', '/pipelines/'),
+    e.entity_id,
+    '" target="_blank">',
+    COALESCE(e.name, e.entity_id),
+    '</a>'
+  ) as entity_url,
+  e.workspace_id,
+  e.entity_type,
+  e.name,
+  e.entity_id,
+  e.runs,
+  e.run_as,
+  e.custom_tags,
+  e.list_cost,
+  e.last_seen_date
+FROM enriched_data e
+LEFT JOIN workspace_info w ON e.workspace_id = w.workspace_id
+ORDER BY e.list_cost DESC;

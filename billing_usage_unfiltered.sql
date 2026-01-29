@@ -132,9 +132,10 @@ output AS (
     t1.runs,
     -- Run_as: coalesce(usage.run_as, job.run_as, pipeline.run_as) - matches original order
     COALESCE(t1.run_as, t2.run_as, t3.run_as) as run_as,
-    t1.custom_tags,
+    -- Use FIRST() for custom_tags since MAP types cannot be used in GROUP BY
+    FIRST(t1.custom_tags) as custom_tags,
     SUM(t1.list_cost) as list_cost,
-    t1.last_seen_date
+    MAX(t1.last_seen_date) as last_seen_date
   FROM list_cost_per_entity t1
   LEFT JOIN most_recent_jobs t2 ON (
     t1.entity_type LIKE '%JOB%'
@@ -146,7 +147,13 @@ output AS (
     AND t1.workspace_id = t3.workspace_id
     AND t1.entity_id = t3.pipeline_id
   )
-  GROUP BY ALL
+  GROUP BY
+    t1.workspace_id,
+    t1.entity_type,
+    COALESCE(t3.name, t2.name, t1.name),
+    t1.entity_id,
+    t1.runs,
+    COALESCE(t1.run_as, t2.run_as, t3.run_as)
   ORDER BY list_cost DESC
 )
 

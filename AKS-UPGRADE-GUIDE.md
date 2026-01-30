@@ -22,6 +22,7 @@ This guide covers all precautions and steps to ensure a successful upgrade.
 6. [Upgrade Execution](#6-upgrade-execution)
 7. [Post-Upgrade Validation](#7-post-upgrade-validation)
 8. [Rollback Strategy](#8-rollback-strategy)
+9. [What Happens to DNS and Pods During Upgrade](#9-what-happens-to-dns-and-pods-during-upgrade)
 
 ---
 
@@ -506,6 +507,211 @@ Use this checklist before each minor version upgrade:
 
 ---
 
+## 9. What Happens to DNS and Pods During Upgrade
+
+### 9.1 Pod Behavior During Upgrade
+
+During an AKS upgrade, nodes are upgraded one at a time using a **cordon and drain** process:
+
+#### The Upgrade Process for Each Node:
+
+```
+1. New node with new version is created (surge node)
+2. Old node is CORDONED (marked unschedulable - no new pods)
+3. Old node is DRAINED (existing pods are evicted)
+4. Pods are rescheduled to other nodes (including the new surge node)
+5. Old node is deleted
+6. Process repeats for next node
+```
+
+#### What This Means for Your Pods:
+
+| Scenario | What Happens |
+|----------|--------------|
+| **Stateless pods (Deployments)** | Pods are terminated and recreated on other nodes. Brief interruption per pod. |
+| **Stateful pods (StatefulSets)** | Pods are drained gracefully, PVs are reattached on new node. Longer interruption. |
+| **DaemonSet pods** | Recreated automatically on each new node |
+| **Pods without replicas** | **DOWNTIME** - Single replica pods will be unavailable during node drain |
+| **Pods with PodDisruptionBudget** | Drain respects PDB - won't evict if it violates the budget |
+
+#### Pod Disruption Timeline:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ Node A (being upgraded)                                         │
+├─────────────────────────────────────────────────────────────────┤
+│ [Running] → [Terminating] → [Deleted]                           │
+│            ↓                                                    │
+│            Pod receives SIGTERM                                 │
+│            ↓                                                    │
+│            terminationGracePeriodSeconds (default 30s)          │
+│            ↓                                                    │
+│            Pod forcefully killed if not stopped                 │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ Node B (available node or new surge node)                       │
+├─────────────────────────────────────────────────────────────────┤
+│ [Pending] → [ContainerCreating] → [Running]                     │
+│            ↓                                                    │
+│            Image pull (if not cached)                           │
+│            ↓                                                    │
+│            Readiness probe must pass                            │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 9.2 DNS Behavior During Upgrade
+
+#### CoreDNS (Cluster DNS) During Upgrade:
+
+CoreDNS runs as a Deployment in `kube-system` namespace with typically 2+ replicas.
+
+| Component | Impact |
+|-----------|--------|
+| **CoreDNS pods** | May be rescheduled during upgrade, but replicas ensure availability |
+| **DNS resolution** | Should remain available if you have multiple CoreDNS replicas |
+| **Service discovery** | Continues to work as long as at least one CoreDNS pod is running |
+
+```bash
+# Check CoreDNS replicas before upgrade
+kubectl get deployment coredns -n kube-system
+
+# Ensure you have at least 2 replicas
+kubectl scale deployment coredns -n kube-system --replicas=2
+```
+
+#### What Happens to DNS Records:
+
+| DNS Type | During Upgrade |
+|----------|----------------|
+| **Kubernetes Service DNS** | Service ClusterIP remains stable. DNS records (`my-svc.my-namespace.svc.cluster.local`) continue to work |
+| **Pod DNS** | Pod IPs change when pods are recreated. Headless service DNS updates automatically |
+| **External DNS** | No impact - Azure DNS zones are external to the cluster |
+| **Ingress/LoadBalancer DNS** | External IPs remain stable. No DNS changes needed |
+
+#### Potential DNS Issues:
+
+```bash
+# Issue: DNS resolution temporarily fails
+# Cause: All CoreDNS pods on same node being drained
+
+# Prevention: Use pod anti-affinity for CoreDNS
+kubectl get deployment coredns -n kube-system -o yaml | grep -A20 affinity
+
+# Issue: Stale DNS cache in pods
+# Cause: Pods cache DNS responses
+
+# Solution: Configure appropriate DNS TTL in CoreDNS
+kubectl get configmap coredns -n kube-system -o yaml
+```
+
+### 9.3 Ensuring Zero/Minimal Downtime
+
+#### For Pods:
+
+```yaml
+# 1. Always run multiple replicas
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-app
+spec:
+  replicas: 3  # Minimum 2 for HA during upgrades
+  
+---
+# 2. Configure PodDisruptionBudget
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: my-app-pdb
+spec:
+  minAvailable: 2  # Or use maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: my-app
+
+---
+# 3. Use pod anti-affinity to spread across nodes
+spec:
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchLabels:
+              app: my-app
+          topologyKey: kubernetes.io/hostname
+```
+
+#### For DNS:
+
+```bash
+# Ensure CoreDNS has multiple replicas spread across nodes
+kubectl get pods -n kube-system -l k8s-app=kube-dns -o wide
+
+# Verify CoreDNS PodDisruptionBudget exists
+kubectl get pdb -n kube-system
+```
+
+### 9.4 Handling Stateful Applications
+
+For databases and stateful workloads:
+
+```bash
+# 1. Check StatefulSet pod distribution
+kubectl get pods -l app=my-database -o wide
+
+# 2. Verify PVC bindings
+kubectl get pvc -l app=my-database
+
+# 3. For databases, consider:
+#    - Putting primary in maintenance mode
+#    - Failing over to replica before upgrade
+#    - Taking backups before each node drain
+```
+
+### 9.5 What Remains Unchanged
+
+| Component | Status During Upgrade |
+|-----------|----------------------|
+| **Service ClusterIPs** | Unchanged |
+| **LoadBalancer External IPs** | Unchanged |
+| **Ingress External IPs** | Unchanged |
+| **PersistentVolumes** | Unchanged (reattached to new pods) |
+| **ConfigMaps/Secrets** | Unchanged |
+| **Azure DNS Zones** | Unchanged (external to cluster) |
+| **Network Policies** | Unchanged |
+
+### 9.6 Monitoring During Upgrade
+
+```bash
+# Watch pod status
+kubectl get pods --all-namespaces -w
+
+# Monitor DNS resolution
+kubectl run dns-test --image=busybox --rm -it --restart=Never -- nslookup kubernetes.default
+
+# Check for DNS errors in CoreDNS logs
+kubectl logs -n kube-system -l k8s-app=kube-dns --tail=100 -f
+
+# Monitor service endpoints
+kubectl get endpoints --all-namespaces -w
+```
+
+### 9.7 Pre-Upgrade DNS and Pod Checklist
+
+- [ ] CoreDNS has at least 2 replicas
+- [ ] CoreDNS pods are spread across different nodes
+- [ ] All critical deployments have 2+ replicas
+- [ ] PodDisruptionBudgets configured for critical workloads
+- [ ] Pod anti-affinity rules spread pods across nodes
+- [ ] Readiness probes configured correctly
+- [ ] Graceful shutdown handlers implemented in applications
+- [ ] Stateful applications have proper drain handling
+
+---
+
 ## Troubleshooting Common Issues
 
 ### Issue 1: Upgrade Stuck or Failing
@@ -545,6 +751,56 @@ kubectl get pods -n kube-system -l k8s-app=azure-cni
 
 # Restart network pods if needed
 kubectl rollout restart daemonset azure-cni -n kube-system
+```
+
+### Issue 4: DNS Resolution Failures
+
+```bash
+# Check CoreDNS pods are running
+kubectl get pods -n kube-system -l k8s-app=kube-dns
+
+# Check CoreDNS logs for errors
+kubectl logs -n kube-system -l k8s-app=kube-dns --tail=100
+
+# Test DNS resolution from a pod
+kubectl run dns-debug --image=busybox:1.28 --rm -it --restart=Never -- nslookup kubernetes.default
+
+# Restart CoreDNS if needed
+kubectl rollout restart deployment coredns -n kube-system
+
+# Check CoreDNS endpoints
+kubectl get endpoints kube-dns -n kube-system
+```
+
+### Issue 5: Pods Stuck in Terminating State
+
+```bash
+# Find stuck pods
+kubectl get pods --all-namespaces | grep Terminating
+
+# Check why pod is stuck (finalizers, volume unmount, etc.)
+kubectl describe pod <pod-name> -n <namespace>
+
+# Force delete if necessary (use with caution)
+kubectl delete pod <pod-name> -n <namespace> --force --grace-period=0
+
+# Check for stuck PV/PVC
+kubectl get pv | grep -v Bound
+kubectl get pvc --all-namespaces | grep -v Bound
+```
+
+### Issue 6: Service Endpoints Not Updating
+
+```bash
+# Check endpoints for a service
+kubectl get endpoints <service-name> -n <namespace>
+
+# Verify pod labels match service selector
+kubectl get pods -n <namespace> --show-labels
+kubectl get svc <service-name> -n <namespace> -o yaml | grep -A5 selector
+
+# Force endpoint refresh by restarting pods
+kubectl rollout restart deployment <deployment-name> -n <namespace>
 ```
 
 ---

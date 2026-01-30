@@ -22,7 +22,8 @@ from datetime import datetime
 from excel_reader import ExcelReader
 from excel_to_json_transformer import (
     ExcelToJSONTransformer,
-    KRIMaster
+    KRIMaster,
+    get_output_file_names
 )
 
 
@@ -39,14 +40,14 @@ SHEET_CONFIG = {
     'kri_master': ['KRI Master', 'KRI_Master', 'KRIMaster']  # Optional
 }
 
-# Output file names
-OUTPUT_FILES = {
-    'json1': 'validations_combined.json',
-    'json2': 'kri_details.json',
-    'json3': 'fund_kri_status.json',
-    'json4': 'strategy_kri_count.json',
-    'json5': 'kri_simple.json'
-}
+# Note: Output file names are now dynamically generated from Card Name
+# Using get_output_file_names() function from excel_to_json_transformer
+# Example: Card "12/31/2024 Canada Annual" generates:
+#   - JSON 1: 2024-12-31CanadaAnnual.json
+#   - JSON 2: 2024-12-31CanadaAnnualkri.json
+#   - JSON 3: 2024-12-31CanadaAnnualkri-fund.json
+#   - JSON 4: 2024-12-31CanadaAnnualstrategy.json
+#   - JSON 5: 2024-12-31CanadaAnnualkri-simple.json
 
 
 # =============================================================================
@@ -286,18 +287,46 @@ def run_transformation(input_file: str, output_folder: str, verbose: bool = True
     if verbose:
         print("  Transformation complete!")
     
-    # Write output files
+    # Get card names for dynamic file naming
+    # File names are auto-generated from Cards tab using Card Name column
+    # For each Card Name, 5 files are created with the card name as prefix
+    card_names = []
+    for card_record in cards_data:
+        card_name = card_record.get('Card Name', '')
+        if card_name and card_name not in card_names:
+            card_names.append(card_name)
+    
+    if not card_names:
+        # Fallback if no card names found
+        card_names = ['output']
+    
+    # Write output files for each card
     if verbose:
         print("\nStep 4: Writing output files...")
+        print(f"  Cards found: {len(card_names)}")
+        print(f"  Files per card: 5")
+        print(f"  Total files to create: {len(card_names) * 5}")
     
-    output_paths = {}
-    for key, filename in OUTPUT_FILES.items():
-        output_path = os.path.join(output_folder, filename)
-        with open(output_path, 'w', encoding='utf-8') as f:
-            f.write(outputs[key])
-        output_paths[key] = output_path
+    all_output_paths = {}
+    
+    for card_name in card_names:
+        # Generate dynamic file names based on Card Name
+        file_names = get_output_file_names(card_name)
+        
         if verbose:
-            print(f"    {filename}")
+            print(f"\n  Card: {card_name}")
+        
+        card_outputs = {}
+        for key in ['json1', 'json2', 'json3', 'json4', 'json5']:
+            filename = file_names[key]
+            output_path = os.path.join(output_folder, filename)
+            with open(output_path, 'w', encoding='utf-8') as f:
+                f.write(outputs[key])
+            card_outputs[key] = output_path
+            if verbose:
+                print(f"    • {filename}")
+        
+        all_output_paths[card_name] = card_outputs
     
     # Print summary
     end_time = datetime.now()
@@ -309,8 +338,12 @@ def run_transformation(input_file: str, output_folder: str, verbose: bool = True
         print("=" * 80)
         print(f"\nDuration: {duration:.2f} seconds")
         print(f"\nOutput files created in: {output_folder}")
-        for key, path in output_paths.items():
-            print(f"  • {OUTPUT_FILES[key]}")
+        
+        for card_name in card_names:
+            file_names = get_output_file_names(card_name)
+            print(f"\n  {card_name}:")
+            for key in ['json1', 'json2', 'json3', 'json4', 'json5']:
+                print(f"    • {file_names[key]}")
         
         # Print statistics
         json1 = json.loads(outputs['json1'])
@@ -322,7 +355,7 @@ def run_transformation(input_file: str, output_folder: str, verbose: bool = True
         print(f"  Unique KRI Types: {len(json2['data']['kriDetails'])}")
         print(f"  Funds Processed: {len(json3['data']['fundKriStatusCount'])}")
     
-    return output_paths
+    return all_output_paths
 
 
 # =============================================================================

@@ -323,7 +323,7 @@ def get_output_file_names(card_name: str) -> Dict[str, str]:
     Get all 5 output file names for a given card.
     
     File names are auto-generated from Card Name column in Cards tab.
-    For each Card Name, 5 files are created with the card name as prefix.
+    For each Card Name, 5 files are created with the card name as prefix/suffix.
     
     Card Name: "12/31/2024 Canada Annual"
     Output files:
@@ -334,6 +334,9 @@ def get_output_file_names(card_name: str) -> Dict[str, str]:
     - JSON 5: 2024-12-31CanadaAnnualkri-simple.json (KRI Simple Details)
     
     Note: If you have 2 cards, 10 output files will be created (5 per card).
+    
+    IMPORTANT: JSON 1 and JSON 5 have slightly different names to prevent overwriting.
+    JSON 5 uses 'kri-simple' suffix to differentiate from JSON 1.
     """
     base = generate_file_name_from_card(card_name, "")
     base_without_ext = base.replace(".json", "")

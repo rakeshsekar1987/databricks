@@ -104,24 +104,25 @@ class QAValidator:
             'Status': 'In-Cycle'
         }])
         
-        # Load Funds
+        # Load Funds - Group_New is used directly for the group field
+        # (Not derived from Fund ID_New suffix)
         self.transformer.load_funds([
             {'#': 23, 'Trust': 'Canada', 'Trust_New': 'Canada', 
              'Fund': 'PIMCO Monthly Income Fund (Canada)', 'Fund ID': 'HD2C', 
              'Fund Name_New': 'Income Strategy Fund', 'Fund ID_New': 'CAN1',
-             'Group': 'H', 'Group_New': 'A', 
+             'Group': 'H', 'Group_New': 'A',  # Group_New = A
              'Book': 'PIMCO Monthly Income Fund (Canada)', 'Book_New': 'Income Strategy Fund', 
              'Fund Type': 'Canada'},
             {'#': 24, 'Trust': 'Canada', 'Trust_New': 'Canada', 
              'Fund': 'PIMCO Monthly Enhanced Income Fund', 'Fund ID': 'HEWM', 
              'Fund Name_New': 'Credit Income Fund', 'Fund ID_New': 'CAN2',
-             'Group': 'H', 'Group_New': 'A', 
+             'Group': 'H', 'Group_New': 'B',  # Group_New = B (business-provided)
              'Book': 'Canada CEF', 'Book_New': 'Credit Income Fund', 
              'Fund Type': 'Canada'},
             {'#': 25, 'Trust': 'Canada', 'Trust_New': 'Canada', 
              'Fund': 'PIMCO Canada Canadian CorePLUS Bond Trust', 'Fund ID': 'HDW1', 
              'Fund Name_New': 'International Bond Trust', 'Fund ID_New': 'CAN3',
-             'Group': 'G', 'Group_New': 'A', 
+             'Group': 'G', 'Group_New': 'C',  # Group_New = C (business-provided)
              'Book': 'Canada Trust', 'Book_New': 'International Bond Trust', 
              'Fund Type': 'Canada'}
         ])
@@ -300,7 +301,7 @@ class QAValidator:
         
         # Cross-referenced fields from Funds tab
         self.assert_equal(v['trust'], 'Canada', 'trust (from Trust_New)', ctx)
-        self.assert_equal(v['group'], 'C', 'group (derived from CAN3→3→C)', ctx)
+        self.assert_equal(v['group'], 'C', 'group (from Group_New for CAN3)', ctx)
         self.assert_equal(v['book'], 'International Bond Trust', 'book (from Book_New)', ctx)
         
         # Direct from Validations Excel
@@ -365,7 +366,7 @@ class QAValidator:
         
         # Cross-referenced fields
         self.assert_equal(v['trust'], 'Canada', 'trust', ctx)
-        self.assert_equal(v['group'], 'B', 'group (derived from CAN2→2→B)', ctx)
+        self.assert_equal(v['group'], 'B', 'group (from Group_New for CAN2)', ctx)
         self.assert_equal(v['book'], 'Credit Income Fund', 'book', ctx)
         
         # Direct from Excel
@@ -431,7 +432,7 @@ class QAValidator:
         ctx = 'JSON1-V4'
         
         self.assert_equal(v['fund'], 'CAN3', 'fund', ctx)
-        self.assert_equal(v['group'], 'C', 'group (derived from CAN3)', ctx)
+        self.assert_equal(v['group'], 'C', 'group (from Group_New for CAN3)', ctx)
         self.assert_equal(v['book'], 'International Bond Trust', 'book', ctx)
         self.assert_equal(v['validation'], 'Effective Leverage: Year Over Year Change', 'validation', ctx)
         self.assert_equal(v['controlValue'], 0.02, 'controlValue', ctx)

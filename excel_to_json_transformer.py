@@ -322,12 +322,18 @@ def get_output_file_names(card_name: str) -> Dict[str, str]:
     """
     Get all 5 output file names for a given card.
     
-    Returns a dictionary with:
-    - json1: Combined validations
-    - json2: KRI details
-    - json3: Fund KRI status count
-    - json4: Strategy KRI count
-    - json5: KRI simple details
+    File names are auto-generated from Card Name column in Cards tab.
+    For each Card Name, 5 files are created with the card name as prefix.
+    
+    Card Name: "12/31/2024 Canada Annual"
+    Output files:
+    - JSON 1: 2024-12-31CanadaAnnual.json (Combined Validations)
+    - JSON 2: 2024-12-31CanadaAnnualkri.json (KRI Details)
+    - JSON 3: 2024-12-31CanadaAnnualkri-fund.json (Fund KRI Status Count)
+    - JSON 4: 2024-12-31CanadaAnnualstrategy.json (Strategy KRI Count)
+    - JSON 5: 2024-12-31CanadaAnnualkri-simple.json (KRI Simple Details)
+    
+    Note: If you have 2 cards, 10 output files will be created (5 per card).
     """
     base = generate_file_name_from_card(card_name, "")
     base_without_ext = base.replace(".json", "")
@@ -337,7 +343,7 @@ def get_output_file_names(card_name: str) -> Dict[str, str]:
         "json2": f"{base_without_ext}kri.json",
         "json3": f"{base_without_ext}kri-fund.json",
         "json4": f"{base_without_ext}strategy.json",
-        "json5": f"{base_without_ext}-krisimple.json"  # Or could be same as json1
+        "json5": f"{base_without_ext}kri-simple.json"
     }
 
 
@@ -1225,32 +1231,62 @@ class ExcelToJSONTransformer:
             self.kri_mapping_service
         )
         
+        # Get file names from Card Name
+        file_names = self.get_file_names()
+        
         return {
             "json1": json1_builder.to_json(),
             "json2": json2_builder.to_json(),
             "json3": json3_builder.to_json(),
             "json4": json4_builder.to_json(),
-            "json5": json5_builder.to_json()
+            "json5": json5_builder.to_json(),
+            "file_names": file_names  # Include file names for reference
         }
     
+    def get_card_name(self) -> str:
+        """Get the card name for file naming."""
+        if self.cards:
+            return self.cards[0].card_name
+        return ""
+    
+    def get_file_names(self) -> Dict[str, str]:
+        """
+        Get output file names based on Card Name.
+        File names are auto-generated from the Cards tab Card Name column.
+        """
+        card_name = self.get_card_name()
+        return get_output_file_names(card_name)
+    
     def save_outputs(self, output_dir: str = "."):
-        """Transform and save all JSON outputs to files."""
+        """
+        Transform and save all JSON outputs to files.
+        
+        File names are auto-generated from Card Name column in Cards tab.
+        For each Card Name, 5 files are created with the card name as prefix.
+        
+        Example for Card Name "12/31/2024 Canada Annual":
+        - 2024-12-31CanadaAnnual.json
+        - 2024-12-31CanadaAnnualkri.json
+        - 2024-12-31CanadaAnnualkri-fund.json
+        - 2024-12-31CanadaAnnualstrategy.json
+        - 2024-12-31CanadaAnnualkri-simple.json
+        """
         outputs = self.transform()
         
-        file_names = {
-            "json1": "validations_combined.json",
-            "json2": "kri_details.json",
-            "json3": "fund_kri_status.json",
-            "json4": "strategy_kri_count.json",
-            "json5": "kri_simple.json"
-        }
+        # Get file names from Card Name
+        file_names = self.get_file_names()
         
         import os
+        saved_files = []
         for key, json_str in outputs.items():
-            file_path = os.path.join(output_dir, file_names[key])
+            file_name = file_names.get(key, f"{key}.json")
+            file_path = os.path.join(output_dir, file_name)
             with open(file_path, 'w') as f:
                 f.write(json_str)
+            saved_files.append(file_path)
             print(f"Saved {file_path}")
+        
+        return saved_files
     
     def print_relationship_summary(self):
         """Print a summary of discovered data relationships."""

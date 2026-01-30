@@ -1,0 +1,38 @@
+.control-tower-module { padding: 16px; }
+.module-info { margin-bottom: 24px; padding: 16px; background: linear-gradient(135deg, #3182ce 0%, #2b6cb0 100%); border-radius: 8px; color: white; }
+.module-info-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.module-info-header h2 { margin: 0; font-size: 1.5rem; }
+.version-badge { background: rgba(255, 255, 255, 0.2); padding: 4px 12px; border-radius: 20px; font-size: 0.875rem; font-weight: 500; }
+.module-description { margin: 0; opacity: 0.9; }
+
+.dashboard { display: flex; flex-direction: column; gap: 24px; }
+.dashboard section { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1); }
+.dashboard section h3 { margin: 0 0 16px 0; color: #2d3748; font-size: 1.25rem; }
+.section-description { color: #718096; margin: -8px 0 16px 0; font-size: 0.9rem; }
+
+.metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
+.metric-card { display: flex; align-items: center; gap: 16px; padding: 16px; background: #f7fafc; border-radius: 8px; border: 1px solid #e2e8f0; }
+.metric-icon { font-size: 2rem; }
+.metric-content h4 { margin: 0; color: #718096; font-size: 0.875rem; font-weight: 500; }
+.metric-value { font-size: 1.5rem; font-weight: 600; color: #2d3748; }
+.metric-change { font-size: 0.875rem; font-weight: 500; }
+.metric-change.positive { color: #38a169; }
+.metric-change.negative { color: #e53e3e; }
+.metric-change.neutral { color: #718096; }
+
+.modules-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+.module-status-card { display: flex; align-items: flex-start; gap: 12px; padding: 16px; background: #f7fafc; border-radius: 8px; border: 1px solid #e2e8f0; }
+.status-indicator { width: 12px; height: 12px; border-radius: 50%; margin-top: 4px; }
+.status-indicator.healthy { background: #38a169; }
+.status-indicator.warning { background: #ed8936; }
+.status-indicator.error { background: #e53e3e; }
+.module-status-content h4 { margin: 0 0 8px 0; color: #2d3748; }
+.module-meta { display: flex; gap: 12px; font-size: 0.875rem; color: #718096; margin-bottom: 4px; }
+.module-meta span { background: #edf2f7; padding: 2px 8px; border-radius: 4px; }
+.last-deployed { font-size: 0.75rem; color: #a0aec0; }
+
+.benefits-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
+.benefit-card { text-align: center; padding: 20px; background: linear-gradient(135deg, #667eea20 0%, #764ba220 100%); border-radius: 8px; border: 1px solid #e9d8fd; }
+.benefit-icon { font-size: 2rem; display: block; margin-bottom: 8px; }
+.benefit-card h4 { margin: 0 0 8px 0; color: #553c9a; font-size: 1rem; }
+.benefit-card p { margin: 0; color: #718096; font-size: 0.875rem; }

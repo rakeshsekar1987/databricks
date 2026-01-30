@@ -1,0 +1,120 @@
+name: Control Tower Module CI/CD
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'apps/control-tower/**'
+      - 'packages/shared-library/**'
+      - '.github/workflows/control-tower.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/control-tower/**'
+      - 'packages/shared-library/**'
+
+env:
+  NODE_VERSION: '18'
+  PNPM_VERSION: '8'
+  APP_NAME: control-tower
+  AG_GRID_VERSION: '31.0.0'
+
+jobs:
+  build:
+    name: Build Control Tower Module
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared library
+        run: pnpm --filter @platform/shared-library build
+
+      - name: Lint
+        run: pnpm --filter @platform/${{ env.APP_NAME }} lint
+
+      - name: Type check
+        run: pnpm --filter @platform/${{ env.APP_NAME }} typecheck
+
+      - name: Run tests
+        run: pnpm --filter @platform/${{ env.APP_NAME }} test
+
+      - name: Build module
+        run: pnpm --filter @platform/${{ env.APP_NAME }} build
+        env:
+          NODE_ENV: production
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.APP_NAME }}-dist
+          path: apps/${{ env.APP_NAME }}/dist
+          retention-days: 7
+
+  publish:
+    name: Publish to JFrog
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.APP_NAME }}-dist
+          path: dist
+
+      - name: Setup JFrog CLI
+        uses: jfrog/setup-jfrog-cli@v3
+
+      - name: Get version
+        id: version
+        run: echo "VERSION=$(date +%Y%m%d%H%M%S)-${GITHUB_SHA::8}" >> $GITHUB_OUTPUT
+
+      - name: Publish to JFrog
+        run: |
+          jfrog config add --url=${{ secrets.JFROG_URL }} \
+            --user=${{ secrets.JFROG_USER }} \
+            --password=${{ secrets.JFROG_PASSWORD }} \
+            --interactive=false
+          jfrog rt upload "dist/*" \
+            "ui-modules/${{ env.APP_NAME }}/${{ steps.version.outputs.VERSION }}/"
+
+  deploy:
+    name: Deploy to CDN
+    needs: publish
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    environment: production
+    
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.APP_NAME }}-dist
+          path: dist
+
+      - name: Deploy to Azure Blob Storage
+        uses: azure/CLI@v1
+        with:
+          inlineScript: |
+            az storage blob upload-batch \
+              --account-name ${{ secrets.AZURE_STORAGE_ACCOUNT }} \
+              --destination '$web/${{ env.APP_NAME }}' \
+              --source dist \
+              --overwrite

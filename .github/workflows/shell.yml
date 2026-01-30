@@ -1,0 +1,150 @@
+name: Shell Application CI/CD
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'apps/shell/**'
+      - 'packages/shared-library/**'
+      - '.github/workflows/shell.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/shell/**'
+      - 'packages/shared-library/**'
+
+env:
+  NODE_VERSION: '18'
+  PNPM_VERSION: '8'
+  APP_NAME: shell
+
+jobs:
+  build:
+    name: Build Shell Application
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared library
+        run: pnpm --filter @platform/shared-library build
+
+      - name: Lint
+        run: pnpm --filter @platform/${{ env.APP_NAME }} lint
+
+      - name: Type check
+        run: pnpm --filter @platform/${{ env.APP_NAME }} typecheck
+
+      - name: Run tests
+        run: pnpm --filter @platform/${{ env.APP_NAME }} test
+
+      - name: Build application
+        run: pnpm --filter @platform/${{ env.APP_NAME }} build
+        env:
+          NODE_ENV: production
+          # Module URLs for production
+          REGREPORTING_URL: ${{ vars.REG_REPORTING_CDN_URL }}
+          FINANCIALREPORTING_URL: ${{ vars.FINANCIAL_REPORTING_CDN_URL }}
+          EXPENSEREPORTING_URL: ${{ vars.EXPENSE_REPORTING_CDN_URL }}
+          TAXREPORTING_URL: ${{ vars.TAX_REPORTING_CDN_URL }}
+          CONTROLTOWER_URL: ${{ vars.CONTROL_TOWER_CDN_URL }}
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: shell-dist
+          path: apps/shell/dist
+          retention-days: 7
+
+  publish:
+    name: Publish to JFrog
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: shell-dist
+          path: dist
+
+      - name: Setup JFrog CLI
+        uses: jfrog/setup-jfrog-cli@v3
+        with:
+          version: latest
+
+      - name: Configure JFrog
+        run: |
+          jfrog config add --url=${{ secrets.JFROG_URL }} \
+            --user=${{ secrets.JFROG_USER }} \
+            --password=${{ secrets.JFROG_PASSWORD }} \
+            --interactive=false
+
+      - name: Get version
+        id: version
+        run: echo "VERSION=$(date +%Y%m%d%H%M%S)-${GITHUB_SHA::8}" >> $GITHUB_OUTPUT
+
+      - name: Publish to JFrog
+        run: |
+          jfrog rt upload "dist/*" \
+            "ui-modules/shell/${{ steps.version.outputs.VERSION }}/" \
+            --build-name="${{ env.APP_NAME }}" \
+            --build-number="${{ steps.version.outputs.VERSION }}"
+
+  deploy:
+    name: Deploy to CDN/K8s
+    needs: publish
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    environment: production
+    
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: shell-dist
+          path: dist
+
+      - name: Deploy to Azure Blob Storage (CDN)
+        uses: azure/CLI@v1
+        with:
+          inlineScript: |
+            az storage blob upload-batch \
+              --account-name ${{ secrets.AZURE_STORAGE_ACCOUNT }} \
+              --destination '$web/shell' \
+              --source dist \
+              --overwrite
+
+      - name: Purge CDN cache
+        uses: azure/CLI@v1
+        with:
+          inlineScript: |
+            az cdn endpoint purge \
+              --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
+              --profile-name ${{ secrets.AZURE_CDN_PROFILE }} \
+              --name ${{ secrets.AZURE_CDN_ENDPOINT }} \
+              --content-paths '/shell/*'
+
+      - name: Notify deployment
+        if: always()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          text: 'Shell application deployment ${{ job.status }}'
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}

@@ -1,0 +1,43 @@
+# Shell Application Dockerfile
+# Multi-stage build for production optimization
+
+# Build stage
+FROM node:18-alpine AS builder
+
+WORKDIR /app
+
+# Install pnpm
+RUN corepack enable && corepack prepare pnpm@8.15.0 --activate
+
+# Copy workspace configuration
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
+COPY packages/shared-library/package.json ./packages/shared-library/
+COPY apps/shell/package.json ./apps/shell/
+
+# Install dependencies
+RUN pnpm install --frozen-lockfile
+
+# Copy source files
+COPY packages/shared-library ./packages/shared-library
+COPY apps/shell ./apps/shell
+
+# Build shared library and shell
+RUN pnpm --filter @platform/shared-library build
+RUN pnpm --filter @platform/shell build
+
+# Production stage
+FROM nginx:alpine AS production
+
+# Copy custom nginx configuration
+COPY infrastructure/docker/nginx/shell.conf /etc/nginx/conf.d/default.conf
+
+# Copy built assets
+COPY --from=builder /app/apps/shell/dist /usr/share/nginx/html
+
+# Add health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost/ || exit 1
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]

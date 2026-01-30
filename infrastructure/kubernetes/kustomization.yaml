@@ -1,0 +1,23 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: ui-platform
+
+resources:
+  - namespace.yaml
+  - shell-deployment.yaml
+  # Module deployments are generated from template
+
+configMapGenerator:
+  - name: module-registry-config
+    literals:
+      - SHELL_URL=https://ui.example.com
+      - REG_REPORTING_URL=https://modules.example.com/reg-reporting
+      - FINANCIAL_REPORTING_URL=https://modules.example.com/financial-reporting
+      - EXPENSE_REPORTING_URL=https://modules.example.com/expense-reporting
+      - TAX_REPORTING_URL=https://modules.example.com/tax-reporting
+      - CONTROL_TOWER_URL=https://modules.example.com/control-tower
+
+commonLabels:
+  app.kubernetes.io/part-of: ui-platform
+  app.kubernetes.io/managed-by: kustomize

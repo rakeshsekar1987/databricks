@@ -1,0 +1,51 @@
+# Generic Module Dockerfile
+# Use with build args: MODULE_NAME (e.g., reg-reporting, tax-reporting)
+
+ARG MODULE_NAME
+
+# Build stage
+FROM node:18-alpine AS builder
+
+ARG MODULE_NAME
+
+WORKDIR /app
+
+# Install pnpm
+RUN corepack enable && corepack prepare pnpm@8.15.0 --activate
+
+# Copy workspace configuration
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
+COPY packages/shared-library/package.json ./packages/shared-library/
+COPY apps/${MODULE_NAME}/package.json ./apps/${MODULE_NAME}/
+
+# Install dependencies
+RUN pnpm install --frozen-lockfile
+
+# Copy source files
+COPY packages/shared-library ./packages/shared-library
+COPY apps/${MODULE_NAME} ./apps/${MODULE_NAME}
+
+# Build shared library and module
+RUN pnpm --filter @platform/shared-library build
+RUN pnpm --filter @platform/${MODULE_NAME} build
+
+# Production stage - serve static files
+FROM nginx:alpine AS production
+
+ARG MODULE_NAME
+
+# Copy custom nginx configuration
+COPY infrastructure/docker/nginx/module.conf /etc/nginx/conf.d/default.conf
+
+# Copy built assets
+COPY --from=builder /app/apps/${MODULE_NAME}/dist /usr/share/nginx/html
+
+# Add CORS headers for module federation
+RUN sed -i 's/MODULE_NAME_PLACEHOLDER/'${MODULE_NAME}'/g' /etc/nginx/conf.d/default.conf
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost/remoteEntry.js || exit 1
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]

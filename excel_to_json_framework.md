@@ -21,7 +21,15 @@ This framework defines the transformation rules for converting Excel data into 5
 
 | Tab | Purpose | Key Columns |
 |-----|---------|-------------|
-| **KRI Master** | Pre-defined KRI IDs and thresholds | KRI ID, KRI Name, Validation ID |
+| **KRI Master** | Pre-defined KRI IDs, thresholds, and risk levels | KRI ID, KRI Name, Validation ID, Risk, Threshold, Risk Thresholds |
+
+**KRI Master Columns:**
+- `KRI ID`: Unique identifier for the KRI (e.g., "KRI_1", "KRI_6")
+- `KRI Name`: Name matching Validations-KRI.Validation column
+- `Validation ID`: Pre-defined validation ID
+- `Threshold`: Business-provided threshold rules as JSON (e.g., `{"High": ">30%","Medium": ">=15% and <30%","Low":"<15%"}`)
+- `Risk`: Business-provided risk level (NOT calculated) - e.g., "Low", "Medium", "High"
+- `Risk Thresholds`: Business-provided risk threshold definitions as JSON (e.g., `{"Green": "<2%", "Yellow": "2% - 5%", "Red": ">5%"}`)
 
 ---
 
@@ -124,7 +132,7 @@ Validations-KRI ────────┘
 | **fundDetails[].fundCode** | Validations-KRI.Fund | Direct from Excel |
 | **fundDetails[].fundName** | Funds.Book_New | Cross-reference |
 | **fundDetails[].result** | Validations-KRI.BPS Impact | As string |
-| **fundDetails[].risk** | Calculated | Based on BPS thresholds |
+| **fundDetails[].risk** | KRI Master.Risk | Business-provided (NOT calculated from BPS) |
 | **fundDetails[].validationStatus** | Validations-KRI.Validation Status | Direct from Excel |
 | **fundDetails[].valuesUsedInFormula** | KRI Variables 1-5 | Build JSON |
 
@@ -171,17 +179,27 @@ for each fund in Funds:
     kriStatusCount[fund] = COUNT(Validations_KRI WHERE Fund == fund.Fund_ID_New)
 ```
 
-### Risk Calculation (JSON 2)
+### Risk (JSON 2) - Business-Provided
+
+**IMPORTANT**: Risk is NOT calculated from BPS Impact. It is provided by the business team in the KRI Master sheet.
+
 ```python
-def calculate_risk(bps_impact):
-    bps = abs(bps_impact)
-    if bps >= 30:
-        return "High"
-    elif bps >= 15:
-        return "Medium"
-    else:
-        return "Low"
+def get_risk(kri_name, kri_master):
+    # Look up risk from business-provided KRI Master data
+    # Returns the Risk column value for this KRI
+    kri = find_kri_by_name(kri_master, kri_name)
+    if kri:
+        return kri['Risk']  # Business-provided value (e.g., "Low", "Medium", "High")
+    return ''  # No hardcoded default
 ```
+
+**Example Business Mapping:**
+- BPS Impact = 0 → "Medium" (business decision, not calculated)
+- Risk Thresholds: `{"Green": "<2%", "Yellow": "2% - 5%", "Red": ">5%"}`
+
+The business team provides:
+- `Risk`: The risk level for each KRI (e.g., "Low", "Medium", "High")
+- `Risk Thresholds`: JSON string defining threshold rules (optional)
 
 ### Group Letter Derivation
 ```python
@@ -288,7 +306,7 @@ def build_values_used_in_formula(row):
 | Control Value | controlValue | Numeric |
 | FS Value | fsValue | Numeric (parse commas) |
 | Variance | variance | Numeric |
-| BPS Impact | bpsImpact | Numeric, used for risk calc |
+| BPS Impact | bpsImpact | Numeric, result field in fundDetails (risk is business-provided) |
 | Auto / Manual | autoManual | Processing type |
 | Validation Source | validationSource | Source system |
 | Validation Type | validationType | Type classification |
@@ -308,8 +326,10 @@ def build_values_used_in_formula(row):
 | KRI ID | kriId | Pre-defined KRI identifier |
 | KRI Name | - | Must match Validations.Validation |
 | KRI Desc | kriDesc | KRI description |
-| Threshold | threshold | JSON threshold definition |
+| Threshold | threshold | JSON threshold definition (business-provided) |
 | Validation ID | validationId | Pre-defined validation ID |
+| Risk | fundDetails[].risk | Business-provided risk level (NOT calculated from BPS) |
+| Risk Thresholds | - | Business-provided risk threshold definitions (JSON) |
 
 ---
 
@@ -317,10 +337,15 @@ def build_values_used_in_formula(row):
 
 1. **No Hardcoded Mappings**: All mappings come from data
 2. **Cross-Reference by Keys**: Use Fund ID_New and Card Name as keys
-3. **Derive Don't Configure**: Group letters derived from Fund ID pattern
-4. **Optional Master Data**: KRI Master provides consistency but is optional
-5. **Order Matters**: KRI IDs generated based on order encountered
+3. **Business-Provided Values**: Risk, threshold, and group come from Excel data (not calculated)
+4. **Optional Master Data**: KRI Master provides KRI IDs, thresholds, and risk levels
+5. **Order Matters**: KRI IDs generated based on order encountered (if no KRI Master)
 6. **Consistent IDs**: Same validation uses same ID across all JSONs
+
+### What is Business-Provided (NOT Calculated):
+- **Group**: Comes from `Group_New` column in Funds tab
+- **Threshold**: Comes from `Threshold` column in KRI Master
+- **Risk**: Comes from `Risk` column in KRI Master (NOT calculated from BPS Impact)
 
 ---
 

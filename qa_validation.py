@@ -126,17 +126,23 @@ class QAValidator:
              'Fund Type': 'Canada'}
         ])
         
-        # Load KRI Master
+        # Load KRI Master - Risk is business-provided, NOT calculated from BPS
         self.transformer.load_kri_master([
             {'KRI ID': 'KRI_1', 'KRI Name': 'Interest Expense versus Average Borrowings', 
              'KRI Desc': '', 'Threshold': '{"High": ">30%","Medium": ">=15% and <30%","Low":"<15%"}', 
-             'Validation ID': '999991'},
+             'Validation ID': '999991',
+             'Risk': 'Medium',  # Business-provided (not calculated from BPS 1.53)
+             'Risk Thresholds': '{"Green": "<2%", "Yellow": "2% - 5%", "Red": ">5%"}'},
             {'KRI ID': 'KRI_6', 'KRI Name': 'Defaulted Securities Review', 
              'KRI Desc': '', 'Threshold': '{"High": ">30%","Medium": ">=15% and <30%","Low":"<15%"}', 
-             'Validation ID': '999996'},
+             'Validation ID': '999996',
+             'Risk': 'Medium',  # Business-provided (BPS 0 mapped to Medium by business)
+             'Risk Thresholds': '{"Green": "<2%", "Yellow": "2% - 5%", "Red": ">5%"}'},
             {'KRI ID': 'KRI_9A', 'KRI Name': 'Effective Leverage: Year Over Year Change', 
              'KRI Desc': '', 'Threshold': '{"High": ">30%","Medium": ">=15% and <30%","Low":"<15%"}', 
-             'Validation ID': '999999'}
+             'Validation ID': '999999',
+             'Risk': 'High',  # Business-provided
+             'Risk Thresholds': '{"Green": "<2%", "Yellow": "2% - 5%", "Red": ">5%"}'}
         ])
         
         # Load Validations - TRIMMED
@@ -474,7 +480,7 @@ class QAValidator:
         self.assert_equal(fd1['fundName'], 'Credit Income Fund', 'kri1.fundDetails[0].fundName (from Book_New)', ctx)
         self.assert_equal(fd1['validationStatus'], 'Passed', 'kri1.fundDetails[0].validationStatus', ctx)
         self.assert_equal(fd1['validationId'], '999991', 'kri1.fundDetails[0].validationId', ctx)
-        self.assert_equal(fd1['risk'], 'Low', 'kri1.fundDetails[0].risk (BPS 1.53 < 15)', ctx)
+        self.assert_equal(fd1['risk'], 'Medium', 'kri1.fundDetails[0].risk (business-provided from KRI Master)', ctx)
         self.assert_equal(fd1['result'], '1.53', 'kri1.fundDetails[0].result', ctx)
         
         # KRI 2: Defaulted Securities
@@ -485,7 +491,7 @@ class QAValidator:
         fd2 = kri2['fundDetails'][0]
         self.assert_equal(fd2['fundCode'], 'CAN2', 'kri2.fundDetails[0].fundCode', ctx)
         self.assert_equal(fd2['fundName'], 'Credit Income Fund', 'kri2.fundDetails[0].fundName', ctx)
-        self.assert_equal(fd2['risk'], 'Low', 'kri2.fundDetails[0].risk (BPS 0 < 15)', ctx)
+        self.assert_equal(fd2['risk'], 'Medium', 'kri2.fundDetails[0].risk (business-provided: BPS 0 mapped to Medium)', ctx)
         self.assert_equal(fd2['validationId'], '999996', 'kri2.fundDetails[0].validationId', ctx)
         
         # KRI 3: Effective Leverage
@@ -496,7 +502,7 @@ class QAValidator:
         fd3 = kri3['fundDetails'][0]
         self.assert_equal(fd3['fundCode'], 'CAN3', 'kri3.fundDetails[0].fundCode', ctx)
         self.assert_equal(fd3['fundName'], 'International Bond Trust', 'kri3.fundDetails[0].fundName (from Book_New)', ctx)
-        self.assert_equal(fd3['risk'], 'High', 'kri3.fundDetails[0].risk (BPS 116.87 >= 30)', ctx)
+        self.assert_equal(fd3['risk'], 'High', 'kri3.fundDetails[0].risk (business-provided from KRI Master)', ctx)
         self.assert_equal(fd3['validationId'], '999999', 'kri3.fundDetails[0].validationId', ctx)
         
         print()

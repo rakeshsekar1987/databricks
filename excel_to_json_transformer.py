@@ -54,14 +54,24 @@ class Fund:
 class KRIMaster:
     """
     Represents a KRI Master record (optional Excel tab for KRI definitions).
-    The threshold field contains the business-defined threshold rules as a JSON string.
-    Example: '{"High": ">30%", "Medium": ">=15% and <30%", "Low": "<15%"}'
+    
+    Business-provided fields:
+    - threshold: The threshold rules as a JSON string
+      Example: '{"High": ">30%", "Medium": ">=15% and <30%", "Low": "<15%"}'
+    - risk: The risk level for this KRI (e.g., "Low", "Medium", "High")
+    - risk_thresholds: Risk thresholds as a JSON string
+      Example: '{"Green": "<2%", "Yellow": "2% - 5%", "Red": ">5%"}'
+    
+    Note: Both risk and risk_thresholds are provided by the business team,
+    NOT calculated from BPS Impact.
     """
     kri_id: str
     kri_name: str
     kri_desc: str
     threshold: str  # Dynamic threshold from business - JSON string
     validation_id: str
+    risk: str = ""  # Business-provided risk level (not calculated)
+    risk_thresholds: str = ""  # Business-provided risk threshold definitions
 
 
 @dataclass
@@ -374,6 +384,42 @@ class KRIMappingService:
                 return str(threshold).strip()
         return ""
     
+    def get_kri_risk(self, validation_name: str, fund_code: str = "") -> str:
+        """
+        Get risk level from KRI Master data.
+        
+        The risk is provided by the business team, NOT calculated from BPS Impact.
+        The business team maps each KRI (and optionally per fund) to a risk level.
+        
+        Args:
+            validation_name: The KRI name (Validation column)
+            fund_code: Optional fund code for fund-specific risk (future enhancement)
+        
+        Returns:
+            Business-provided risk level (e.g., "Low", "Medium", "High") 
+            or empty string if not found.
+        """
+        if validation_name in self._kri_master_index:
+            risk = self._kri_master_index[validation_name].risk
+            if risk and str(risk).strip():
+                return str(risk).strip()
+        return ""
+    
+    def get_kri_risk_thresholds(self, validation_name: str) -> str:
+        """
+        Get risk thresholds definition from KRI Master data.
+        
+        The risk thresholds are provided by the business team.
+        Example: '{"Green": "<2%", "Yellow": "2% - 5%", "Red": ">5%"}'
+        
+        Returns empty string if not found.
+        """
+        if validation_name in self._kri_master_index:
+            risk_thresholds = self._kri_master_index[validation_name].risk_thresholds
+            if risk_thresholds and str(risk_thresholds).strip():
+                return str(risk_thresholds).strip()
+        return ""
+    
     def get_all_kri_names(self) -> List[str]:
         """Get all registered KRI names in order."""
         return self._kri_order.copy()
@@ -412,13 +458,21 @@ class ValidationIDService:
 
 
 # =============================================================================
-# Risk Calculator - Data-Driven Thresholds
+# Risk Calculator - DEPRECATED (Risk is now business-provided)
 # =============================================================================
 
 class RiskCalculator:
     """
-    Calculate risk level based on BPS impact.
-    Thresholds can be configured or derived from data.
+    DEPRECATED: Risk level is now provided by the business team, not calculated.
+    
+    The business team provides risk mappings in the KRI Master sheet.
+    For example: BPS Impact = 0 can be mapped to "Medium" risk by business rules.
+    
+    Risk thresholds are also business-provided:
+    Example: {"Green": "<2%", "Yellow": "2% - 5%", "Red": ">5%"}
+    
+    This class is kept for backward compatibility but should not be used
+    for new implementations. Use KRIMappingService.get_kri_risk() instead.
     """
     
     def __init__(self, high_threshold: float = 30.0, medium_threshold: float = 15.0):
@@ -426,7 +480,10 @@ class RiskCalculator:
         self.medium_threshold = medium_threshold
     
     def calculate_risk(self, bps_impact: Optional[float]) -> str:
-        """Calculate risk level from BPS impact."""
+        """
+        DEPRECATED: Do not use this method.
+        Risk should come from business-provided data via KRIMappingService.get_kri_risk()
+        """
         bps = abs(bps_impact) if bps_impact else 0
         if bps >= self.high_threshold:
             return "High"
@@ -593,15 +650,18 @@ class JSON2Builder(BaseJSONBuilder):
     """
     Builder for JSON 2: KRI Details grouped by KRI type.
     All values derived from data.
+    
+    Risk is business-provided from KRI Master, NOT calculated from BPS Impact.
     """
     
     def __init__(self, kri_validations: List[Validation],
                  lookup_service: DataLookupService,
                  kri_mapping_service: KRIMappingService,
-                 risk_calculator: RiskCalculator):
+                 risk_calculator: RiskCalculator = None):  # Deprecated parameter
         self.kri_validations = kri_validations
         self.lookup = lookup_service
         self.kri_mapping = kri_mapping_service
+        # risk_calculator is deprecated - kept for backward compatibility
         self.risk_calc = risk_calculator
     
     def build(self) -> Dict[str, Any]:
@@ -622,8 +682,11 @@ class JSON2Builder(BaseJSONBuilder):
             # Get description from first validation's Control Procedures
             kri_desc = clean_text(validations[0].control_procedures)
             
-            # Get threshold from master or default
+            # Get threshold from master (business-provided)
             threshold = self.kri_mapping.get_kri_threshold(kri_name)
+            
+            # Get risk from master (business-provided, NOT calculated from BPS)
+            business_risk = self.kri_mapping.get_kri_risk(kri_name)
             
             fund_details = []
             for v in validations:
@@ -631,12 +694,15 @@ class JSON2Builder(BaseJSONBuilder):
                 fund_name = self.lookup.get_book(v.fund)  # Book_New is fund display name
                 
                 bps = parse_number(v.bps_impact) or 0
-                risk = self.risk_calc.calculate_risk(bps)
+                
+                # Risk is from business (KRI Master), not calculated
+                # If no business risk provided, leave empty (no hardcoded default)
+                risk = business_risk if business_risk else ""
                 
                 values_formula = build_values_used_in_formula(v.kri_variables)
                 
                 fund_details.append({
-                    "risk": risk,  # Calculated from BPS Impact
+                    "risk": risk,  # Business-provided from KRI Master (NOT calculated)
                     "threshold": None,
                     "fundName": fund_name,  # From Funds.Book_New
                     "fundCode": v.fund,  # From Validations.Fund
@@ -874,7 +940,9 @@ class ExcelToJSONTransformer:
                 kri_name=row.get('KRI Name', ''),
                 kri_desc=row.get('KRI Desc', ''),
                 threshold=row.get('Threshold', ''),
-                validation_id=row.get('Validation ID', '')
+                validation_id=row.get('Validation ID', ''),
+                risk=row.get('Risk', ''),  # Business-provided risk level
+                risk_thresholds=row.get('Risk Thresholds', '')  # Business-provided risk thresholds
             ))
     
     def _parse_validation(self, row: Dict[str, Any], is_kri: bool, row_index: int) -> Validation:
@@ -1130,30 +1198,43 @@ def example_usage():
         }
     ]
     
-    # Optional: KRI Master data for pre-defined KRI IDs and thresholds
+    # Optional: KRI Master data for pre-defined KRI IDs, thresholds, and risk levels
     # If not provided, IDs will be auto-generated sequentially
-    # THRESHOLD is provided by business team - each KRI can have unique threshold rules
+    # 
+    # BUSINESS-PROVIDED FIELDS:
+    # - Threshold: JSON string with threshold rules (unique per KRI)
+    # - Risk: Business-provided risk level (NOT calculated from BPS Impact)
+    # - Risk Thresholds: JSON string with risk threshold definitions
+    #
+    # Example: BPS Impact = 0 mapped to "Medium" risk by business rules
+    # Risk Thresholds: {"Green": "<2%", "Yellow": "2% - 5%", "Red": ">5%"}
     kri_master_data = [
         {
             "KRI ID": "KRI_1",
             "KRI Name": "Interest Expense versus Average Borrowings",
             "KRI Desc": "",
             "Threshold": '{"High": ">30%","Medium": ">=15% and <30%","Low":"<15%"}',
-            "Validation ID": "999991"
+            "Validation ID": "999991",
+            "Risk": "Medium",  # Business-provided, not calculated from BPS
+            "Risk Thresholds": '{"Green": "<2%", "Yellow": "2% - 5%", "Red": ">5%"}'
         },
         {
             "KRI ID": "KRI_6",
             "KRI Name": "Defaulted Securities Review",
             "KRI Desc": "",
             "Threshold": '{"High": ">30%","Medium": ">=15% and <30%","Low":"<15%"}',
-            "Validation ID": "999996"
+            "Validation ID": "999996",
+            "Risk": "Medium",  # Business-provided, even when BPS Impact = 0
+            "Risk Thresholds": '{"Green": "<2%", "Yellow": "2% - 5%", "Red": ">5%"}'
         },
         {
             "KRI ID": "KRI_9A",
             "KRI Name": "Effective Leverage: Year Over Year Change",
             "KRI Desc": "",
             "Threshold": '{"High": ">30%","Medium": ">=15% and <30%","Low":"<15%"}',
-            "Validation ID": "999999"
+            "Validation ID": "999999",
+            "Risk": "High",  # Business-provided
+            "Risk Thresholds": '{"Green": "<2%", "Yellow": "2% - 5%", "Red": ">5%"}'
         }
     ]
     

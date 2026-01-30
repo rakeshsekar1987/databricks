@@ -326,7 +326,8 @@
 │ ✓ kriTotalCount    - calculated from data                                    │
 │ ✓ kriStatusCount   - calculated from data                                    │
 │ ✓ kriDesc          - from Control Procedures column                          │
-│ ✓ risk             - calculated from BPS Impact                              │
+│ ✓ risk             - from KRI Master (business-provided, NOT calculated)     │
+│ ✓ threshold        - from KRI Master (business-provided)                     │
 └─────────────────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -335,9 +336,16 @@
 │ • strategy         - default "Credit - Diversified Income"                   │
 │                      (add Strategy column to Funds to make data-driven)      │
 │ • analyticsStatus  - default "High"                                          │
-│ • threshold        - from KRI Master or default JSON                         │
 │ • statusFilter     - default ["Low", "N/A", "High"]                          │
-│ • risk thresholds  - default 15%/30% boundaries                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ BUSINESS-PROVIDED VALUES (from KRI Master)                                   │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ • risk             - from KRI Master.Risk (NOT calculated from BPS Impact)   │
+│ • threshold        - from KRI Master.Threshold (unique per KRI)              │
+│ • riskThresholds   - from KRI Master.Risk Thresholds (optional)              │
+│   Example: {"Green": "<2%", "Yellow": "2% - 5%", "Red": ">5%"}               │
 └─────────────────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────────────────┐

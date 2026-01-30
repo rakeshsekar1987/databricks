@@ -85,7 +85,7 @@ Your Excel file should have these tabs:
 - `Validations.Fund` → `Funds.Fund ID_New` (lookup for trust, book, group)
 
 ### Derived Fields
-- **group**: Derived from Fund ID_New suffix (CAN1→A, CAN2→B, CAN3→C)
+- **group**: From Group_New column in Funds tab (Fund ID_New is lookup key)
 - **validationDesc**: Control Procedures for KRI, Validation for non-KRI
 - **valuesUsedInFormula**: Built from KRI Variable Key/Value columns
 
@@ -93,7 +93,11 @@ Your Excel file should have these tabs:
 - **rowCount**: COUNT(TRIMMED) + COUNT(KRI)
 - **kriTotalCount**: COUNT(DISTINCT KRI names)
 - **kriStatusCount**: COUNT(KRI per fund)
-- **risk**: Based on BPS Impact (<15→Low, 15-30→Medium, ≥30→High)
+
+### Business-Provided Values (from KRI Master)
+- **risk**: Business-provided from KRI Master (NOT calculated from BPS Impact)
+- **threshold**: Business-provided from KRI Master (unique per KRI)
+- **riskThresholds**: Business-provided risk threshold definitions (optional)
 
 ## Files in This Repository
 

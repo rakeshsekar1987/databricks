@@ -105,7 +105,7 @@ class QAValidator:
         }])
         
         # Load Funds - Group_New is used directly for the group field
-        # (Not derived from Fund ID_New suffix)
+        # All funds have Group_New = "A" as per the expected output
         self.transformer.load_funds([
             {'#': 23, 'Trust': 'Canada', 'Trust_New': 'Canada', 
              'Fund': 'PIMCO Monthly Income Fund (Canada)', 'Fund ID': 'HD2C', 
@@ -116,33 +116,39 @@ class QAValidator:
             {'#': 24, 'Trust': 'Canada', 'Trust_New': 'Canada', 
              'Fund': 'PIMCO Monthly Enhanced Income Fund', 'Fund ID': 'HEWM', 
              'Fund Name_New': 'Credit Income Fund', 'Fund ID_New': 'CAN2',
-             'Group': 'H', 'Group_New': 'B',  # Group_New = B (business-provided)
+             'Group': 'H', 'Group_New': 'A',  # Group_New = A
              'Book': 'Canada CEF', 'Book_New': 'Credit Income Fund', 
              'Fund Type': 'Canada'},
             {'#': 25, 'Trust': 'Canada', 'Trust_New': 'Canada', 
              'Fund': 'PIMCO Canada Canadian CorePLUS Bond Trust', 'Fund ID': 'HDW1', 
              'Fund Name_New': 'International Bond Trust', 'Fund ID_New': 'CAN3',
-             'Group': 'G', 'Group_New': 'C',  # Group_New = C (business-provided)
+             'Group': 'G', 'Group_New': 'A',  # Group_New = A
              'Book': 'Canada Trust', 'Book_New': 'International Bond Trust', 
              'Fund Type': 'Canada'}
         ])
         
-        # Load KRI Master - Risk is business-provided, NOT calculated from BPS
+        # Load KRI Master - ALL VALUES ARE BUSINESS-PROVIDED
+        # KRI IDs are NOT sequential (KRI_1, KRI_6, KRI_55)
+        # Risk does NOT correlate with BPS Impact:
+        #   - BPS 1.53 → "High" (business decision)
+        #   - BPS 0 → "Medium" (business decision)
+        #   - BPS 116.87 → "Low" (business decision - high BPS can map to Low!)
+        # Each KRI has UNIQUE threshold rules
         self.transformer.load_kri_master([
             {'KRI ID': 'KRI_1', 'KRI Name': 'Interest Expense versus Average Borrowings', 
-             'KRI Desc': '', 'Threshold': '{"High": ">30%","Medium": ">=15% and <30%","Low":"<15%"}', 
+             'KRI Desc': '', 'Threshold': '{"High": ">7%","Medium": ">=7% and <=5%","Low":"<5%"}', 
              'Validation ID': '999991',
-             'Risk': 'Medium',  # Business-provided (not calculated from BPS 1.53)
+             'Risk': 'High',  # Business-provided (BPS 1.53 mapped to High)
              'Risk Thresholds': '{"Green": "<2%", "Yellow": "2% - 5%", "Red": ">5%"}'},
             {'KRI ID': 'KRI_6', 'KRI Name': 'Defaulted Securities Review', 
-             'KRI Desc': '', 'Threshold': '{"High": ">30%","Medium": ">=15% and <30%","Low":"<15%"}', 
+             'KRI Desc': '', 'Threshold': '{"High": ">5%","Medium": ">=3% and <=5%","Low":"<3%"}', 
              'Validation ID': '999996',
-             'Risk': 'Medium',  # Business-provided (BPS 0 mapped to Medium by business)
+             'Risk': 'Medium',  # Business-provided (BPS 0 mapped to Medium)
              'Risk Thresholds': '{"Green": "<2%", "Yellow": "2% - 5%", "Red": ">5%"}'},
-            {'KRI ID': 'KRI_9A', 'KRI Name': 'Effective Leverage: Year Over Year Change', 
-             'KRI Desc': '', 'Threshold': '{"High": ">30%","Medium": ">=15% and <30%","Low":"<15%"}', 
+            {'KRI ID': 'KRI_55', 'KRI Name': 'Effective Leverage: Year Over Year Change', 
+             'KRI Desc': '', 'Threshold': '{"High": ">10%","Medium": ">=5% and <=10%","Low":"<5%"}', 
              'Validation ID': '999999',
-             'Risk': 'High',  # Business-provided
+             'Risk': 'Low',  # Business-provided (BPS 116.87 mapped to Low!)
              'Risk Thresholds': '{"Green": "<2%", "Yellow": "2% - 5%", "Red": ">5%"}'}
         ])
         
@@ -301,7 +307,7 @@ class QAValidator:
         
         # Cross-referenced fields from Funds tab
         self.assert_equal(v['trust'], 'Canada', 'trust (from Trust_New)', ctx)
-        self.assert_equal(v['group'], 'C', 'group (from Group_New for CAN3)', ctx)
+        self.assert_equal(v['group'], 'A', 'group (from Group_New for CAN3)', ctx)
         self.assert_equal(v['book'], 'International Bond Trust', 'book (from Book_New)', ctx)
         
         # Direct from Validations Excel
@@ -366,7 +372,7 @@ class QAValidator:
         
         # Cross-referenced fields
         self.assert_equal(v['trust'], 'Canada', 'trust', ctx)
-        self.assert_equal(v['group'], 'B', 'group (from Group_New for CAN2)', ctx)
+        self.assert_equal(v['group'], 'A', 'group (from Group_New for CAN2)', ctx)
         self.assert_equal(v['book'], 'Credit Income Fund', 'book', ctx)
         
         # Direct from Excel
@@ -407,7 +413,7 @@ class QAValidator:
         ctx = 'JSON1-V3'
         
         self.assert_equal(v['fund'], 'CAN2', 'fund', ctx)
-        self.assert_equal(v['group'], 'B', 'group', ctx)
+        self.assert_equal(v['group'], 'A', 'group (from Group_New)', ctx)
         self.assert_equal(v['book'], 'Credit Income Fund', 'book', ctx)
         self.assert_equal(v['validation'], 'Defaulted Securities Review', 'validation', ctx)
         self.assert_equal(v['fsValue'], 798606.0, 'fsValue (parsed from 7,98,606.00)', ctx)
@@ -432,14 +438,14 @@ class QAValidator:
         ctx = 'JSON1-V4'
         
         self.assert_equal(v['fund'], 'CAN3', 'fund', ctx)
-        self.assert_equal(v['group'], 'C', 'group (from Group_New for CAN3)', ctx)
+        self.assert_equal(v['group'], 'A', 'group (from Group_New for CAN3)', ctx)
         self.assert_equal(v['book'], 'International Bond Trust', 'book', ctx)
         self.assert_equal(v['validation'], 'Effective Leverage: Year Over Year Change', 'validation', ctx)
         self.assert_equal(v['controlValue'], 0.02, 'controlValue', ctx)
         self.assert_equal(v['fsValue'], 0.02, 'fsValue', ctx)
         self.assert_equal(v['bpsImpact'], 116.87, 'bpsImpact', ctx)
         self.assert_equal(v['priority'], 'Standard', 'priority (from Excel)', ctx)
-        self.assert_equal(v['validationId'], '999999', 'validationId (KRI_9A)', ctx)
+        self.assert_equal(v['validationId'], '999999', 'validationId (KRI_55)', ctx)
         
         # valuesUsedInFormula
         formula = json.loads(v['valuesUsedInFormula'])
@@ -481,7 +487,7 @@ class QAValidator:
         self.assert_equal(fd1['fundName'], 'Credit Income Fund', 'kri1.fundDetails[0].fundName (from Book_New)', ctx)
         self.assert_equal(fd1['validationStatus'], 'Passed', 'kri1.fundDetails[0].validationStatus', ctx)
         self.assert_equal(fd1['validationId'], '999991', 'kri1.fundDetails[0].validationId', ctx)
-        self.assert_equal(fd1['risk'], 'Medium', 'kri1.fundDetails[0].risk (business-provided from KRI Master)', ctx)
+        self.assert_equal(fd1['risk'], 'High', 'kri1.fundDetails[0].risk (business-provided: BPS 1.53 mapped to High)', ctx)
         self.assert_equal(fd1['result'], '1.53', 'kri1.fundDetails[0].result', ctx)
         
         # KRI 2: Defaulted Securities
@@ -498,12 +504,12 @@ class QAValidator:
         # KRI 3: Effective Leverage
         kri3 = kri_details[2]
         self.assert_equal(kri3['kriName'], 'Effective Leverage: Year Over Year Change', 'kri3.kriName', ctx)
-        self.assert_equal(kri3['kriId'], 'KRI_9A', 'kri3.kriId', ctx)
+        self.assert_equal(kri3['kriId'], 'KRI_55', 'kri3.kriId', ctx)
         
         fd3 = kri3['fundDetails'][0]
         self.assert_equal(fd3['fundCode'], 'CAN3', 'kri3.fundDetails[0].fundCode', ctx)
         self.assert_equal(fd3['fundName'], 'International Bond Trust', 'kri3.fundDetails[0].fundName (from Book_New)', ctx)
-        self.assert_equal(fd3['risk'], 'High', 'kri3.fundDetails[0].risk (business-provided from KRI Master)', ctx)
+        self.assert_equal(fd3['risk'], 'Low', 'kri3.fundDetails[0].risk (business-provided: BPS 116.87 mapped to Low!)', ctx)
         self.assert_equal(fd3['validationId'], '999999', 'kri3.fundDetails[0].validationId', ctx)
         
         print()
@@ -625,7 +631,7 @@ class QAValidator:
         k3 = kri_map.get('Effective Leverage: Year Over Year Change')
         self.assert_not_none(k3, 'Effective Leverage entry exists', ctx)
         if k3:
-            self.assert_equal(k3['kriId'], 'KRI_9A', 'Effective Leverage kriId', ctx)
+            self.assert_equal(k3['kriId'], 'KRI_55', 'Effective Leverage kriId', ctx)
             self.assert_equal(k3['validationId'], '999999', 'Effective Leverage validationId', ctx)
         
         print()
@@ -685,11 +691,12 @@ class QAValidator:
             self.assert_in(v['fundCode'], valid_fund_codes, f"fundCode {v['fundCode']} in valid funds", ctx)
         
         # Verify group mapping is correct for each fund
-        group_mapping = {'CAN1': 'A', 'CAN2': 'B', 'CAN3': 'C'}
+        # All funds have Group_New = 'A' as per the expected output
+        group_mapping = {'CAN1': 'A', 'CAN2': 'A', 'CAN3': 'A'}
         for v in self.outputs['json1']['data']['getValidations']['validations']:
             expected_group = group_mapping[v['fund']]
             self.assert_equal(v['group'], expected_group, 
-                             f"group for {v['fund']} is {expected_group}", ctx)
+                             f"group for {v['fund']} (from Group_New)", ctx)
         
         # Verify book mapping
         book_mapping = {

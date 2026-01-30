@@ -6,6 +6,30 @@ This framework defines the transformation rules for converting Excel data into 5
 
 ---
 
+## Output File Naming Convention
+
+File names are derived from the **Card Name** column:
+
+| Card Name | Transformation | Output File Names |
+|-----------|----------------|-------------------|
+| `12/31/2024 Canada Annual` | Date to ISO + Clean text | `2024-12-31CanadaAnnual.json` |
+
+### File Name Pattern
+```
+{YYYY-MM-DD}{CardNameClean}{Suffix}.json
+```
+
+### All 5 Output Files for Each Card
+| JSON | Suffix | Example File Name |
+|------|--------|-------------------|
+| JSON 1 | (none) | `2024-12-31CanadaAnnual.json` |
+| JSON 2 | `kri` | `2024-12-31CanadaAnnualkri.json` |
+| JSON 3 | `kri-fund` | `2024-12-31CanadaAnnualkri-fund.json` |
+| JSON 4 | `strategy` | `2024-12-31CanadaAnnualstrategy.json` |
+| JSON 5 | `-krisimple` | `2024-12-31CanadaAnnual-krisimple.json` |
+
+---
+
 ## Input Data Structure
 
 ### Required Excel Tabs (4 tabs):
@@ -17,19 +41,31 @@ This framework defines the transformation rules for converting Excel data into 5
 | **Validations - TRIMMED** | Normal validation records | Card, Fund (Foreign Keys) |
 | **Validations - KRI** | KRI validation records | Card, Fund, KRI Variables 1-5 |
 
-### Optional Excel Tab:
+### KRI Master Tab (Required for Business-Provided Values)
 
 | Tab | Purpose | Key Columns |
 |-----|---------|-------------|
-| **KRI Master** | Pre-defined KRI IDs, thresholds, and risk levels | KRI ID, KRI Name, Validation ID, Risk, Threshold, Risk Thresholds |
+| **KRI Master** | KRI IDs, thresholds, and risk levels | KRI ID, KRI Name, Validation ID, Risk, Threshold |
 
 **KRI Master Columns:**
-- `KRI ID`: Unique identifier for the KRI (e.g., "KRI_1", "KRI_6")
+- `KRI ID`: Unique identifier - **NOT sequential** (e.g., "KRI_1", "KRI_6", "KRI_55")
 - `KRI Name`: Name matching Validations-KRI.Validation column
-- `Validation ID`: Pre-defined validation ID
-- `Threshold`: Business-provided threshold rules as JSON (e.g., `{"High": ">30%","Medium": ">=15% and <30%","Low":"<15%"}`)
-- `Risk`: Business-provided risk level (NOT calculated) - e.g., "Low", "Medium", "High"
-- `Risk Thresholds`: Business-provided risk threshold definitions as JSON (e.g., `{"Green": "<2%", "Yellow": "2% - 5%", "Red": ">5%"}`)
+- `Validation ID`: Pre-defined validation ID (e.g., 999991, 999996, 999999)
+- `Threshold`: Business-provided threshold rules as JSON - **UNIQUE per KRI**
+- `Risk`: Business-provided risk level - **NOT calculated from BPS Impact**
+- `Risk Thresholds`: Optional risk threshold definitions as JSON
+
+**Example KRI Master Data:**
+| KRI ID | KRI Name | Validation ID | Risk | Threshold |
+|--------|----------|---------------|------|-----------|
+| KRI_1 | Interest Expense vs Average Borrowings | 999991 | High | `{"High":">7%",...}` |
+| KRI_6 | Defaulted Securities Review | 999996 | Medium | `{"High":">5%",...}` |
+| KRI_55 | Effective Leverage: YoY Change | 999999 | Low | `{"High":">10%",...}` |
+
+**IMPORTANT - Risk Does NOT Correlate with BPS:**
+- BPS 1.53 → "High" (business decision)
+- BPS 0 → "Medium" (business decision)
+- BPS 116.87 → "Low" (business decision - high BPS can map to Low!)
 
 ---
 

@@ -209,6 +209,67 @@ def build_values_used_in_formula(kri_variables: Dict[str, Any]) -> str:
     return json.dumps(result)
 
 
+def generate_file_name_from_card(card_name: str, suffix: str = "") -> str:
+    """
+    Generate output file name from Card Name.
+    
+    Transformation rules:
+    1. Extract date (MM/DD/YYYY format) and convert to YYYY-MM-DD (ISO format)
+    2. Take remaining text and remove spaces/special characters
+    3. Concatenate: {YYYY-MM-DD}{CleanText}{suffix}.json
+    
+    Examples:
+    - "12/31/2024 Canada Annual" → "2024-12-31CanadaAnnual.json"
+    - "12/31/2024 Canada Annual" + "kri" → "2024-12-31CanadaAnnualkri.json"
+    """
+    if not card_name:
+        return "output.json"
+    
+    # Try to extract date in MM/DD/YYYY format
+    date_match = re.match(r'^(\d{1,2})/(\d{1,2})/(\d{4})\s*(.*)$', card_name.strip())
+    
+    if date_match:
+        month = date_match.group(1).zfill(2)
+        day = date_match.group(2).zfill(2)
+        year = date_match.group(3)
+        remaining = date_match.group(4).strip()
+        
+        # Convert to ISO format
+        iso_date = f"{year}-{month}-{day}"
+        
+        # Clean remaining text - remove spaces and special characters
+        clean_text = re.sub(r'[^a-zA-Z0-9]', '', remaining)
+        
+        return f"{iso_date}{clean_text}{suffix}.json"
+    else:
+        # Fallback: just clean the card name
+        clean_name = re.sub(r'[^a-zA-Z0-9]', '', card_name)
+        return f"{clean_name}{suffix}.json"
+
+
+def get_output_file_names(card_name: str) -> Dict[str, str]:
+    """
+    Get all 5 output file names for a given card.
+    
+    Returns a dictionary with:
+    - json1: Combined validations
+    - json2: KRI details
+    - json3: Fund KRI status count
+    - json4: Strategy KRI count
+    - json5: KRI simple details
+    """
+    base = generate_file_name_from_card(card_name, "")
+    base_without_ext = base.replace(".json", "")
+    
+    return {
+        "json1": f"{base_without_ext}.json",
+        "json2": f"{base_without_ext}kri.json",
+        "json3": f"{base_without_ext}kri-fund.json",
+        "json4": f"{base_without_ext}strategy.json",
+        "json5": f"{base_without_ext}-krisimple.json"  # Or could be same as json1
+    }
+
+
 # =============================================================================
 # Data Lookup Service - Fully Data-Driven
 # =============================================================================
@@ -1198,42 +1259,45 @@ def example_usage():
         }
     ]
     
-    # Optional: KRI Master data for pre-defined KRI IDs, thresholds, and risk levels
-    # If not provided, IDs will be auto-generated sequentially
+    # KRI Master data - ALL VALUES ARE BUSINESS-PROVIDED
     # 
     # BUSINESS-PROVIDED FIELDS:
-    # - Threshold: JSON string with threshold rules (unique per KRI)
+    # - KRI ID: Non-sequential IDs (KRI_1, KRI_6, KRI_55, etc.)
+    # - Validation ID: Pre-defined validation IDs
+    # - Threshold: JSON string with threshold rules (UNIQUE per KRI)
     # - Risk: Business-provided risk level (NOT calculated from BPS Impact)
-    # - Risk Thresholds: JSON string with risk threshold definitions
     #
-    # Example: BPS Impact = 0 mapped to "Medium" risk by business rules
-    # Risk Thresholds: {"Green": "<2%", "Yellow": "2% - 5%", "Red": ">5%"}
+    # IMPORTANT: KRI IDs are NOT sequential - they are business-defined
+    # IMPORTANT: Risk does NOT correlate with BPS Impact:
+    #   - BPS 1.53 → "High" (business decision)
+    #   - BPS 0 → "Medium" (business decision) 
+    #   - BPS 116.87 → "Low" (business decision - high BPS can map to Low risk!)
     kri_master_data = [
         {
             "KRI ID": "KRI_1",
             "KRI Name": "Interest Expense versus Average Borrowings",
             "KRI Desc": "",
-            "Threshold": '{"High": ">30%","Medium": ">=15% and <30%","Low":"<15%"}',
+            "Threshold": '{"High": ">7%","Medium": ">=7% and <=5%","Low":"<5%"}',
             "Validation ID": "999991",
-            "Risk": "Medium",  # Business-provided, not calculated from BPS
+            "Risk": "High",  # Business-provided (BPS 1.53 mapped to High)
             "Risk Thresholds": '{"Green": "<2%", "Yellow": "2% - 5%", "Red": ">5%"}'
         },
         {
             "KRI ID": "KRI_6",
             "KRI Name": "Defaulted Securities Review",
             "KRI Desc": "",
-            "Threshold": '{"High": ">30%","Medium": ">=15% and <30%","Low":"<15%"}',
+            "Threshold": '{"High": ">5%","Medium": ">=3% and <=5%","Low":"<3%"}',
             "Validation ID": "999996",
-            "Risk": "Medium",  # Business-provided, even when BPS Impact = 0
+            "Risk": "Medium",  # Business-provided (BPS 0 mapped to Medium)
             "Risk Thresholds": '{"Green": "<2%", "Yellow": "2% - 5%", "Red": ">5%"}'
         },
         {
-            "KRI ID": "KRI_9A",
+            "KRI ID": "KRI_55",
             "KRI Name": "Effective Leverage: Year Over Year Change",
             "KRI Desc": "",
-            "Threshold": '{"High": ">30%","Medium": ">=15% and <30%","Low":"<15%"}',
+            "Threshold": '{"High": ">10%","Medium": ">=5% and <=10%","Low":"<5%"}',
             "Validation ID": "999999",
-            "Risk": "High",  # Business-provided
+            "Risk": "Low",  # Business-provided (BPS 116.87 mapped to Low!)
             "Risk Thresholds": '{"Green": "<2%", "Yellow": "2% - 5%", "Red": ">5%"}'
         }
     ]

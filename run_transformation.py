@@ -3,7 +3,7 @@
 Main Execution Script for Excel to JSON Transformation Framework.
 
 This script reads data from an Excel file with multiple tabs and generates
-5 JSON output files.
+5 JSON output files per card.
 
 Usage:
     python run_transformation.py --input <excel_file> --output <output_folder>
@@ -120,6 +120,8 @@ def normalize_column_names(records: List[Dict[str, Any]]) -> List[Dict[str, Any]
         'validation status': 'Validation Status',
         'validation': 'Validation',
         'statement type': 'Statement Type',
+        'risk level': 'Risk Level',
+        'threshold chart': 'Threshold Chart',
         'section': 'Section',
         'line item description': 'Line Item Description',
         'control procedures': 'Control Procedures',
@@ -185,6 +187,10 @@ def normalize_column_names(records: List[Dict[str, Any]]) -> List[Dict[str, Any]
 def run_transformation(input_file: str, output_folder: str, verbose: bool = True):
     """
     Run the complete transformation from Excel to JSON.
+    
+    Generates 5 output files per card:
+    - For each card in the Cards tab, 5 JSON files are created
+    - File names are auto-generated from Card Name column
     
     Args:
         input_file: Path to the input Excel file
@@ -281,35 +287,35 @@ def run_transformation(input_file: str, output_folder: str, verbose: bool = True
     if kri_master_data:
         transformer.load_kri_master(kri_master_data)
     
-    # Transform
-    outputs = transformer.transform()
+    # Get all card names
+    card_names = transformer.get_card_names()
+    
+    if verbose:
+        print(f"  Found {len(card_names)} card(s)")
+        for cn in card_names:
+            print(f"    - {cn}")
+    
+    # Transform all cards
+    all_outputs = transformer.transform_all_cards()
     
     if verbose:
         print("  Transformation complete!")
     
-    # Get card names for dynamic file naming
-    # File names are auto-generated from Cards tab using Card Name column
-    # For each Card Name, 5 files are created with the card name as prefix
-    card_names = []
-    for card_record in cards_data:
-        card_name = card_record.get('Card Name', '')
-        if card_name and card_name not in card_names:
-            card_names.append(card_name)
-    
-    if not card_names:
-        # Fallback if no card names found
-        card_names = ['output']
-    
     # Write output files for each card
     if verbose:
         print("\nStep 4: Writing output files...")
-        print(f"  Cards found: {len(card_names)}")
+        print(f"  Cards to process: {len(card_names)}")
         print(f"  Files per card: 5")
         print(f"  Total files to create: {len(card_names) * 5}")
     
     all_output_paths = {}
+    total_files = 0
     
     for card_name in card_names:
+        outputs = all_outputs.get(card_name, {})
+        if not outputs:
+            continue
+        
         # Generate dynamic file names based on Card Name
         file_names = get_output_file_names(card_name)
         
@@ -318,13 +324,16 @@ def run_transformation(input_file: str, output_folder: str, verbose: bool = True
         
         card_outputs = {}
         for key in ['json1', 'json2', 'json3', 'json4', 'json5']:
+            if key not in outputs:
+                continue
             filename = file_names[key]
             output_path = os.path.join(output_folder, filename)
             with open(output_path, 'w', encoding='utf-8') as f:
                 f.write(outputs[key])
             card_outputs[key] = output_path
+            total_files += 1
             if verbose:
-                print(f"    • {filename}")
+                print(f"    - {filename}")
         
         all_output_paths[card_name] = card_outputs
     
@@ -337,23 +346,28 @@ def run_transformation(input_file: str, output_folder: str, verbose: bool = True
         print("TRANSFORMATION COMPLETE")
         print("=" * 80)
         print(f"\nDuration: {duration:.2f} seconds")
+        print(f"Total files created: {total_files}")
         print(f"\nOutput files created in: {output_folder}")
         
         for card_name in card_names:
             file_names = get_output_file_names(card_name)
             print(f"\n  {card_name}:")
             for key in ['json1', 'json2', 'json3', 'json4', 'json5']:
-                print(f"    • {file_names[key]}")
+                print(f"    - {file_names[key]}")
         
-        # Print statistics
-        json1 = json.loads(outputs['json1'])
-        json2 = json.loads(outputs['json2'])
-        json3 = json.loads(outputs['json3'])
-        
-        print(f"\nStatistics:")
-        print(f"  Total Validations: {json1['data']['getValidations']['rowCount']}")
-        print(f"  Unique KRI Types: {len(json2['data']['kriDetails'])}")
-        print(f"  Funds Processed: {len(json3['data']['fundKriStatusCount'])}")
+        # Print statistics for first card
+        if card_names and card_names[0] in all_outputs:
+            first_outputs = all_outputs[card_names[0]]
+            if 'json1' in first_outputs:
+                json1 = json.loads(first_outputs['json1'])
+                print(f"\nStatistics (first card):")
+                print(f"  Total Validations: {json1['data']['getValidations']['rowCount']}")
+            if 'json2' in first_outputs:
+                json2 = json.loads(first_outputs['json2'])
+                print(f"  Unique KRI Types: {len(json2['data']['kriDetails'])}")
+            if 'json3' in first_outputs:
+                json3 = json.loads(first_outputs['json3'])
+                print(f"  Funds Processed: {len(json3['data']['fundKriStatusCount'])}")
     
     return all_output_paths
 
@@ -371,6 +385,21 @@ def main():
 Examples:
   python run_transformation.py --input data.xlsx --output ./output
   python run_transformation.py -i "C:\\Data\\input.xlsx" -o "C:\\Data\\output"
+
+Output File Naming:
+  For each card in the Cards tab, 5 files are generated:
+    - {YYYY-MM-DD}{CardName}.json (Combined Validations)
+    - {YYYY-MM-DD}{CardName}kri.json (KRI Details)
+    - {YYYY-MM-DD}{CardName}kri-fund.json (Fund KRI Status)
+    - {YYYY-MM-DD}{CardName}strategy.json (Strategy KRI Count)
+    - {YYYY-MM-DD}{CardName}kri-simple.json (KRI Simple Details)
+  
+  Example: Card "12/31/2024 Canada Annual" generates:
+    - 2024-12-31CanadaAnnual.json
+    - 2024-12-31CanadaAnnualkri.json
+    - 2024-12-31CanadaAnnualkri-fund.json
+    - 2024-12-31CanadaAnnualstrategy.json
+    - 2024-12-31CanadaAnnualkri-simple.json
         """
     )
     

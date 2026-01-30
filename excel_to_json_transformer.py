@@ -4,6 +4,7 @@ Excel to JSON Transformation Framework - Data-Driven Version
 Transforms 4+ Excel tabs into 5 JSON output files for KRI Validations system.
 
 All mappings are derived from the input data - no hardcoding.
+Supports multi-card processing with per-card output filtering.
 """
 
 import json
@@ -27,7 +28,7 @@ class Card:
     card_name: str
     fiscal_year_end: str
     reporting_cycle: str
-    open_end_close_end: str
+    open_end_close_end: str  # This is the Trust/Region (Canada, America, India)
     reporting_date: str
     status: str
 
@@ -54,24 +55,14 @@ class Fund:
 class KRIMaster:
     """
     Represents a KRI Master record (optional Excel tab for KRI definitions).
-    
-    Business-provided fields:
-    - threshold: The threshold rules as a JSON string
-      Example: '{"High": ">30%", "Medium": ">=15% and <30%", "Low": "<15%"}'
-    - risk: The risk level for this KRI (e.g., "Low", "Medium", "High")
-    - risk_thresholds: Risk thresholds as a JSON string
-      Example: '{"Green": "<2%", "Yellow": "2% - 5%", "Red": ">5%"}'
-    
-    Note: Both risk and risk_thresholds are provided by the business team,
-    NOT calculated from BPS Impact.
     """
     kri_id: str
     kri_name: str
     kri_desc: str
-    threshold: str  # Dynamic threshold from business - JSON string
+    threshold: str
     validation_id: str
-    risk: str = ""  # Business-provided risk level (not calculated)
-    risk_thresholds: str = ""  # Business-provided risk threshold definitions
+    risk: str = ""
+    risk_thresholds: str = ""
 
 
 @dataclass
@@ -106,9 +97,7 @@ class Validation:
     threshold_abs: str
     kri_variables: Dict[str, Any] = field(default_factory=dict)
     is_kri: bool = False
-    # Additional fields that may come from Excel
     row_index: int = 0
-    # Fields from Validations-KRI tab - mapped directly from Excel columns
     risk_level: str = ""  # From Validations-KRI.Risk Level column
     threshold_chart: str = ""  # From Validations-KRI.Threshold Chart column
     kri_id: str = ""  # From Validations-KRI.KRI ID column (if exists)
@@ -153,14 +142,23 @@ def clean_text(text: str) -> str:
     """Clean multiline text for JSON output."""
     if not text:
         return ""
+    # Remove Excel carriage return markers
+    cleaned = str(text).replace('_x000D_', ' ')
     # Remove extra whitespace and newlines
-    cleaned = re.sub(r'\s+', ' ', str(text)).strip()
+    cleaned = re.sub(r'\s+', ' ', cleaned).strip()
     return cleaned
+
+
+def clean_threshold_value(value: str) -> str:
+    """Clean threshold values - convert '--' to empty string."""
+    if not value or value == "--":
+        return ""
+    return str(value).strip()
 
 
 def get_current_timestamp() -> str:
     """Get current timestamp in required format."""
-    return datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-1] + "0"
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
 
 
 def extract_numeric_suffix(text: str) -> Tuple[str, int]:
@@ -225,19 +223,17 @@ def transform_threshold_chart_to_json(threshold_chart: str) -> str:
     
     Output format (for JSON threshold field):
         '{"High": ">7%", "Medium": ">=5% and <=7%", "Low": "<5%"}'
-    
-    Mapping:
-        Green → Low
-        Yellow → Medium (X% - Y% becomes >=X% and <=Y%)
-        Red → High
     """
     if not threshold_chart or not threshold_chart.strip():
         return ""
     
     result = {}
     
+    # Clean the input - remove _x000D_ markers
+    cleaned = threshold_chart.replace('_x000D_', '\n')
+    
     # Split by newlines and process each line
-    lines = threshold_chart.strip().split('\n')
+    lines = cleaned.strip().split('\n')
     
     for line in lines:
         line = line.strip()
@@ -288,10 +284,6 @@ def generate_file_name_from_card(card_name: str, suffix: str = "") -> str:
     1. Extract date (MM/DD/YYYY format) and convert to YYYY-MM-DD (ISO format)
     2. Take remaining text and remove spaces/special characters
     3. Concatenate: {YYYY-MM-DD}{CleanText}{suffix}.json
-    
-    Examples:
-    - "12/31/2024 Canada Annual" → "2024-12-31CanadaAnnual.json"
-    - "12/31/2024 Canada Annual" + "kri" → "2024-12-31CanadaAnnualkri.json"
     """
     if not card_name:
         return "output.json"
@@ -309,9 +301,9 @@ def generate_file_name_from_card(card_name: str, suffix: str = "") -> str:
         iso_date = f"{year}-{month}-{day}"
         
         # Clean remaining text - remove spaces and special characters
-        clean_text = re.sub(r'[^a-zA-Z0-9]', '', remaining)
+        clean_text_val = re.sub(r'[^a-zA-Z0-9]', '', remaining)
         
-        return f"{iso_date}{clean_text}{suffix}.json"
+        return f"{iso_date}{clean_text_val}{suffix}.json"
     else:
         # Fallback: just clean the card name
         clean_name = re.sub(r'[^a-zA-Z0-9]', '', card_name)
@@ -324,19 +316,6 @@ def get_output_file_names(card_name: str) -> Dict[str, str]:
     
     File names are auto-generated from Card Name column in Cards tab.
     For each Card Name, 5 files are created with the card name as prefix/suffix.
-    
-    Card Name: "12/31/2024 Canada Annual"
-    Output files:
-    - JSON 1: 2024-12-31CanadaAnnual.json (Combined Validations)
-    - JSON 2: 2024-12-31CanadaAnnualkri.json (KRI Details)
-    - JSON 3: 2024-12-31CanadaAnnualkri-fund.json (Fund KRI Status Count)
-    - JSON 4: 2024-12-31CanadaAnnualstrategy.json (Strategy KRI Count)
-    - JSON 5: 2024-12-31CanadaAnnualkri-simple.json (KRI Simple Details)
-    
-    Note: If you have 2 cards, 10 output files will be created (5 per card).
-    
-    IMPORTANT: JSON 1 and JSON 5 have slightly different names to prevent overwriting.
-    JSON 5 uses 'kri-simple' suffix to differentiate from JSON 1.
     """
     base = generate_file_name_from_card(card_name, "")
     base_without_ext = base.replace(".json", "")
@@ -348,6 +327,11 @@ def get_output_file_names(card_name: str) -> Dict[str, str]:
         "json4": f"{base_without_ext}strategy.json",
         "json5": f"{base_without_ext}kri-simple.json"
     }
+
+
+def extract_trust_from_card(card: Card) -> str:
+    """Extract the Trust/Region from a Card (from open_end_close_end field)."""
+    return card.open_end_close_end if card else ""
 
 
 # =============================================================================
@@ -365,19 +349,23 @@ class DataLookupService:
         self.cards = cards
         self._fund_index: Dict[str, Fund] = {}
         self._card_index: Dict[str, Card] = {}
-        self._fund_order: Dict[str, int] = {}  # Fund code to order position
+        self._fund_order: Dict[str, int] = {}
+        self._funds_by_trust: Dict[str, List[Fund]] = {}  # Trust -> List of Funds
         self._build_indexes()
     
     def _build_indexes(self):
         """Build lookup indexes dynamically from loaded data."""
-        # Index funds - Group is taken directly from Group_New column
+        # Index funds
         for idx, fund in enumerate(self.funds):
-            # Index by Fund ID_New (e.g., CAN1, CAN2)
             self._fund_index[fund.fund_id_new] = fund
-            # Also index by Fund ID for flexibility
             self._fund_index[fund.fund_id] = fund
-            # Track order
             self._fund_order[fund.fund_id_new] = idx
+            
+            # Group funds by Trust_New
+            trust = fund.trust_new
+            if trust not in self._funds_by_trust:
+                self._funds_by_trust[trust] = []
+            self._funds_by_trust[trust].append(fund)
         
         for card in self.cards:
             self._card_index[card.card_name] = card
@@ -394,15 +382,14 @@ class DataLookupService:
         """Get all funds in original order."""
         return self.funds
     
+    def get_funds_by_trust(self, trust: str) -> List[Fund]:
+        """Get all funds for a specific Trust."""
+        return self._funds_by_trust.get(trust, [])
+    
     def get_fund_group(self, fund_code: str) -> str:
-        """
-        Get the group for a fund.
-        DIRECTLY FROM DATA: Uses Group_New column from Funds tab.
-        Fund ID_New is used as the lookup key to find the fund.
-        """
+        """Get the group for a fund - DIRECTLY from Group_New column."""
         fund = self.get_fund(fund_code)
         if fund:
-            # Use Group_New directly from the Funds tab
             return fund.group_new if fund.group_new else ""
         return ""
     
@@ -423,219 +410,74 @@ class DataLookupService:
 
 
 # =============================================================================
-# KRI Mapping Service - Data-Driven
+# Global KRI Mapping Service - Consistent IDs Across All Cards
 # =============================================================================
 
-class KRIMappingService:
+class GlobalKRIMappingService:
     """
-    Service for mapping KRI validation names to KRI IDs.
-    Can use either:
-    1. A KRI Master sheet from Excel (if provided)
-    2. Auto-generate sequential IDs based on order encountered
+    Service for mapping KRI validation names to KRI IDs globally.
+    Ensures same KRI Name gets same KRI ID regardless of which card it appears in.
     """
     
-    def __init__(self, kri_master: Optional[List[KRIMaster]] = None):
-        self._kri_master_index: Dict[str, KRIMaster] = {}
-        self._kri_id_counter = 0
-        self._validation_id_counter = 999990
+    def __init__(self, all_kri_validations: List[Validation]):
         self._kri_id_map: Dict[str, str] = {}  # name -> kri_id
         self._validation_id_map: Dict[str, str] = {}  # name -> validation_id
-        self._kri_order: List[str] = []  # Track order of KRIs encountered
+        self._kri_order: List[str] = []  # Track order of unique KRIs globally
         
-        # Load KRI Master if provided
-        if kri_master:
-            for kri in kri_master:
-                self._kri_master_index[kri.kri_name] = kri
-                self._kri_id_map[kri.kri_name] = kri.kri_id
-                self._validation_id_map[kri.kri_name] = kri.validation_id
-    
-    def register_kri(self, validation_name: str):
-        """
-        Register a KRI validation name. Call this during data loading
-        to establish order before ID generation.
-        """
-        if validation_name not in self._kri_order:
-            self._kri_order.append(validation_name)
+        # Register all KRIs from all validations to establish global order
+        for v in all_kri_validations:
+            if v.validation not in self._kri_order:
+                self._kri_order.append(v.validation)
+        
+        # Generate consistent IDs based on global order
+        for idx, kri_name in enumerate(self._kri_order):
+            self._kri_id_map[kri_name] = f"KRI_{idx + 1}"
+            self._validation_id_map[kri_name] = str(999990 + idx + 1)
     
     def get_kri_id(self, validation_name: str) -> str:
-        """
-        Get KRI ID for a validation name.
-        DATA-DRIVEN: Uses KRI Master if available, otherwise generates sequential ID.
-        """
-        if validation_name in self._kri_id_map:
-            return self._kri_id_map[validation_name]
-        
-        # Check master data first
-        if validation_name in self._kri_master_index:
-            kri = self._kri_master_index[validation_name]
-            self._kri_id_map[validation_name] = kri.kri_id
-            return kri.kri_id
-        
-        # Generate sequential ID based on order encountered
-        if validation_name in self._kri_order:
-            order_idx = self._kri_order.index(validation_name) + 1
-        else:
-            self._kri_id_counter += 1
-            order_idx = self._kri_id_counter
-        
-        kri_id = f"KRI_{order_idx}"
-        self._kri_id_map[validation_name] = kri_id
-        return kri_id
+        """Get globally consistent KRI ID for a validation name."""
+        return self._kri_id_map.get(validation_name, "")
     
     def get_validation_id(self, validation_name: str) -> str:
-        """
-        Get or generate validation ID for a KRI validation.
-        DATA-DRIVEN: Uses KRI Master if available, otherwise generates based on order.
-        """
-        if validation_name in self._validation_id_map:
-            return self._validation_id_map[validation_name]
-        
-        # Check master data first
-        if validation_name in self._kri_master_index:
-            kri = self._kri_master_index[validation_name]
-            self._validation_id_map[validation_name] = kri.validation_id
-            return kri.validation_id
-        
-        # Generate based on order
-        if validation_name in self._kri_order:
-            order_idx = self._kri_order.index(validation_name) + 1
-        else:
-            order_idx = len(self._validation_id_map) + 1
-        
-        # Generate validation ID: base + order
-        val_id = str(self._validation_id_counter + order_idx)
-        self._validation_id_map[validation_name] = val_id
-        return val_id
-    
-    def get_kri_description(self, validation_name: str, fallback: str = "") -> str:
-        """Get KRI description from master data or fallback."""
-        if validation_name in self._kri_master_index:
-            return self._kri_master_index[validation_name].kri_desc
-        return fallback
-    
-    def get_kri_threshold(self, validation_name: str) -> str:
-        """
-        Get KRI threshold from master data.
-        The threshold is provided by the business team in the KRI Master sheet.
-        Returns empty string if not found (no hardcoded default).
-        """
-        if validation_name in self._kri_master_index:
-            threshold = self._kri_master_index[validation_name].threshold
-            if threshold and str(threshold).strip():
-                return str(threshold).strip()
-        return ""
-    
-    def get_kri_risk(self, validation_name: str, fund_code: str = "") -> str:
-        """
-        Get risk level from KRI Master data.
-        
-        The risk is provided by the business team, NOT calculated from BPS Impact.
-        The business team maps each KRI (and optionally per fund) to a risk level.
-        
-        Args:
-            validation_name: The KRI name (Validation column)
-            fund_code: Optional fund code for fund-specific risk (future enhancement)
-        
-        Returns:
-            Business-provided risk level (e.g., "Low", "Medium", "High") 
-            or empty string if not found.
-        """
-        if validation_name in self._kri_master_index:
-            risk = self._kri_master_index[validation_name].risk
-            if risk and str(risk).strip():
-                return str(risk).strip()
-        return ""
-    
-    def get_kri_risk_thresholds(self, validation_name: str) -> str:
-        """
-        Get risk thresholds definition from KRI Master data.
-        
-        The risk thresholds are provided by the business team.
-        Example: '{"Green": "<2%", "Yellow": "2% - 5%", "Red": ">5%"}'
-        
-        Returns empty string if not found.
-        """
-        if validation_name in self._kri_master_index:
-            risk_thresholds = self._kri_master_index[validation_name].risk_thresholds
-            if risk_thresholds and str(risk_thresholds).strip():
-                return str(risk_thresholds).strip()
-        return ""
+        """Get globally consistent validation ID for a KRI."""
+        return self._validation_id_map.get(validation_name, "")
     
     def get_all_kri_names(self) -> List[str]:
-        """Get all registered KRI names in order."""
+        """Get all registered KRI names in global order."""
         return self._kri_order.copy()
+    
+    def get_total_kri_count(self) -> int:
+        """Get total number of unique KRIs globally."""
+        return len(self._kri_order)
 
 
 # =============================================================================
-# Validation ID Service - Data-Driven
+# Validation ID Service - Sequential IDs for TRIMMED validations
 # =============================================================================
 
 class ValidationIDService:
     """
-    Service for generating validation IDs.
-    IDs are generated based on row order and validation type.
+    Service for generating sequential validation IDs for TRIMMED validations.
     """
     
-    def __init__(self, normal_start_id: int = 1000, kri_base_id: int = 999990):
-        self._normal_counter = normal_start_id
-        self._kri_base = kri_base_id
+    def __init__(self, start_id: int = 1000):
+        self._counter = start_id
         self._id_cache: Dict[str, str] = {}
-        self._row_id_map: Dict[int, str] = {}  # row_index -> validation_id
     
-    def get_normal_validation_id(self, row_index: int) -> str:
-        """Generate ID for normal (non-KRI) validation based on row order."""
-        cache_key = f"normal_{row_index}"
+    def get_validation_id(self, validation: Validation) -> str:
+        """Generate sequential ID for a TRIMMED validation."""
+        cache_key = f"{validation.card}|{validation.fund}|{validation.validation}"
         if cache_key in self._id_cache:
             return self._id_cache[cache_key]
         
-        self._normal_counter += 1
-        val_id = str(self._normal_counter)
+        self._counter += 1
+        val_id = str(self._counter)
         self._id_cache[cache_key] = val_id
         return val_id
-    
-    def get_kri_validation_id(self, kri_order: int) -> str:
-        """Generate ID for KRI validation based on KRI order."""
-        return str(self._kri_base + kri_order)
 
 
 # =============================================================================
-# Risk Calculator - DEPRECATED (Risk is now business-provided)
-# =============================================================================
-
-class RiskCalculator:
-    """
-    DEPRECATED: Risk level is now provided by the business team, not calculated.
-    
-    The business team provides risk mappings in the KRI Master sheet.
-    For example: BPS Impact = 0 can be mapped to "Medium" risk by business rules.
-    
-    Risk thresholds are also business-provided:
-    Example: {"Green": "<2%", "Yellow": "2% - 5%", "Red": ">5%"}
-    
-    This class is kept for backward compatibility but should not be used
-    for new implementations. Use KRIMappingService.get_kri_risk() instead.
-    """
-    
-    def __init__(self, high_threshold: float = 30.0, medium_threshold: float = 15.0):
-        self.high_threshold = high_threshold
-        self.medium_threshold = medium_threshold
-    
-    def calculate_risk(self, bps_impact: Optional[float]) -> str:
-        """
-        DEPRECATED: Do not use this method.
-        Risk should come from business-provided data via KRIMappingService.get_kri_risk()
-        """
-        bps = abs(bps_impact) if bps_impact else 0
-        if bps >= self.high_threshold:
-            return "High"
-        elif bps >= self.medium_threshold:
-            return "Medium"
-        else:
-            return "Low"
-
-
-# =============================================================================
-# JSON Builders - Data-Driven
+# JSON Builders - Per-Card Filtering
 # =============================================================================
 
 class BaseJSONBuilder(ABC):
@@ -653,77 +495,63 @@ class BaseJSONBuilder(ABC):
 
 class JSON1Builder(BaseJSONBuilder):
     """
-    Builder for JSON 1: Combined Validations.
-    All field values are derived from input data.
+    Builder for JSON 1: Combined Validations for a specific card.
     """
     
     def __init__(self, validations: List[Validation], 
                  lookup_service: DataLookupService,
-                 kri_mapping_service: KRIMappingService,
+                 global_kri_mapping: GlobalKRIMappingService,
                  validation_id_service: ValidationIDService):
         self.validations = validations
         self.lookup = lookup_service
-        self.kri_mapping = kri_mapping_service
+        self.global_kri_mapping = global_kri_mapping
         self.val_id_service = validation_id_service
-        self._normal_counter = 0
     
     def _generate_record_id(self, validation: Validation, index: int) -> str:
         """Generate unique record ID based on validation data."""
-        # Create deterministic ID from validation content
         seed = f"{validation.card}|{validation.fund}|{validation.validation}|{index}"
         return generate_unique_id(seed)
     
     def _build_validation_object(self, validation: Validation, index: int) -> Dict[str, Any]:
-        """Build a single validation object - all values from data."""
+        """Build a single validation object."""
         
-        # === CROSS-REFERENCED FROM FUNDS TAB ===
+        # Cross-referenced from Funds tab
         trust = self.lookup.get_trust(validation.fund)
         book = self.lookup.get_book(validation.fund)
-        group = self.lookup.get_fund_group(validation.fund)  # Derived from Fund ID pattern
+        group = self.lookup.get_fund_group(validation.fund)
         
-        # === GENERATE IDs BASED ON DATA ORDER ===
+        # Generate IDs
         record_id = self._generate_record_id(validation, index)
         
-        # FIRST try to get Validation ID from Excel column, then fallback to auto-generate
-        if validation.validation_id_from_excel:
-            # Use Validation ID directly from Excel column
-            validation_id = validation.validation_id_from_excel
-        elif validation.is_kri:
-            # KRI validation ID from KRI mapping service or auto-generate
-            validation_id = self.kri_mapping.get_validation_id(validation.validation)
+        # Get validation ID
+        if validation.is_kri:
+            validation_id = self.global_kri_mapping.get_validation_id(validation.validation)
         else:
-            # Normal validation ID based on row order
-            self._normal_counter += 1
-            validation_id = self.val_id_service.get_normal_validation_id(self._normal_counter)
+            validation_id = self.val_id_service.get_validation_id(validation)
         
-        # === VALUES DIRECTLY FROM EXCEL ===
+        # Extract draft number
         control_draft = extract_draft_number(validation.control_draft_number)
         
-        # Build validation description from Control Procedures or Validation name
+        # Build validation description
         if validation.is_kri and validation.control_procedures:
             validation_desc = clean_text(validation.control_procedures)
         else:
             validation_desc = validation.validation
         
-        # Build valuesUsedInFormula from KRI Variable columns
+        # Build valuesUsedInFormula
         values_in_formula = ""
         if validation.is_kri and validation.kri_variables:
             values_in_formula = build_values_used_in_formula(validation.kri_variables)
         
         return {
-            # Generated/Derived
             "id": record_id,
             "validationId": validation_id,
             "auditVersionControlDs": "1",
             "writeTs": get_current_timestamp(),
-            
-            # Cross-referenced from Funds tab
             "trust": trust,
             "group": group,
             "book": book,
             "fundCode": validation.fund,
-            
-            # Direct from Validations Excel
             "fund": validation.fund,
             "shareClass": validation.share_class or "",
             "section": validation.section or "",
@@ -736,33 +564,25 @@ class JSON1Builder(BaseJSONBuilder):
             "validationSource": validation.validation_source,
             "controlDraftNumber": control_draft,
             "autoManual": validation.auto_manual,
-            "priority": validation.priority,  # Direct from Excel
+            "priority": validation.priority,
             "validationStatus": validation.validation_status,
-            "isFinalDraft": validation.is_final,
+            "isFinalDraft": False,  # Boolean, not empty string
             "lineItemDescription": validation.line_item_description or "",
             "statementType": validation.statement_type,
             "testDraftNumber": validation.test_draft_number or "",
-            
-            # Threshold fields from Excel
-            "thresholdColAmount": validation.threshold_amount or "",
-            "thresholdColDesc": validation.threshold_desc or "",
-            "thresholdPercent": validation.threshold_percent or "",
-            "thresholdAbs": validation.threshold_abs or "",
-            
-            # Derived from data
+            "thresholdColAmount": clean_threshold_value(validation.threshold_amount),
+            "thresholdColDesc": clean_threshold_value(validation.threshold_desc),
+            "thresholdPercent": clean_threshold_value(validation.threshold_percent),
+            "thresholdAbs": clean_threshold_value(validation.threshold_abs),
             "validationDesc": validation_desc,
             "webappWorkflowStatus": validation.workflow_status,
             "valuesUsedInFormula": values_in_formula,
-            
-            # Default flags
             "isCpoControl": "0",
             "isCpoTest": "0",
             "isBannerLessControl": "0",
             "isBannerLessTest": "0",
             "isBlueFontControl": "0",
             "isBlueFontTest": "0",
-            
-            # Null fields
             "analyticStatus": None,
             "fundStrategy": None,
             "result": None,
@@ -780,7 +600,7 @@ class JSON1Builder(BaseJSONBuilder):
             },
             "data": {
                 "getValidations": {
-                    "rowCount": len(validation_objects),  # Count from data
+                    "rowCount": len(validation_objects),
                     "pageInfo": {
                         "hasNextPage": False,
                         "hasPreviousPage": False
@@ -793,26 +613,18 @@ class JSON1Builder(BaseJSONBuilder):
 
 class JSON2Builder(BaseJSONBuilder):
     """
-    Builder for JSON 2: KRI Details grouped by KRI type.
-    All values derived from data.
-    
-    Risk Level and Threshold Chart come from Validations-KRI tab columns:
-    - Risk Level: "High", "Medium", "Low" (direct from Excel)
-    - Threshold Chart: "Green: <5%\nYellow: 5% - 7%\nRed: >7%" (transformed to JSON)
+    Builder for JSON 2: KRI Details grouped by KRI type for a specific card.
     """
     
     def __init__(self, kri_validations: List[Validation],
                  lookup_service: DataLookupService,
-                 kri_mapping_service: KRIMappingService,
-                 risk_calculator: RiskCalculator = None):  # Deprecated parameter
+                 global_kri_mapping: GlobalKRIMappingService):
         self.kri_validations = kri_validations
         self.lookup = lookup_service
-        self.kri_mapping = kri_mapping_service
-        # risk_calculator is deprecated - kept for backward compatibility
-        self.risk_calc = risk_calculator
+        self.global_kri_mapping = global_kri_mapping
     
     def build(self) -> Dict[str, Any]:
-        # Group validations by KRI name (maintains order)
+        # Group validations by KRI name
         kri_groups: OrderedDict[str, List[Validation]] = OrderedDict()
         for v in self.kri_validations:
             if v.validation not in kri_groups:
@@ -824,52 +636,46 @@ class JSON2Builder(BaseJSONBuilder):
         for kri_name, validations in kri_groups.items():
             first_val = validations[0]
             
-            # Get KRI ID - FIRST try from Excel column, then fallback to auto-generate
-            kri_id = first_val.kri_id if first_val.kri_id else self.kri_mapping.get_kri_id(kri_name)
+            # Get globally consistent KRI ID
+            kri_id = self.global_kri_mapping.get_kri_id(kri_name)
             
-            # Get Validation ID - FIRST try from Excel column, then fallback to auto-generate
-            validation_id = first_val.validation_id_from_excel if first_val.validation_id_from_excel else self.kri_mapping.get_validation_id(kri_name)
-            
-            # Get description from first validation's Control Procedures
+            # Get description from Control Procedures
             kri_desc = clean_text(first_val.control_procedures)
             
-            # Get threshold from Validations-KRI.Threshold Chart column
-            # Transform from "Green: <5%\nYellow: 5% - 7%\nRed: >7%" to JSON
+            # Transform threshold chart to JSON
             threshold_chart = first_val.threshold_chart if first_val.threshold_chart else ""
             threshold = transform_threshold_chart_to_json(threshold_chart)
             
             fund_details = []
             for v in validations:
-                # Cross-reference from Funds tab
-                fund_name = self.lookup.get_book(v.fund)  # Book_New is fund display name
-                
+                fund_name = self.lookup.get_book(v.fund)
                 bps = parse_number(v.bps_impact) or 0
                 
-                # Risk is from Validations-KRI.Risk Level column (direct from Excel)
+                # Risk from Excel column
                 risk = v.risk_level if v.risk_level else ""
                 
-                # Get validation ID for this specific fund - from Excel or auto-generate
-                fund_val_id = v.validation_id_from_excel if v.validation_id_from_excel else validation_id
+                # Validation ID
+                val_id = self.global_kri_mapping.get_validation_id(v.validation)
                 
                 values_formula = build_values_used_in_formula(v.kri_variables)
                 
                 fund_details.append({
-                    "risk": risk,  # From Validations-KRI.Risk Level
+                    "risk": risk,
                     "threshold": None,
-                    "fundName": fund_name,  # From Funds.Book_New
-                    "fundCode": v.fund,  # From Validations.Fund
-                    "result": str(bps),  # From BPS Impact
-                    "strategy": self._get_fund_strategy(v.fund),  # Derived
-                    "validationStatus": v.validation_status,  # From Excel
-                    "validationId": fund_val_id,  # From Excel or auto-generated
-                    "valuesUsedInFormula": values_formula  # From KRI Variables
+                    "fundName": fund_name,
+                    "fundCode": v.fund,
+                    "result": str(bps),
+                    "strategy": "Credit - Diversified Income",
+                    "validationStatus": v.validation_status,
+                    "validationId": val_id,
+                    "valuesUsedInFormula": values_formula
                 })
             
             kri_details.append({
-                "kriName": kri_name,  # From Validations.Validation
-                "kriId": kri_id,  # Generated or from KRI Master
-                "kriDesc": kri_desc,  # From Control Procedures
-                "threshold": threshold,  # Transformed from Validations-KRI.Threshold Chart
+                "kriName": kri_name,
+                "kriId": kri_id,
+                "kriDesc": kri_desc,
+                "threshold": threshold,
                 "fundDetails": fund_details
             })
         
@@ -881,74 +687,51 @@ class JSON2Builder(BaseJSONBuilder):
                 "kriDetails": kri_details
             }
         }
-    
-    def _get_fund_strategy(self, fund_code: str) -> str:
-        """
-        Get fund strategy. This could be added as a column in Funds tab.
-        For now, derive from fund type or return a default.
-        """
-        fund = self.lookup.get_fund(fund_code)
-        if fund:
-            # Could add Strategy column to Funds tab
-            # For now, use a pattern based on fund type
-            return "Credit - Diversified Income"
-        return "Credit - Diversified Income"
 
 
 class JSON3Builder(BaseJSONBuilder):
     """
-    Builder for JSON 3: Fund KRI Status Count.
-    All counts calculated from data.
+    Builder for JSON 3: Fund KRI Status Count for a specific card.
+    Only includes funds belonging to the same Trust as the card.
     """
     
     def __init__(self, kri_validations: List[Validation],
-                 lookup_service: DataLookupService,
-                 kri_mapping_service: KRIMappingService):
+                 card_funds: List[Fund],
+                 global_kri_mapping: GlobalKRIMappingService):
         self.kri_validations = kri_validations
-        self.lookup = lookup_service
-        self.kri_mapping = kri_mapping_service
+        self.card_funds = card_funds
+        self.global_kri_mapping = global_kri_mapping
     
     def build(self) -> Dict[str, Any]:
-        # === COUNT CALCULATIONS FROM DATA ===
+        # Get unique KRIs for this card
+        unique_kris_in_card = list(OrderedDict.fromkeys(v.validation for v in self.kri_validations))
+        kri_total_count = str(len(unique_kris_in_card))
         
-        # Count unique KRI types from data
-        unique_kris = list(OrderedDict.fromkeys(v.validation for v in self.kri_validations))
-        kri_total_count = str(len(unique_kris))
-        
-        # Count KRIs per fund from data
+        # Count KRIs per fund
         fund_kri_counts: Dict[str, int] = {}
         for v in self.kri_validations:
             fund_kri_counts[v.fund] = fund_kri_counts.get(v.fund, 0) + 1
         
-        # Build fund status count for ALL funds from Funds tab
+        # Build fund status count only for funds belonging to this card's Trust
         fund_status_counts = []
-        for fund in self.lookup.get_all_funds():
-            fund_code = fund.fund_id_new  # From Funds.Fund ID_New
-            fund_name = fund.fund_name_new  # From Funds.Fund Name_New
-            kri_count = fund_kri_counts.get(fund_code, 0)  # Calculated from data
+        for fund in self.card_funds:
+            fund_code = fund.fund_id_new
+            fund_name = fund.fund_name_new
+            kri_count = fund_kri_counts.get(fund_code, 0)
             
             fund_status_counts.append({
                 "kriTotalCount": kri_total_count,
                 "kriStatusCount": str(kri_count),
-                "analyticsStatus": "High",  # Default or calculate based on risk
+                "analyticsStatus": "High",
                 "fundCode": fund_code,
                 "fundName": fund_name
             })
         
-        # Build KRI filter list from unique KRIs in data
-        # Get the first validation for each KRI to read Excel columns
-        kri_first_validation: Dict[str, Validation] = {}
-        for v in self.kri_validations:
-            if v.validation not in kri_first_validation:
-                kri_first_validation[v.validation] = v
-        
+        # Build KRI filter list only for KRIs present in this card
         kri_filter = []
-        for kri_name in unique_kris:
-            first_val = kri_first_validation.get(kri_name)
-            
-            # FIRST try from Excel column, then fallback to auto-generate
-            kri_id = first_val.kri_id if first_val and first_val.kri_id else self.kri_mapping.get_kri_id(kri_name)
-            val_id = first_val.validation_id_from_excel if first_val and first_val.validation_id_from_excel else self.kri_mapping.get_validation_id(kri_name)
+        for kri_name in unique_kris_in_card:
+            kri_id = self.global_kri_mapping.get_kri_id(kri_name)
+            val_id = self.global_kri_mapping.get_validation_id(kri_name)
             
             kri_filter.append({
                 "kriId": kri_id,
@@ -956,7 +739,6 @@ class JSON3Builder(BaseJSONBuilder):
                 "validationId": val_id
             })
         
-        # Status filter - could be derived from unique statuses in data
         status_filter = ["Low", "N/A", "High"]
         
         return {
@@ -973,27 +755,20 @@ class JSON3Builder(BaseJSONBuilder):
 
 class JSON4Builder(BaseJSONBuilder):
     """
-    Builder for JSON 4: Strategy KRI Count.
-    All counts from data.
+    Builder for JSON 4: Strategy KRI Count for a specific card.
     """
     
-    def __init__(self, kri_validations: List[Validation],
-                 lookup_service: DataLookupService):
+    def __init__(self, kri_validations: List[Validation]):
         self.kri_validations = kri_validations
-        self.lookup = lookup_service
     
     def build(self) -> Dict[str, Any]:
-        # === ALL COUNTS FROM DATA ===
-        
-        # Count unique KRI types
+        # Count unique KRI types in this card
         unique_kris = set(v.validation for v in self.kri_validations)
         kri_total_count = str(len(unique_kris))
         
-        # Total KRI validations
+        # Total KRI validations in this card
         kri_status_count = str(len(self.kri_validations))
         
-        # Group by strategy (could be derived from Funds data if Strategy column exists)
-        # For now, aggregate all under one strategy
         return {
             "requestDetails": {
                 "requestId": generate_request_id()
@@ -1011,32 +786,23 @@ class JSON4Builder(BaseJSONBuilder):
 
 class JSON5Builder(BaseJSONBuilder):
     """
-    Builder for JSON 5: Simple KRI Details list.
-    Derived from KRI validations data.
+    Builder for JSON 5: Simple KRI Details list for a specific card.
+    Only includes KRIs that appear in this card.
     """
     
     def __init__(self, kri_validations: List[Validation],
-                 kri_mapping_service: KRIMappingService):
+                 global_kri_mapping: GlobalKRIMappingService):
         self.kri_validations = kri_validations
-        self.kri_mapping = kri_mapping_service
+        self.global_kri_mapping = global_kri_mapping
     
     def build(self) -> Dict[str, Any]:
-        # Get unique KRIs in order encountered
+        # Get unique KRIs in order encountered in this card
         unique_kris = list(OrderedDict.fromkeys(v.validation for v in self.kri_validations))
-        
-        # Get the first validation for each KRI to read Excel columns
-        kri_first_validation: Dict[str, Validation] = {}
-        for v in self.kri_validations:
-            if v.validation not in kri_first_validation:
-                kri_first_validation[v.validation] = v
         
         kri_details = []
         for kri_name in unique_kris:
-            first_val = kri_first_validation.get(kri_name)
-            
-            # FIRST try from Excel column, then fallback to auto-generate
-            kri_id = first_val.kri_id if first_val and first_val.kri_id else self.kri_mapping.get_kri_id(kri_name)
-            val_id = first_val.validation_id_from_excel if first_val and first_val.validation_id_from_excel else self.kri_mapping.get_validation_id(kri_name)
+            kri_id = self.global_kri_mapping.get_kri_id(kri_name)
+            val_id = self.global_kri_mapping.get_validation_id(kri_name)
             
             kri_details.append({
                 "kriId": kri_id,
@@ -1050,13 +816,13 @@ class JSON5Builder(BaseJSONBuilder):
 
 
 # =============================================================================
-# Main Transformer Class - Data-Driven
+# Main Transformer Class - Multi-Card Support
 # =============================================================================
 
 class ExcelToJSONTransformer:
     """
     Main transformer class that orchestrates the conversion.
-    All transformations are data-driven - no hardcoded mappings.
+    Supports multi-card processing with per-card output filtering.
     """
     
     def __init__(self):
@@ -1068,9 +834,8 @@ class ExcelToJSONTransformer:
         
         # Services - initialized after data loading
         self.lookup_service: Optional[DataLookupService] = None
-        self.kri_mapping_service: Optional[KRIMappingService] = None
+        self.global_kri_mapping: Optional[GlobalKRIMappingService] = None
         self.validation_id_service: Optional[ValidationIDService] = None
-        self.risk_calculator = RiskCalculator()
     
     def load_cards(self, cards_data: List[Dict[str, Any]]):
         """Load cards from parsed Excel data."""
@@ -1104,12 +869,7 @@ class ExcelToJSONTransformer:
             ))
     
     def load_kri_master(self, kri_master_data: List[Dict[str, Any]]):
-        """
-        Load KRI Master data (optional).
-        This provides pre-defined KRI IDs and descriptions.
-        
-        Expected columns: KRI ID, KRI Name, KRI Desc, Threshold, Validation ID
-        """
+        """Load KRI Master data (optional)."""
         for row in kri_master_data:
             self.kri_master.append(KRIMaster(
                 kri_id=row.get('KRI ID', ''),
@@ -1117,13 +877,12 @@ class ExcelToJSONTransformer:
                 kri_desc=row.get('KRI Desc', ''),
                 threshold=row.get('Threshold', ''),
                 validation_id=row.get('Validation ID', ''),
-                risk=row.get('Risk', ''),  # Business-provided risk level
-                risk_thresholds=row.get('Risk Thresholds', '')  # Business-provided risk thresholds
+                risk=row.get('Risk', ''),
+                risk_thresholds=row.get('Risk Thresholds', '')
             ))
     
     def _parse_validation(self, row: Dict[str, Any], is_kri: bool, row_index: int) -> Validation:
         """Parse a validation row from Excel data."""
-        # Extract KRI variables for KRI validations
         kri_variables = OrderedDict()
         if is_kri:
             for i in range(1, 6):
@@ -1163,11 +922,10 @@ class ExcelToJSONTransformer:
             kri_variables=kri_variables,
             is_kri=is_kri,
             row_index=row_index,
-            # Parse fields directly from Excel columns (no hardcoding)
-            risk_level=row.get('Risk Level', ''),  # Direct from Excel
-            threshold_chart=row.get('Threshold Chart', ''),  # Direct from Excel
-            kri_id=row.get('KRI ID', ''),  # Direct from Excel (if column exists)
-            validation_id_from_excel=row.get('Validation ID', '')  # Direct from Excel (if column exists)
+            risk_level=row.get('Risk Level', ''),
+            threshold_chart=row.get('Threshold Chart', ''),
+            kri_id=row.get('KRI ID', ''),
+            validation_id_from_excel=row.get('Validation ID', '')
         )
     
     def load_validations_trimmed(self, validations_data: List[Dict[str, Any]]):
@@ -1183,173 +941,114 @@ class ExcelToJSONTransformer:
     
     def _initialize_services(self):
         """Initialize all services after data is loaded."""
-        # Lookup service - builds indexes from loaded data
         self.lookup_service = DataLookupService(self.funds, self.cards)
         
-        # KRI mapping service - uses KRI master if available
-        self.kri_mapping_service = KRIMappingService(self.kri_master if self.kri_master else None)
+        # Global KRI mapping - ensures consistent IDs across all cards
+        self.global_kri_mapping = GlobalKRIMappingService(self.validations_kri)
         
-        # Register all KRI validations in order
-        for v in self.validations_kri:
-            self.kri_mapping_service.register_kri(v.validation)
-        
-        # Validation ID service
+        # Validation ID service for TRIMMED validations
         self.validation_id_service = ValidationIDService()
     
-    def transform(self) -> Dict[str, str]:
+    def get_card_names(self) -> List[str]:
+        """Get all card names."""
+        return [card.card_name for card in self.cards]
+    
+    def transform_for_card(self, card_name: str) -> Dict[str, str]:
         """
-        Transform all loaded data into 5 JSON outputs.
-        Returns a dictionary with keys json1-json5 and JSON string values.
+        Transform data for a specific card.
+        Filters validations and funds to only include data for this card.
         """
-        # Initialize services from loaded data
-        self._initialize_services()
+        # Initialize services if not already done
+        if not self.lookup_service:
+            self._initialize_services()
         
-        # Combine validations for JSON 1
-        all_validations = self.validations_trimmed + self.validations_kri
+        # Get the card
+        card = self.lookup_service.get_card(card_name)
+        if not card:
+            return {}
         
-        # Build all JSONs using data-driven builders
+        # Get the Trust/Region for this card
+        card_trust = extract_trust_from_card(card)
+        
+        # Filter validations for this card
+        card_validations_trimmed = [v for v in self.validations_trimmed if v.card == card_name]
+        card_validations_kri = [v for v in self.validations_kri if v.card == card_name]
+        
+        # Get funds for this card's Trust
+        card_funds = self.lookup_service.get_funds_by_trust(card_trust)
+        
+        # Combine validations
+        all_validations = card_validations_trimmed + card_validations_kri
+        
+        # Build all JSONs for this card
         json1_builder = JSON1Builder(
             all_validations, 
             self.lookup_service, 
-            self.kri_mapping_service,
+            self.global_kri_mapping,
             self.validation_id_service
         )
         json2_builder = JSON2Builder(
-            self.validations_kri, 
+            card_validations_kri, 
             self.lookup_service, 
-            self.kri_mapping_service,
-            self.risk_calculator
+            self.global_kri_mapping
         )
         json3_builder = JSON3Builder(
-            self.validations_kri, 
-            self.lookup_service, 
-            self.kri_mapping_service
+            card_validations_kri, 
+            card_funds,
+            self.global_kri_mapping
         )
-        json4_builder = JSON4Builder(
-            self.validations_kri,
-            self.lookup_service
-        )
+        json4_builder = JSON4Builder(card_validations_kri)
         json5_builder = JSON5Builder(
-            self.validations_kri, 
-            self.kri_mapping_service
+            card_validations_kri, 
+            self.global_kri_mapping
         )
-        
-        # Get file names from Card Name
-        file_names = self.get_file_names()
         
         return {
             "json1": json1_builder.to_json(),
             "json2": json2_builder.to_json(),
             "json3": json3_builder.to_json(),
             "json4": json4_builder.to_json(),
-            "json5": json5_builder.to_json(),
-            "file_names": file_names  # Include file names for reference
+            "json5": json5_builder.to_json()
         }
     
-    def get_card_name(self) -> str:
-        """Get the card name for file naming."""
-        if self.cards:
-            return self.cards[0].card_name
-        return ""
-    
-    def get_file_names(self) -> Dict[str, str]:
+    def transform_all_cards(self) -> Dict[str, Dict[str, str]]:
         """
-        Get output file names based on Card Name.
-        File names are auto-generated from the Cards tab Card Name column.
+        Transform data for all cards.
+        Returns a dictionary with card names as keys and output dictionaries as values.
         """
-        card_name = self.get_card_name()
-        return get_output_file_names(card_name)
-    
-    def save_outputs(self, output_dir: str = "."):
-        """
-        Transform and save all JSON outputs to files.
+        self._initialize_services()
         
-        File names are auto-generated from Card Name column in Cards tab.
-        For each Card Name, 5 files are created with the card name as prefix.
-        
-        Example for Card Name "12/31/2024 Canada Annual":
-        - 2024-12-31CanadaAnnual.json
-        - 2024-12-31CanadaAnnualkri.json
-        - 2024-12-31CanadaAnnualkri-fund.json
-        - 2024-12-31CanadaAnnualstrategy.json
-        - 2024-12-31CanadaAnnualkri-simple.json
-        """
-        outputs = self.transform()
-        
-        # Get file names from Card Name
-        file_names = self.get_file_names()
-        
-        import os
-        saved_files = []
-        for key, json_str in outputs.items():
-            file_name = file_names.get(key, f"{key}.json")
-            file_path = os.path.join(output_dir, file_name)
-            with open(file_path, 'w') as f:
-                f.write(json_str)
-            saved_files.append(file_path)
-            print(f"Saved {file_path}")
-        
-        return saved_files
-    
-    def print_relationship_summary(self):
-        """Print a summary of discovered data relationships."""
-        print("\n" + "=" * 80)
-        print("DATA RELATIONSHIP SUMMARY (All Derived from Input Data)")
-        print("=" * 80)
-        
-        print("\n1. CARDS TAB:")
-        print(f"   - Loaded {len(self.cards)} card(s)")
+        results = {}
         for card in self.cards:
-            print(f"     * {card.card_name}")
+            card_name = card.card_name
+            results[card_name] = self.transform_for_card(card_name)
         
-        print("\n2. FUNDS TAB:")
-        print(f"   - Loaded {len(self.funds)} fund(s)")
-        print("   - Cross-reference key: Fund ID_New -> Validations.Fund")
-        print("   - Derived mappings:")
-        for fund in self.funds:
-            print(f"     * {fund.fund_id_new}:")
-            print(f"       - Trust: {fund.trust_new} (from Trust_New)")
-            print(f"       - Book: {fund.book_new} (from Book_New)")
-            print(f"       - Group: {fund.derived_group_letter} (derived from Fund ID suffix)")
-            print(f"       - Name: {fund.fund_name_new} (from Fund Name_New)")
-        
-        print("\n3. VALIDATIONS - TRIMMED TAB:")
-        print(f"   - Loaded {len(self.validations_trimmed)} validation(s)")
-        
-        print("\n4. VALIDATIONS - KRI TAB:")
-        print(f"   - Loaded {len(self.validations_kri)} KRI validation(s)")
-        print("   - Unique KRI types discovered:")
-        if self.kri_mapping_service:
-            for kri_name in self.kri_mapping_service.get_all_kri_names():
-                kri_id = self.kri_mapping_service.get_kri_id(kri_name)
-                val_id = self.kri_mapping_service.get_validation_id(kri_name)
-                print(f"     * {kri_name}")
-                print(f"       - KRI ID: {kri_id} (auto-generated)")
-                print(f"       - Validation ID: {val_id} (auto-generated)")
-        
-        print("\n5. COUNT CALCULATIONS:")
-        print(f"   - rowCount (JSON 1): {len(self.validations_trimmed) + len(self.validations_kri)}")
-        unique_kris = set(v.validation for v in self.validations_kri)
-        print(f"   - kriTotalCount: {len(unique_kris)} (distinct KRI types)")
-        
-        # Count per fund
-        fund_kri_counts: Dict[str, int] = {}
-        for v in self.validations_kri:
-            fund_kri_counts[v.fund] = fund_kri_counts.get(v.fund, 0) + 1
-        print("   - kriStatusCount per fund:")
-        for fund in self.funds:
-            count = fund_kri_counts.get(fund.fund_id_new, 0)
-            print(f"     * {fund.fund_id_new}: {count}")
+        return results
+    
+    def transform(self) -> Dict[str, str]:
+        """
+        Transform all loaded data into 5 JSON outputs.
+        For backward compatibility - uses first card only.
+        """
+        if self.cards:
+            return self.transform_for_card(self.cards[0].card_name)
+        return {}
+    
+    def get_file_names(self, card_name: str = None) -> Dict[str, str]:
+        """Get output file names based on Card Name."""
+        if card_name is None and self.cards:
+            card_name = self.cards[0].card_name
+        return get_output_file_names(card_name or "")
 
 
 # =============================================================================
-# Example Usage with Data-Driven Approach
+# Example Usage
 # =============================================================================
 
 def example_usage():
-    """Demonstrate data-driven transformation with sample data."""
+    """Demonstrate multi-card transformation with sample data."""
     
-    # Sample Cards data - loaded from Excel
+    # Sample Cards data
     cards_data = [
         {
             "Card Name": "12/31/2024 Canada Annual",
@@ -1358,280 +1057,69 @@ def example_usage():
             "open_end_close_end": "Canada",
             "reporting_date": "31-12-2024",
             "Status": "In-Cycle"
+        },
+        {
+            "Card Name": "12/31/2025 America Annual",
+            "fiscal_year_end": "31-Dec",
+            "reporting_cycle": "Annual",
+            "open_end_close_end": "America",
+            "reporting_date": "31-12-2025",
+            "Status": "In-Cycle"
         }
     ]
     
-    # Sample Funds data - loaded from Excel
-    # Group is taken DIRECTLY from Group_New column (NOT derived from Fund ID)
-    # Fund ID_New is used as the lookup key to find the fund
+    # Sample Funds data
     funds_data = [
-        {
-            "#": 23,
-            "Trust": "Canada",
-            "Trust_New": "Canada",
-            "Fund": "PIMCO Monthly Income Fund (Canada)",
-            "Fund ID": "HD2C",
-            "Fund Name_New": "Income Strategy Fund",
-            "Fund ID_New": "CAN1",
-            "Group": "H",
-            "Group_New": "A",
-            "Book": "PIMCO Monthly Income Fund (Canada)",
-            "Book_New": "Income Strategy Fund",
-            "Fund Type": "Canada"
-        },
-        {
-            "#": 24,
-            "Trust": "Canada",
-            "Trust_New": "Canada",
-            "Fund": "PIMCO Monthly Enhanced Income Fund",
-            "Fund ID": "HEWM",
-            "Fund Name_New": "Credit Income Fund",
-            "Fund ID_New": "CAN2",
-            "Group": "H",
-            "Group_New": "A",
-            "Book": "Canada CEF",
-            "Book_New": "Credit Income Fund",
-            "Fund Type": "Canada"
-        },
-        {
-            "#": 25,
-            "Trust": "Canada",
-            "Trust_New": "Canada",
-            "Fund": "PIMCO Canada Canadian CorePLUS Bond Trust",
-            "Fund ID": "HDW1",
-            "Fund Name_New": "International Bond Trust",
-            "Fund ID_New": "CAN3",
-            "Group": "G",
-            "Group_New": "A",
-            "Book": "Canada Trust",
-            "Book_New": "International Bond Trust",
-            "Fund Type": "Canada"
-        }
+        {"#": 23, "Trust": "Canada", "Trust_New": "Canada", "Fund ID_New": "CAN1", 
+         "Fund Name_New": "Income Strategy Fund", "Group_New": "A", "Book_New": "Income Strategy Fund"},
+        {"#": 24, "Trust": "Canada", "Trust_New": "Canada", "Fund ID_New": "CAN2", 
+         "Fund Name_New": "Credit Income Fund", "Group_New": "A", "Book_New": "Credit Income Fund"},
+        {"#": 25, "Trust": "Canada", "Trust_New": "Canada", "Fund ID_New": "CAN3", 
+         "Fund Name_New": "International Bond Trust", "Group_New": "A", "Book_New": "International Bond Trust"},
+        {"#": 26, "Trust": "America", "Trust_New": "America", "Fund ID_New": "AM1", 
+         "Fund Name_New": "Income Strategy Fund", "Group_New": "A", "Book_New": "Income Strategy Fund"},
+        {"#": 27, "Trust": "America", "Trust_New": "America", "Fund ID_New": "AM2", 
+         "Fund Name_New": "Credit Income Fund", "Group_New": "B", "Book_New": "Credit Income Fund"},
+        {"#": 28, "Trust": "America", "Trust_New": "America", "Fund ID_New": "AM3", 
+         "Fund Name_New": "International Bond Trust", "Group_New": "C", "Book_New": "International Bond Trust"}
     ]
     
-    # KRI Master data - ALL VALUES ARE BUSINESS-PROVIDED
-    # 
-    # BUSINESS-PROVIDED FIELDS:
-    # - KRI ID: Non-sequential IDs (KRI_1, KRI_6, KRI_55, etc.)
-    # - Validation ID: Pre-defined validation IDs
-    # - Threshold: JSON string with threshold rules (UNIQUE per KRI)
-    # - Risk: Business-provided risk level (NOT calculated from BPS Impact)
-    #
-    # IMPORTANT: KRI IDs are NOT sequential - they are business-defined
-    # IMPORTANT: Risk does NOT correlate with BPS Impact:
-    #   - BPS 1.53 → "High" (business decision)
-    #   - BPS 0 → "Medium" (business decision) 
-    #   - BPS 116.87 → "Low" (business decision - high BPS can map to Low risk!)
-    kri_master_data = [
-        {
-            "KRI ID": "KRI_1",
-            "KRI Name": "Interest Expense versus Average Borrowings",
-            "KRI Desc": "",
-            "Threshold": '{"High": ">7%","Medium": ">=7% and <=5%","Low":"<5%"}',
-            "Validation ID": "999991",
-            "Risk": "High",  # Business-provided (BPS 1.53 mapped to High)
-            "Risk Thresholds": '{"Green": "<2%", "Yellow": "2% - 5%", "Red": ">5%"}'
-        },
-        {
-            "KRI ID": "KRI_6",
-            "KRI Name": "Defaulted Securities Review",
-            "KRI Desc": "",
-            "Threshold": '{"High": ">5%","Medium": ">=3% and <=5%","Low":"<3%"}',
-            "Validation ID": "999996",
-            "Risk": "Medium",  # Business-provided (BPS 0 mapped to Medium)
-            "Risk Thresholds": '{"Green": "<2%", "Yellow": "2% - 5%", "Red": ">5%"}'
-        },
-        {
-            "KRI ID": "KRI_55",
-            "KRI Name": "Effective Leverage: Year Over Year Change",
-            "KRI Desc": "",
-            "Threshold": '{"High": ">10%","Medium": ">=5% and <=10%","Low":"<5%"}',
-            "Validation ID": "999999",
-            "Risk": "Low",  # Business-provided (BPS 116.87 mapped to Low!)
-            "Risk Thresholds": '{"Green": "<2%", "Yellow": "2% - 5%", "Red": ">5%"}'
-        }
-    ]
-    
-    # Sample Validations - TRIMMED data
-    validations_trimmed_data = [
-        {
-            "Card": "12/31/2024 Canada Annual",
-            "Fund": "CAN3",
-            "Priority": "Material",
-            "Workflow Status": "EY L1 Review",
-            "Validation Status": "Failed",
-            "Validation": "SCF_admin vs generalledger_adjusted_entries_ey_CANADA",
-            "Statement Type": "SCF",
-            "Section": "Net Realized (Gain) Loss",
-            "Line Item Description": "Foreign currency transactions",
-            "Control Procedures": "SCF_admin vs generalledger_adjusted_entries_ey_CANADA",
-            "Share Class": "",
-            "Control Value": -141,
-            "FS Value": -152,
-            "Variance": 11,
-            "BPS Impact": -0.078014184,
-            "Comments": "0",
-            "Comment Details": "",
-            "Auto / Manual": "Automated",
-            "Validation Source": "Recon_Engine",
-            "Validation Type": "AFS - Indicative FS",
-            "Control Draft Number": "2.1",
-            "Test Draft Number": "",
-            "Is Final": False,
-            "Threshold Amount": "",
-            "Threshold Desc": "--",
-            "Threshold Percent (%)": "--",
-            "Threshold Abs": ""
-        }
-    ]
-    
-    # Sample Validations - KRI data
-    # NEW: Includes Risk Level and Threshold Chart columns from Validations-KRI tab
+    # Sample KRI Validations
     validations_kri_data = [
-        {
-            "Card": "12/31/2024 Canada Annual",
-            "Fund": "CAN2",
-            "Priority": "Standard",
-            "Workflow Status": "EY L1 Review",
-            "Validation Status": "Passed",
-            "Validation": "Interest Expense versus Average Borrowings",
-            "Statement Type": "KRI",
-            "Risk Level": "High",  # NEW: Direct from Excel
-            "Threshold Chart": "Green: <5%\nYellow: 5% - 7%\nRed: >7%",  # NEW: Direct from Excel
-            "Section": "",
-            "Line Item Description": "",
-            "Control Procedures": "Percent difference between the Interest Expense versus the Average Borrowings throughout the period multiplied by the Weighted Average Interest rate.((Average borrowings x Weighted Average Interest rate) - Interest Expense) / Interest Expense",
-            "Share Class": "",
-            "Control Value": -25.06,
-            "FS Value": -1633,
-            "Variance": -25.06,
-            "BPS Impact": 1.53,
-            "Comments": "0",
-            "Comment Details": "",
-            "Auto / Manual": "Automated",
-            "Validation Source": "KRI Validations",
-            "Validation Type": "KRI Validations",
-            "Control Draft Number": "null.1",
-            "Test Draft Number": "",
-            "Is Final": False,
-            "KRI Variable Key1": "Average Borrowings",
-            "KRI Variable Value1": -36711,
-            "KRI Variable Key2": "Weighted Average Interest Rate",
-            "KRI Variable Value2": 4.38,
-            "KRI Variable Key3": "Interest Expense",
-            "KRI Variable Value3": -1633
-        },
-        {
-            "Card": "12/31/2024 Canada Annual",
-            "Fund": "CAN2",
-            "Priority": "Standard",
-            "Workflow Status": "EY L1 Review",
-            "Validation Status": "Passed",
-            "Validation": "Defaulted Securities Review",
-            "Statement Type": "KRI",
-            "Risk Level": "Medium",  # NEW: Direct from Excel
-            "Threshold Chart": "Green: <3%\nYellow: 3% - 5%\nRed: >5%",  # NEW: Direct from Excel
-            "Section": "",
-            "Line Item Description": "",
-            "Control Procedures": "Total Market Value of Securities in Default as a percentage of Net Assets.  Total Market Value of Securities in Default / Net Assets",
-            "Share Class": "",
-            "Control Value": 0,
-            "FS Value": "7,98,606.00",
-            "Variance": 0,
-            "BPS Impact": 0,
-            "Comments": "0",
-            "Comment Details": "",
-            "Auto / Manual": "Automated",
-            "Validation Source": "KRI Validations",
-            "Validation Type": "KRI Validations",
-            "Control Draft Number": "null.1",
-            "Test Draft Number": "",
-            "Is Final": False,
-            "KRI Variable Key1": "Total Market Value Of Securities In Default",
-            "KRI Variable Value1": 0,
-            "KRI Variable Key2": "Net Assets",
-            "KRI Variable Value2": "7,98,606.00"
-        },
-        {
-            "Card": "12/31/2024 Canada Annual",
-            "Fund": "CAN3",
-            "Priority": "Standard",
-            "Workflow Status": "EY L1 Review",
-            "Validation Status": "Passed",
-            "Validation": "Effective Leverage: Year Over Year Change",
-            "Statement Type": "KRI",
-            "Risk Level": "Low",  # NEW: Direct from Excel
-            "Threshold Chart": "Green: <5%\nYellow: 5% - 10%\nRed: >10%",  # NEW: Direct from Excel
-            "Section": "",
-            "Line Item Description": "",
-            "Control Procedures": "Period over period change for a Fund's Total Effective Leverage.  (Total Effective Leverage CY - Total Effective Leverage PY) / Total Effective Leverage PY",
-            "Share Class": "",
-            "Control Value": 0.02,
-            "FS Value": 0.02,
-            "Variance": 0,
-            "BPS Impact": 116.87,
-            "Comments": "0",
-            "Comment Details": "",
-            "Auto / Manual": "Automated",
-            "Validation Source": "KRI Validations",
-            "Validation Type": "KRI Validations",
-            "Control Draft Number": "null.1",
-            "Test Draft Number": "",
-            "Is Final": False,
-            "KRI Variable Key1": "Py Net Assets",
-            "KRI Variable Value1": "18,17,515.00",
-            "KRI Variable Key2": "Cy Reverse Repos",
-            "KRI Variable Value2": "9,500.00",
-            "KRI Variable Key3": "Cy Credit Default Swaps",
-            "KRI Variable Value3": "51,800.00",
-            "KRI Variable Key4": "Cy Net Assets",
-            "KRI Variable Value4": "17,14,756.00",
-            "KRI Variable Key5": "Cy Line Of Credit",
-            "KRI Variable Value5": 0
-        }
+        {"Card": "12/31/2024 Canada Annual", "Fund": "CAN2", "Validation": "Interest Expense versus Average Borrowings",
+         "Statement Type": "KRI", "Risk Level": "High", "Threshold Chart": "Green: <5%\nYellow: 5% - 7%\nRed: >7%",
+         "Priority": "Standard", "Workflow Status": "EY L1 Review", "Validation Status": "Passed",
+         "Control Procedures": "Test control procedure", "BPS Impact": 1.53, "Auto / Manual": "Automated",
+         "Validation Source": "KRI Validations", "Validation Type": "KRI Validations"},
+        {"Card": "12/31/2024 Canada Annual", "Fund": "CAN2", "Validation": "Defaulted Securities Review",
+         "Statement Type": "KRI", "Risk Level": "Medium", "Threshold Chart": "Green: <3%\nYellow: 3% - 5%\nRed: >5%",
+         "Priority": "Standard", "Workflow Status": "EY L1 Review", "Validation Status": "Passed",
+         "Control Procedures": "Test control procedure", "BPS Impact": 0, "Auto / Manual": "Automated",
+         "Validation Source": "KRI Validations", "Validation Type": "KRI Validations"},
+        {"Card": "12/31/2025 America Annual", "Fund": "AM2", "Validation": "Interest Expense versus Average Borrowings",
+         "Statement Type": "KRI", "Risk Level": "High", "Threshold Chart": "Green: <5%\nYellow: 5% - 7%\nRed: >7%",
+         "Priority": "Standard", "Workflow Status": "EY L1 Review", "Validation Status": "Failed",
+         "Control Procedures": "Test control procedure", "BPS Impact": 1.53, "Auto / Manual": "Automated",
+         "Validation Source": "KRI Validations", "Validation Type": "KRI Validations"}
     ]
     
     # Create transformer and load data
     transformer = ExcelToJSONTransformer()
     transformer.load_cards(cards_data)
     transformer.load_funds(funds_data)
-    transformer.load_validations_trimmed(validations_trimmed_data)
     transformer.load_validations_kri(validations_kri_data)
     
-    # Optional: Load KRI Master for pre-defined KRI IDs
-    transformer.load_kri_master(kri_master_data)
+    # Transform all cards
+    all_outputs = transformer.transform_all_cards()
     
-    # Transform and get outputs
-    outputs = transformer.transform()
-    
-    # Print relationship summary
-    transformer.print_relationship_summary()
-    
-    # Print each JSON
-    print("\n" + "=" * 80)
-    print("JSON 1: Combined Validations")
-    print("=" * 80)
-    print(outputs["json1"])
-    
-    print("\n" + "=" * 80)
-    print("JSON 2: KRI Details")
-    print("=" * 80)
-    print(outputs["json2"])
-    
-    print("\n" + "=" * 80)
-    print("JSON 3: Fund KRI Status Count")
-    print("=" * 80)
-    print(outputs["json3"])
-    
-    print("\n" + "=" * 80)
-    print("JSON 4: Strategy KRI Count")
-    print("=" * 80)
-    print(outputs["json4"])
-    
-    print("\n" + "=" * 80)
-    print("JSON 5: KRI Simple Details")
-    print("=" * 80)
-    print(outputs["json5"])
+    for card_name, outputs in all_outputs.items():
+        print(f"\n{'='*80}")
+        print(f"Card: {card_name}")
+        print(f"{'='*80}")
+        file_names = get_output_file_names(card_name)
+        for key in ['json1', 'json2', 'json3', 'json4', 'json5']:
+            print(f"\n{file_names[key]}:")
+            print(outputs[key][:500] + "..." if len(outputs[key]) > 500 else outputs[key])
 
 
 if __name__ == "__main__":

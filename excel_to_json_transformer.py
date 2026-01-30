@@ -108,9 +108,11 @@ class Validation:
     is_kri: bool = False
     # Additional fields that may come from Excel
     row_index: int = 0
-    # NEW: Fields from Validations-KRI tab for KRI validations
-    risk_level: str = ""  # From Validations-KRI.Risk Level column (e.g., "High", "Medium", "Low")
-    threshold_chart: str = ""  # From Validations-KRI.Threshold Chart column (e.g., "Green: <5%\nYellow: 5% - 7%\nRed: >7%")
+    # Fields from Validations-KRI tab - mapped directly from Excel columns
+    risk_level: str = ""  # From Validations-KRI.Risk Level column
+    threshold_chart: str = ""  # From Validations-KRI.Threshold Chart column
+    kri_id: str = ""  # From Validations-KRI.KRI ID column (if exists)
+    validation_id_from_excel: str = ""  # From Validations-KRI.Validation ID column (if exists)
 
 
 # =============================================================================
@@ -673,8 +675,12 @@ class JSON1Builder(BaseJSONBuilder):
         # === GENERATE IDs BASED ON DATA ORDER ===
         record_id = self._generate_record_id(validation, index)
         
-        if validation.is_kri:
-            # KRI validation ID from KRI mapping service
+        # FIRST try to get Validation ID from Excel column, then fallback to auto-generate
+        if validation.validation_id_from_excel:
+            # Use Validation ID directly from Excel column
+            validation_id = validation.validation_id_from_excel
+        elif validation.is_kri:
+            # KRI validation ID from KRI mapping service or auto-generate
             validation_id = self.kri_mapping.get_validation_id(validation.validation)
         else:
             # Normal validation ID based on row order
@@ -807,21 +813,21 @@ class JSON2Builder(BaseJSONBuilder):
         kri_details = []
         
         for kri_name, validations in kri_groups.items():
-            # Get IDs from mapping service (data-driven)
-            kri_id = self.kri_mapping.get_kri_id(kri_name)
-            validation_id = self.kri_mapping.get_validation_id(kri_name)
+            first_val = validations[0]
+            
+            # Get KRI ID - FIRST try from Excel column, then fallback to auto-generate
+            kri_id = first_val.kri_id if first_val.kri_id else self.kri_mapping.get_kri_id(kri_name)
+            
+            # Get Validation ID - FIRST try from Excel column, then fallback to auto-generate
+            validation_id = first_val.validation_id_from_excel if first_val.validation_id_from_excel else self.kri_mapping.get_validation_id(kri_name)
             
             # Get description from first validation's Control Procedures
-            kri_desc = clean_text(validations[0].control_procedures)
+            kri_desc = clean_text(first_val.control_procedures)
             
             # Get threshold from Validations-KRI.Threshold Chart column
             # Transform from "Green: <5%\nYellow: 5% - 7%\nRed: >7%" to JSON
-            threshold_chart = validations[0].threshold_chart if validations else ""
+            threshold_chart = first_val.threshold_chart if first_val.threshold_chart else ""
             threshold = transform_threshold_chart_to_json(threshold_chart)
-            
-            # If no threshold from validation, try KRI Master as fallback
-            if not threshold:
-                threshold = self.kri_mapping.get_kri_threshold(kri_name)
             
             fund_details = []
             for v in validations:
@@ -831,24 +837,22 @@ class JSON2Builder(BaseJSONBuilder):
                 bps = parse_number(v.bps_impact) or 0
                 
                 # Risk is from Validations-KRI.Risk Level column (direct from Excel)
-                # NOT calculated from BPS Impact
                 risk = v.risk_level if v.risk_level else ""
                 
-                # Fallback to KRI Master if no risk_level in validation
-                if not risk:
-                    risk = self.kri_mapping.get_kri_risk(kri_name)
+                # Get validation ID for this specific fund - from Excel or auto-generate
+                fund_val_id = v.validation_id_from_excel if v.validation_id_from_excel else validation_id
                 
                 values_formula = build_values_used_in_formula(v.kri_variables)
                 
                 fund_details.append({
-                    "risk": risk,  # From Validations-KRI.Risk Level (NOT calculated)
+                    "risk": risk,  # From Validations-KRI.Risk Level
                     "threshold": None,
                     "fundName": fund_name,  # From Funds.Book_New
                     "fundCode": v.fund,  # From Validations.Fund
                     "result": str(bps),  # From BPS Impact
                     "strategy": self._get_fund_strategy(v.fund),  # Derived
                     "validationStatus": v.validation_status,  # From Excel
-                    "validationId": validation_id,
+                    "validationId": fund_val_id,  # From Excel or auto-generated
                     "valuesUsedInFormula": values_formula  # From KRI Variables
                 })
             
@@ -923,12 +927,24 @@ class JSON3Builder(BaseJSONBuilder):
             })
         
         # Build KRI filter list from unique KRIs in data
+        # Get the first validation for each KRI to read Excel columns
+        kri_first_validation: Dict[str, Validation] = {}
+        for v in self.kri_validations:
+            if v.validation not in kri_first_validation:
+                kri_first_validation[v.validation] = v
+        
         kri_filter = []
         for kri_name in unique_kris:
+            first_val = kri_first_validation.get(kri_name)
+            
+            # FIRST try from Excel column, then fallback to auto-generate
+            kri_id = first_val.kri_id if first_val and first_val.kri_id else self.kri_mapping.get_kri_id(kri_name)
+            val_id = first_val.validation_id_from_excel if first_val and first_val.validation_id_from_excel else self.kri_mapping.get_validation_id(kri_name)
+            
             kri_filter.append({
-                "kriId": self.kri_mapping.get_kri_id(kri_name),
+                "kriId": kri_id,
                 "kriName": kri_name,
-                "validationId": self.kri_mapping.get_validation_id(kri_name)
+                "validationId": val_id
             })
         
         # Status filter - could be derived from unique statuses in data
@@ -999,12 +1015,24 @@ class JSON5Builder(BaseJSONBuilder):
         # Get unique KRIs in order encountered
         unique_kris = list(OrderedDict.fromkeys(v.validation for v in self.kri_validations))
         
+        # Get the first validation for each KRI to read Excel columns
+        kri_first_validation: Dict[str, Validation] = {}
+        for v in self.kri_validations:
+            if v.validation not in kri_first_validation:
+                kri_first_validation[v.validation] = v
+        
         kri_details = []
         for kri_name in unique_kris:
+            first_val = kri_first_validation.get(kri_name)
+            
+            # FIRST try from Excel column, then fallback to auto-generate
+            kri_id = first_val.kri_id if first_val and first_val.kri_id else self.kri_mapping.get_kri_id(kri_name)
+            val_id = first_val.validation_id_from_excel if first_val and first_val.validation_id_from_excel else self.kri_mapping.get_validation_id(kri_name)
+            
             kri_details.append({
-                "kriId": self.kri_mapping.get_kri_id(kri_name),
+                "kriId": kri_id,
                 "kriName": kri_name,
-                "validationId": self.kri_mapping.get_validation_id(kri_name)
+                "validationId": val_id
             })
         
         return {
@@ -1126,9 +1154,11 @@ class ExcelToJSONTransformer:
             kri_variables=kri_variables,
             is_kri=is_kri,
             row_index=row_index,
-            # NEW: Parse Risk Level and Threshold Chart from Validations-KRI tab
-            risk_level=row.get('Risk Level', ''),  # "High", "Medium", "Low"
-            threshold_chart=row.get('Threshold Chart', '')  # "Green: <5%\nYellow: 5% - 7%\nRed: >7%"
+            # Parse fields directly from Excel columns (no hardcoding)
+            risk_level=row.get('Risk Level', ''),  # Direct from Excel
+            threshold_chart=row.get('Threshold Chart', ''),  # Direct from Excel
+            kri_id=row.get('KRI ID', ''),  # Direct from Excel (if column exists)
+            validation_id_from_excel=row.get('Validation ID', '')  # Direct from Excel (if column exists)
         )
     
     def load_validations_trimmed(self, validations_data: List[Dict[str, Any]]):

@@ -58,24 +58,35 @@ Card Name is transformed to create file names:
 
 ---
 
-## KRI Master Data (Business-Provided)
+## Data Sources for KRI Fields
 
-Based on the expected output, the KRI Master must contain:
+### KRI Master Tab (Optional)
+Provides KRI IDs and Validation IDs:
 
-| KRI Name | KRI ID | Validation ID | Risk | Threshold |
-|----------|--------|---------------|------|-----------|
-| Interest Expense versus Average Borrowings | KRI_1 | 999991 | High | `{"High": ">7%","Medium": ">=7% and <=5%","Low":"<5%"}` |
-| Defaulted Securities Review | KRI_6 | 999996 | Medium | `{"High": ">5%","Medium": ">=3% and <=5%","Low":"<3%"}` |
-| Effective Leverage: Year Over Year Change | KRI_55 | 999999 | Low | `{"High": ">10%","Medium": ">=5% and <=10%","Low":"<5%"}` |
+| KRI Name | KRI ID | Validation ID |
+|----------|--------|---------------|
+| Interest Expense versus Average Borrowings | KRI_1 | 999991 |
+| Defaulted Securities Review | KRI_6 | 999996 |
+| Effective Leverage: Year Over Year Change | KRI_55 | 999999 |
+
+### Validations-KRI Tab (NEW Columns!)
+Provides Risk Level and Threshold Chart directly:
+
+| KRI Name | Risk Level | Threshold Chart |
+|----------|------------|-----------------|
+| Interest Expense... | High | "Green: <5%\nYellow: 5% - 7%\nRed: >7%" |
+| Defaulted Securities... | Medium | "Green: <3%\nYellow: 3% - 5%\nRed: >5%" |
+| Effective Leverage... | Low | "Green: <5%\nYellow: 5% - 10%\nRed: >10%" |
 
 ### Key Observations
-1. **KRI IDs are NOT sequential** - They are business-defined (KRI_1, KRI_6, KRI_55)
-2. **Risk is business-provided, NOT calculated from BPS**:
-   - BPS 1.53 → "High" (for Interest Expense)
-   - BPS 0 → "Medium" (for Defaulted Securities)
-   - BPS 116.87 → "Low" (for Effective Leverage) - Note: High BPS maps to Low risk!
-3. **Threshold is unique per KRI** - Different thresholds for each KRI
-4. **Validation IDs** are pre-defined: 999991, 999996, 999999
+1. **KRI IDs are NOT sequential** - From KRI Master (KRI_1, KRI_6, KRI_55)
+2. **Risk Level is from Validations-KRI tab** - NOT calculated from BPS:
+   - BPS 1.53 → "High" (from Risk Level column)
+   - BPS 0 → "Medium" (from Risk Level column)
+   - BPS 116.87 → "Low" (from Risk Level column)
+3. **Threshold Chart is from Validations-KRI tab** - Transformed to JSON:
+   - "Green: <5%\nYellow: 5% - 7%\nRed: >7%" → `{"High": ">7%", "Medium": ">=5% and <=7%", "Low": "<5%"}`
+4. **Validation IDs** are from KRI Master: 999991, 999996, 999999
 
 ---
 

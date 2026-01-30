@@ -41,31 +41,52 @@ File names are derived from the **Card Name** column:
 | **Validations - TRIMMED** | Normal validation records | Card, Fund (Foreign Keys) |
 | **Validations - KRI** | KRI validation records | Card, Fund, KRI Variables 1-5 |
 
-### KRI Master Tab (Required for Business-Provided Values)
+### KRI Master Tab (Optional - for KRI IDs and Validation IDs)
 
 | Tab | Purpose | Key Columns |
 |-----|---------|-------------|
-| **KRI Master** | KRI IDs, thresholds, and risk levels | KRI ID, KRI Name, Validation ID, Risk, Threshold |
+| **KRI Master** | Pre-defined KRI IDs and Validation IDs | KRI ID, KRI Name, Validation ID |
 
 **KRI Master Columns:**
 - `KRI ID`: Unique identifier - **NOT sequential** (e.g., "KRI_1", "KRI_6", "KRI_55")
 - `KRI Name`: Name matching Validations-KRI.Validation column
 - `Validation ID`: Pre-defined validation ID (e.g., 999991, 999996, 999999)
-- `Threshold`: Business-provided threshold rules as JSON - **UNIQUE per KRI**
-- `Risk`: Business-provided risk level - **NOT calculated from BPS Impact**
-- `Risk Thresholds`: Optional risk threshold definitions as JSON
 
-**Example KRI Master Data:**
-| KRI ID | KRI Name | Validation ID | Risk | Threshold |
-|--------|----------|---------------|------|-----------|
-| KRI_1 | Interest Expense vs Average Borrowings | 999991 | High | `{"High":">7%",...}` |
-| KRI_6 | Defaulted Securities Review | 999996 | Medium | `{"High":">5%",...}` |
-| KRI_55 | Effective Leverage: YoY Change | 999999 | Low | `{"High":">10%",...}` |
+---
+
+## NEW: Validations-KRI Tab Columns
+
+The Validations-KRI tab includes two important columns for Risk and Threshold:
+
+| Column | Purpose | Example Value |
+|--------|---------|---------------|
+| **Risk Level** | Business-provided risk level | "High", "Medium", "Low" |
+| **Threshold Chart** | Threshold rules in Green/Yellow/Red format | "Green: <5%\nYellow: 5% - 7%\nRed: >7%" |
+
+### Threshold Chart Transformation
+The Threshold Chart column is transformed to JSON format:
+
+**Input (from Excel):**
+```
+Green: <5%
+Yellow: 5% - 7%
+Red: >7%
+```
+
+**Output (in JSON):**
+```json
+{"High": ">7%", "Medium": ">=5% and <=7%", "Low": "<5%"}
+```
+
+**Mapping:**
+- Green → Low
+- Yellow → Medium (X% - Y% becomes >=X% and <=Y%)
+- Red → High
 
 **IMPORTANT - Risk Does NOT Correlate with BPS:**
-- BPS 1.53 → "High" (business decision)
-- BPS 0 → "Medium" (business decision)
-- BPS 116.87 → "Low" (business decision - high BPS can map to Low!)
+- BPS 1.53 → "High" (from Risk Level column)
+- BPS 0 → "Medium" (from Risk Level column)
+- BPS 116.87 → "Low" (from Risk Level column - high BPS can map to Low!)
 
 ---
 
@@ -168,7 +189,8 @@ Validations-KRI ────────┘
 | **fundDetails[].fundCode** | Validations-KRI.Fund | Direct from Excel |
 | **fundDetails[].fundName** | Funds.Book_New | Cross-reference |
 | **fundDetails[].result** | Validations-KRI.BPS Impact | As string |
-| **fundDetails[].risk** | KRI Master.Risk | Business-provided (NOT calculated from BPS) |
+| **fundDetails[].risk** | Validations-KRI.Risk Level | Direct from Excel (NOT calculated from BPS) |
+| **threshold** | Validations-KRI.Threshold Chart | Transformed from Green/Yellow/Red format to JSON |
 | **fundDetails[].validationStatus** | Validations-KRI.Validation Status | Direct from Excel |
 | **fundDetails[].valuesUsedInFormula** | KRI Variables 1-5 | Build JSON |
 

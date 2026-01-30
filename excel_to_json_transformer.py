@@ -43,22 +43,24 @@ class Fund:
     fund_name_new: str
     fund_id_new: str
     group: str
-    group_new: str
+    group_new: str  # This is the GROUP value to use in JSON output
     book: str
     book_new: str
     fund_type: str
-    # Derived fields
-    derived_group_letter: str = ""  # Derived from fund position/ID
     card_mappings: Dict[str, bool] = field(default_factory=dict)
 
 
 @dataclass
 class KRIMaster:
-    """Represents a KRI Master record (optional Excel tab for KRI definitions)."""
+    """
+    Represents a KRI Master record (optional Excel tab for KRI definitions).
+    The threshold field contains the business-defined threshold rules as a JSON string.
+    Example: '{"High": ">30%", "Medium": ">=15% and <30%", "Low": "<15%"}'
+    """
     kri_id: str
     kri_name: str
     kri_desc: str
-    threshold: str
+    threshold: str  # Dynamic threshold from business - JSON string
     validation_id: str
 
 
@@ -217,22 +219,14 @@ class DataLookupService:
     
     def _build_indexes(self):
         """Build lookup indexes dynamically from loaded data."""
-        # Index funds and derive group letters from position
+        # Index funds - Group is taken directly from Group_New column
         for idx, fund in enumerate(self.funds):
             # Index by Fund ID_New (e.g., CAN1, CAN2)
             self._fund_index[fund.fund_id_new] = fund
             # Also index by Fund ID for flexibility
             self._fund_index[fund.fund_id] = fund
-            # Track order for group derivation
+            # Track order
             self._fund_order[fund.fund_id_new] = idx
-            
-            # Derive group letter from Fund ID pattern (e.g., CAN1 -> 1 -> A)
-            prefix, number = extract_numeric_suffix(fund.fund_id_new)
-            if number > 0:
-                fund.derived_group_letter = number_to_letter(number)
-            else:
-                # Fallback to position-based
-                fund.derived_group_letter = number_to_letter(idx + 1)
         
         for card in self.cards:
             self._card_index[card.card_name] = card
@@ -251,18 +245,15 @@ class DataLookupService:
     
     def get_fund_group(self, fund_code: str) -> str:
         """
-        Get the group letter for a fund.
-        DERIVED FROM DATA: Uses numeric suffix from Fund ID_New.
-        E.g., CAN1 -> A, CAN2 -> B, CAN3 -> C
+        Get the group for a fund.
+        DIRECTLY FROM DATA: Uses Group_New column from Funds tab.
+        Fund ID_New is used as the lookup key to find the fund.
         """
         fund = self.get_fund(fund_code)
-        if fund and fund.derived_group_letter:
-            return fund.derived_group_letter
-        # Fallback: derive from fund code directly
-        prefix, number = extract_numeric_suffix(fund_code)
-        if number > 0:
-            return number_to_letter(number)
-        return "A"
+        if fund:
+            # Use Group_New directly from the Funds tab
+            return fund.group_new if fund.group_new else ""
+        return ""
     
     def get_trust(self, fund_code: str) -> str:
         """Get trust name for a fund - from Trust_New column."""
@@ -372,10 +363,16 @@ class KRIMappingService:
         return fallback
     
     def get_kri_threshold(self, validation_name: str) -> str:
-        """Get KRI threshold from master data or default."""
+        """
+        Get KRI threshold from master data.
+        The threshold is provided by the business team in the KRI Master sheet.
+        Returns empty string if not found (no hardcoded default).
+        """
         if validation_name in self._kri_master_index:
-            return self._kri_master_index[validation_name].threshold
-        return '{"High": ">30%","Medium": ">=15% and <30%","Low":"<15%"}'
+            threshold = self._kri_master_index[validation_name].threshold
+            if threshold and str(threshold).strip():
+                return str(threshold).strip()
+        return ""
     
     def get_all_kri_names(self) -> List[str]:
         """Get all registered KRI names in order."""
@@ -1086,7 +1083,8 @@ def example_usage():
     ]
     
     # Sample Funds data - loaded from Excel
-    # Group is DERIVED from Fund ID_New pattern (CAN1->A, CAN2->B, CAN3->C)
+    # Group is taken DIRECTLY from Group_New column (NOT derived from Fund ID)
+    # Fund ID_New is used as the lookup key to find the fund
     funds_data = [
         {
             "#": 23,
@@ -1132,8 +1130,9 @@ def example_usage():
         }
     ]
     
-    # Optional: KRI Master data for pre-defined KRI IDs
+    # Optional: KRI Master data for pre-defined KRI IDs and thresholds
     # If not provided, IDs will be auto-generated sequentially
+    # THRESHOLD is provided by business team - each KRI can have unique threshold rules
     kri_master_data = [
         {
             "KRI ID": "KRI_1",

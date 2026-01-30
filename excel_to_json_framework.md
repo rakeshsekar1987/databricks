@@ -38,10 +38,10 @@ Validations.Fund  ──────────────────►  Fun
                                               └── Fund ID_New  → Derive Group Letter
 ```
 
-**How Group Letter is Derived:**
-- Extract numeric suffix from Fund ID_New
-- Convert number to letter: 1→A, 2→B, 3→C, etc.
-- Example: CAN1 → A, CAN2 → B, CAN3 → C
+**How Group is Derived:**
+- Group is taken DIRECTLY from the `Group_New` column in the Funds tab
+- Fund ID_New is used as the lookup key to find the correct fund record
+- Example: If CAN2 has Group_New = "B", then JSON group = "B"
 
 ### 2. Cross-Reference: Validations → Cards
 
@@ -90,7 +90,7 @@ Validations-KRI ────────┘
 | **id** | Generated | Hash of card + fund + validation + index |
 | **validationId** | Auto-generated | Row order (TRIMMED) or KRI Master lookup |
 | **trust** | Funds.Trust_New | Cross-reference via Validations.Fund |
-| **group** | Funds.Fund ID_New | Extract numeric suffix, convert to letter |
+| **group** | Funds.Group_New | Direct from Group_New column (Fund ID_New is lookup key) |
 | **book** | Funds.Book_New | Cross-reference via Validations.Fund |
 | **fund** | Validations.Fund | Direct from Excel |
 | **fundCode** | Validations.Fund | Same as fund |
@@ -120,7 +120,7 @@ Validations-KRI ────────┘
 | **kriName** | Validations-KRI.Validation | Direct from Excel |
 | **kriId** | KRI Master or Generated | Lookup or sequential |
 | **kriDesc** | Validations-KRI.Control Procedures | Clean text |
-| **threshold** | KRI Master or Default | Lookup or default JSON |
+| **threshold** | KRI Master.Threshold | Business-provided unique values per KRI |
 | **fundDetails[].fundCode** | Validations-KRI.Fund | Direct from Excel |
 | **fundDetails[].fundName** | Funds.Book_New | Cross-reference |
 | **fundDetails[].result** | Validations-KRI.BPS Impact | As string |
@@ -185,13 +185,12 @@ def calculate_risk(bps_impact):
 
 ### Group Letter Derivation
 ```python
-def get_group_letter(fund_id_new):
-    # Extract numeric suffix: CAN3 -> 3
-    match = re.match(r'^([A-Za-z]+)(\d+)', fund_id_new)
-    if match:
-        number = int(match.group(2))
-        return chr(ord('A') + number - 1)  # 1->A, 2->B, 3->C
-    return 'A'
+def get_group(fund_id_new, funds_data):
+    # Look up the fund by Fund ID_New and return the Group_New value
+    fund = find_fund_by_id(funds_data, fund_id_new)
+    if fund:
+        return fund['Group_New']  # Use Group_New directly
+    return ''
 ```
 
 ### valuesUsedInFormula Construction

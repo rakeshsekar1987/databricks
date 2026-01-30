@@ -1,0 +1,1575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Module Federation Strategy - UI/UX Platform Transformation</title>
+    <style>
+        :root {
+            --primary: #667eea;
+            --primary-dark: #5a67d8;
+            --secondary: #764ba2;
+            --success: #48bb78;
+            --warning: #ed8936;
+            --danger: #f56565;
+            --dark: #2d3748;
+            --light: #f7fafc;
+            --gray: #718096;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: var(--light);
+            color: var(--dark);
+            line-height: 1.6;
+        }
+
+        /* Navigation */
+        .nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 1000;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .nav-title {
+            color: white;
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+
+        .nav-controls {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .nav-controls button {
+            background: rgba(255,255,255,0.2);
+            border: none;
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.2s;
+        }
+
+        .nav-controls button:hover {
+            background: rgba(255,255,255,0.3);
+        }
+
+        .slide-counter {
+            color: white;
+            font-weight: 500;
+        }
+
+        /* Slides Container */
+        .slides-container {
+            padding-top: 70px;
+            min-height: 100vh;
+        }
+
+        .slide {
+            display: none;
+            min-height: calc(100vh - 70px);
+            padding: 3rem;
+            animation: fadeIn 0.5s ease;
+        }
+
+        .slide.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Slide Styles */
+        .slide-title {
+            font-size: 2.5rem;
+            color: var(--primary);
+            margin-bottom: 2rem;
+            text-align: center;
+        }
+
+        .slide-subtitle {
+            font-size: 1.5rem;
+            color: var(--gray);
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+
+        /* Title Slide */
+        .title-slide {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            color: white;
+        }
+
+        .title-slide .slide-title {
+            font-size: 3.5rem;
+            color: white;
+            margin-bottom: 1rem;
+        }
+
+        .title-slide .slide-subtitle {
+            font-size: 1.75rem;
+            color: rgba(255,255,255,0.9);
+            margin-bottom: 2rem;
+        }
+
+        .title-slide .meta {
+            font-size: 1.25rem;
+            color: rgba(255,255,255,0.8);
+        }
+
+        /* Content Grid */
+        .content-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .content-grid-3 {
+            grid-template-columns: repeat(3, 1fr);
+        }
+
+        .content-grid-2 {
+            grid-template-columns: repeat(2, 1fr);
+        }
+
+        /* Cards */
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            border: 1px solid #e2e8f0;
+        }
+
+        .card-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+
+        .card-title {
+            font-size: 1.25rem;
+            color: var(--dark);
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+        }
+
+        .card-text {
+            color: var(--gray);
+            font-size: 0.95rem;
+        }
+
+        .card.highlight {
+            border-left: 4px solid var(--primary);
+        }
+
+        .card.danger {
+            border-left: 4px solid var(--danger);
+            background: #fff5f5;
+        }
+
+        .card.success {
+            border-left: 4px solid var(--success);
+            background: #f0fff4;
+        }
+
+        .card.warning {
+            border-left: 4px solid var(--warning);
+            background: #fffaf0;
+        }
+
+        /* Architecture Diagram */
+        .architecture-diagram {
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .diagram-title {
+            text-align: center;
+            font-size: 1.5rem;
+            margin-bottom: 2rem;
+            color: var(--dark);
+        }
+
+        /* Current Architecture */
+        .current-arch {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .arch-box {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            color: white;
+            padding: 1rem 2rem;
+            border-radius: 8px;
+            text-align: center;
+            font-weight: 500;
+        }
+
+        .arch-box.single-pod {
+            width: 100%;
+            max-width: 800px;
+            padding: 2rem;
+        }
+
+        .arch-box.module {
+            background: #e2e8f0;
+            color: var(--dark);
+            font-size: 0.9rem;
+        }
+
+        .modules-row {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .arrow {
+            font-size: 2rem;
+            color: var(--gray);
+        }
+
+        .arrow-down {
+            transform: rotate(90deg);
+        }
+
+        /* New Architecture */
+        .new-arch {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1.5rem;
+        }
+
+        .shell-container {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            color: white;
+            padding: 1.5rem 3rem;
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        .federation-arrow {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .federation-arrow span {
+            font-size: 1.5rem;
+            color: var(--gray);
+        }
+
+        .remote-modules {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .remote-module {
+            background: white;
+            border: 2px solid var(--primary);
+            border-radius: 10px;
+            padding: 1rem;
+            text-align: center;
+            min-width: 140px;
+        }
+
+        .remote-module .name {
+            font-weight: 600;
+            color: var(--dark);
+            margin-bottom: 0.5rem;
+        }
+
+        .remote-module .version {
+            font-size: 0.85rem;
+            color: white;
+            padding: 0.25rem 0.5rem;
+            border-radius: 20px;
+            display: inline-block;
+        }
+
+        .version.v31 { background: var(--success); }
+        .version.v30 { background: var(--primary); }
+        .version.v29 { background: var(--warning); }
+
+        /* Timeline */
+        .timeline {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .timeline-item {
+            display: flex;
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .timeline-phase {
+            width: 120px;
+            flex-shrink: 0;
+            text-align: center;
+        }
+
+        .phase-number {
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 1.25rem;
+            margin: 0 auto 0.5rem;
+        }
+
+        .phase-label {
+            font-size: 0.9rem;
+            color: var(--gray);
+        }
+
+        .timeline-content {
+            flex: 1;
+            background: white;
+            padding: 1.5rem;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            border: 1px solid #e2e8f0;
+        }
+
+        .timeline-title {
+            font-size: 1.25rem;
+            color: var(--dark);
+            margin-bottom: 0.5rem;
+        }
+
+        .timeline-tasks {
+            list-style: none;
+            margin-top: 1rem;
+        }
+
+        .timeline-tasks li {
+            padding: 0.5rem 0;
+            padding-left: 1.5rem;
+            position: relative;
+            color: var(--gray);
+        }
+
+        .timeline-tasks li::before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: var(--success);
+            font-weight: bold;
+        }
+
+        /* Comparison Table */
+        .comparison-table {
+            width: 100%;
+            max-width: 1100px;
+            margin: 0 auto;
+            border-collapse: collapse;
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+
+        .comparison-table th,
+        .comparison-table td {
+            padding: 1rem 1.5rem;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .comparison-table th {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            color: white;
+            font-weight: 600;
+        }
+
+        .comparison-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .comparison-table .current {
+            background: #fff5f5;
+            color: var(--danger);
+        }
+
+        .comparison-table .new {
+            background: #f0fff4;
+            color: var(--success);
+        }
+
+        /* Code Block */
+        .code-block {
+            background: #1a202c;
+            color: #e2e8f0;
+            padding: 1.5rem;
+            border-radius: 10px;
+            font-family: 'Monaco', 'Consolas', monospace;
+            font-size: 0.9rem;
+            overflow-x: auto;
+            margin: 1rem 0;
+        }
+
+        .code-block .comment {
+            color: #718096;
+        }
+
+        .code-block .keyword {
+            color: #f687b3;
+        }
+
+        .code-block .string {
+            color: #68d391;
+        }
+
+        .code-block .property {
+            color: #63b3ed;
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1.5rem;
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 2rem;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+
+        .stat-value {
+            font-size: 3rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .stat-label {
+            color: var(--gray);
+            font-size: 1rem;
+            margin-top: 0.5rem;
+        }
+
+        /* Flow Diagram */
+        .flow-diagram {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin: 2rem 0;
+        }
+
+        .flow-step {
+            background: white;
+            border: 2px solid var(--primary);
+            border-radius: 10px;
+            padding: 1rem 1.5rem;
+            text-align: center;
+            min-width: 150px;
+        }
+
+        .flow-step.highlight {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            color: white;
+            border: none;
+        }
+
+        .flow-arrow {
+            font-size: 1.5rem;
+            color: var(--primary);
+        }
+
+        /* Benefits List */
+        .benefits-list {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .benefit-item {
+            display: flex;
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+            background: white;
+            padding: 1.5rem;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            align-items: center;
+        }
+
+        .benefit-icon {
+            font-size: 2.5rem;
+            flex-shrink: 0;
+        }
+
+        .benefit-content h4 {
+            color: var(--dark);
+            margin-bottom: 0.25rem;
+        }
+
+        .benefit-content p {
+            color: var(--gray);
+            font-size: 0.95rem;
+        }
+
+        /* AG Grid Version Diagram */
+        .version-isolation {
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        .browser-container {
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+
+        .browser-header {
+            background: #e2e8f0;
+            padding: 0.75rem 1rem;
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .browser-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        .browser-dot.red { background: #f56565; }
+        .browser-dot.yellow { background: #ed8936; }
+        .browser-dot.green { background: #48bb78; }
+
+        .browser-content {
+            padding: 2rem;
+        }
+
+        .isolation-modules {
+            display: flex;
+            justify-content: space-around;
+            gap: 1rem;
+        }
+
+        .isolated-module {
+            border: 2px dashed var(--gray);
+            border-radius: 10px;
+            padding: 1.5rem;
+            text-align: center;
+            flex: 1;
+        }
+
+        .isolated-module h5 {
+            margin-bottom: 0.5rem;
+        }
+
+        .ag-grid-badge {
+            display: inline-block;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            color: white;
+            font-weight: 600;
+            margin-top: 0.5rem;
+        }
+
+        .ag-grid-badge.v31 { background: var(--success); }
+        .ag-grid-badge.v30 { background: var(--primary); }
+        .ag-grid-badge.v29 { background: var(--warning); }
+
+        /* Deployment Architecture */
+        .deployment-arch {
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+
+        .k8s-cluster {
+            background: #1a202c;
+            border-radius: 12px;
+            padding: 2rem;
+            color: white;
+        }
+
+        .k8s-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .k8s-header img {
+            width: 40px;
+        }
+
+        .k8s-header h4 {
+            font-size: 1.25rem;
+        }
+
+        .k8s-pods {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+        }
+
+        .k8s-pod {
+            background: rgba(255,255,255,0.1);
+            border-radius: 8px;
+            padding: 1rem;
+            text-align: center;
+        }
+
+        .k8s-pod.shell {
+            grid-column: 1 / -1;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+        }
+
+        .pod-name {
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .pod-version {
+            font-size: 0.8rem;
+            opacity: 0.8;
+        }
+
+        /* Section divider */
+        .section-divider {
+            text-align: center;
+            margin: 3rem 0;
+        }
+
+        .section-divider span {
+            display: inline-block;
+            background: var(--primary);
+            color: white;
+            padding: 0.5rem 2rem;
+            border-radius: 30px;
+            font-weight: 500;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .slide {
+                padding: 1.5rem;
+            }
+
+            .slide-title {
+                font-size: 1.75rem;
+            }
+
+            .content-grid-3,
+            .content-grid-2 {
+                grid-template-columns: 1fr;
+            }
+
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .k8s-pods {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Print styles */
+        @media print {
+            .nav { display: none; }
+            .slide { display: block !important; page-break-after: always; }
+            .slides-container { padding-top: 0; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="nav">
+        <div class="nav-title">Module Federation Strategy</div>
+        <div class="nav-controls">
+            <button onclick="prevSlide()">← Previous</button>
+            <span class="slide-counter">Slide <span id="currentSlide">1</span> of <span id="totalSlides">15</span></span>
+            <button onclick="nextSlide()">Next →</button>
+        </div>
+    </nav>
+
+    <div class="slides-container">
+        <!-- Slide 1: Title -->
+        <div class="slide active title-slide" data-slide="1">
+            <h1 class="slide-title">Module Federation Strategy</h1>
+            <p class="slide-subtitle">Transforming Monolithic UI to Micro-Frontends</p>
+            <p class="meta">UI/UX Platform Architecture Modernization</p>
+            <div style="margin-top: 3rem; display: flex; gap: 2rem;">
+                <div style="background: rgba(255,255,255,0.2); padding: 1rem 2rem; border-radius: 8px;">
+                    <div style="font-size: 2rem; font-weight: bold;">5</div>
+                    <div>Independent Modules</div>
+                </div>
+                <div style="background: rgba(255,255,255,0.2); padding: 1rem 2rem; border-radius: 8px;">
+                    <div style="font-size: 2rem; font-weight: bold;">3</div>
+                    <div>AG Grid Versions</div>
+                </div>
+                <div style="background: rgba(255,255,255,0.2); padding: 1rem 2rem; border-radius: 8px;">
+                    <div style="font-size: 2rem; font-weight: bold;">∞</div>
+                    <div>Parallel Deployments</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 2: Problem Statement -->
+        <div class="slide" data-slide="2">
+            <h2 class="slide-title">Current Challenges</h2>
+            <p class="slide-subtitle">Why we need to transform our architecture</p>
+
+            <div class="content-grid content-grid-2">
+                <div class="card danger">
+                    <div class="card-icon">🔗</div>
+                    <h3 class="card-title">Tight Coupling</h3>
+                    <p class="card-text">All UI modules bundled into a single image. Changes to one module require rebuilding and redeploying everything.</p>
+                </div>
+
+                <div class="card danger">
+                    <div class="card-icon">⏳</div>
+                    <h3 class="card-title">Deployment Bottlenecks</h3>
+                    <p class="card-text">Teams must wait for code merges and coordinated releases. One team's changes block others.</p>
+                </div>
+
+                <div class="card danger">
+                    <div class="card-icon">📦</div>
+                    <h3 class="card-title">Single AG Grid Version</h3>
+                    <p class="card-text">Cannot run different AG Grid versions. Forced to use the same version across all modules despite different requirements.</p>
+                </div>
+
+                <div class="card danger">
+                    <div class="card-icon">🐌</div>
+                    <h3 class="card-title">Slow Build Times</h3>
+                    <p class="card-text">Full builds required even for small changes. CI/CD pipeline runs entire test suite for every change.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 3: Current Architecture -->
+        <div class="slide" data-slide="3">
+            <h2 class="slide-title">Current Architecture</h2>
+            <p class="slide-subtitle">Single Pod with All Modules Bundled Together</p>
+
+            <div class="architecture-diagram">
+                <div class="current-arch">
+                    <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center;">
+                        <div class="arch-box module">Reg Reporting</div>
+                        <div class="arch-box module">Financial Reporting</div>
+                        <div class="arch-box module">Expense Reporting</div>
+                        <div class="arch-box module">Tax Reporting</div>
+                        <div class="arch-box module">Control Tower</div>
+                        <div class="arch-box module">Shared Library</div>
+                    </div>
+                    
+                    <div class="arrow">↓</div>
+                    <div style="text-align: center; color: var(--gray);">Build & Bundle Together</div>
+                    <div class="arrow">↓</div>
+                    
+                    <div class="arch-box single-pod">
+                        <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">🐳 Single Docker Image</div>
+                        <div style="opacity: 0.9;">All modules bundled together</div>
+                        <div style="margin-top: 1rem; padding: 1rem; background: rgba(255,255,255,0.1); border-radius: 8px;">
+                            <strong>AG Grid v31.0.0</strong> (forced for all modules)
+                        </div>
+                    </div>
+                    
+                    <div class="arrow">↓</div>
+                    
+                    <div class="arch-box" style="background: #2d3748;">
+                        <div style="font-size: 1.25rem;">☸️ Single AKS Pod</div>
+                        <div style="font-size: 0.9rem; opacity: 0.8;">1 Replica</div>
+                    </div>
+                </div>
+            </div>
+
+            <div style="margin-top: 2rem; text-align: center;">
+                <span style="background: var(--danger); color: white; padding: 0.5rem 1rem; border-radius: 6px;">
+                    ⚠️ All modules share same dependencies - Cannot support multiple AG Grid versions
+                </span>
+            </div>
+        </div>
+
+        <!-- Slide 4: Target Architecture -->
+        <div class="slide" data-slide="4">
+            <h2 class="slide-title">Target Architecture</h2>
+            <p class="slide-subtitle">Federated Modules with Independent Deployments</p>
+
+            <div class="architecture-diagram">
+                <div class="new-arch">
+                    <div class="shell-container">
+                        <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">🏠 Shell Application (Host)</div>
+                        <div style="opacity: 0.9;">Module Federation Runtime</div>
+                    </div>
+
+                    <div class="federation-arrow">
+                        <span>↙</span>
+                        <span>↓</span>
+                        <span>↓</span>
+                        <span>↓</span>
+                        <span>↘</span>
+                    </div>
+
+                    <div class="remote-modules">
+                        <div class="remote-module">
+                            <div class="name">Reg Reporting</div>
+                            <div class="version v31">AG Grid v31</div>
+                        </div>
+                        <div class="remote-module">
+                            <div class="name">Financial Reporting</div>
+                            <div class="version v30">AG Grid v30</div>
+                        </div>
+                        <div class="remote-module">
+                            <div class="name">Expense Reporting</div>
+                            <div class="version v31">AG Grid v31</div>
+                        </div>
+                        <div class="remote-module">
+                            <div class="name">Tax Reporting</div>
+                            <div class="version v29">AG Grid v29</div>
+                        </div>
+                        <div class="remote-module">
+                            <div class="name">Control Tower</div>
+                            <div class="version v31">AG Grid v31</div>
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 1.5rem; text-align: center; color: var(--gray);">
+                        Each module deployed independently with its own AG Grid version
+                    </div>
+                </div>
+            </div>
+
+            <div style="margin-top: 2rem; text-align: center;">
+                <span style="background: var(--success); color: white; padding: 0.5rem 1rem; border-radius: 6px;">
+                    ✓ Independent deployments with isolated dependencies
+                </span>
+            </div>
+        </div>
+
+        <!-- Slide 5: What is Module Federation -->
+        <div class="slide" data-slide="5">
+            <h2 class="slide-title">What is Module Federation?</h2>
+            <p class="slide-subtitle">Webpack 5 feature for micro-frontend architecture</p>
+
+            <div class="content-grid content-grid-2" style="max-width: 1000px; margin: 0 auto;">
+                <div class="card">
+                    <h3 class="card-title">🏠 Host Application (Shell)</h3>
+                    <p class="card-text">The main container that dynamically loads remote modules at runtime. Provides:</p>
+                    <ul style="margin-top: 1rem; color: var(--gray);">
+                        <li>Global navigation and layout</li>
+                        <li>Authentication/authorization</li>
+                        <li>Routing between modules</li>
+                        <li>Shared dependency management</li>
+                    </ul>
+                </div>
+
+                <div class="card">
+                    <h3 class="card-title">📦 Remote Modules</h3>
+                    <p class="card-text">Independent applications that expose components to be consumed by the host:</p>
+                    <ul style="margin-top: 1rem; color: var(--gray);">
+                        <li>Deployed independently</li>
+                        <li>Own dependencies & versions</li>
+                        <li>Loaded on-demand</li>
+                        <li>Can be updated without host rebuild</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="code-block" style="max-width: 1000px; margin: 2rem auto;">
+                <span class="comment">// Shell webpack.config.js - Host configuration</span><br>
+                <span class="keyword">new</span> ModuleFederationPlugin({<br>
+                &nbsp;&nbsp;name: <span class="string">'shell'</span>,<br>
+                &nbsp;&nbsp;<span class="property">remotes</span>: {<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;taxReporting: <span class="string">'taxReporting@https://cdn.example.com/tax/remoteEntry.js'</span>,<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;regReporting: <span class="string">'regReporting@https://cdn.example.com/reg/remoteEntry.js'</span>,<br>
+                &nbsp;&nbsp;},<br>
+                &nbsp;&nbsp;<span class="property">shared</span>: { react: { <span class="property">singleton</span>: <span class="keyword">true</span> } }<br>
+                })
+            </div>
+        </div>
+
+        <!-- Slide 6: AG Grid Version Isolation -->
+        <div class="slide" data-slide="6">
+            <h2 class="slide-title">AG Grid Version Isolation</h2>
+            <p class="slide-subtitle">How Module Federation enables multiple versions</p>
+
+            <div class="version-isolation">
+                <div class="browser-container">
+                    <div class="browser-header">
+                        <div class="browser-dot red"></div>
+                        <div class="browser-dot yellow"></div>
+                        <div class="browser-dot green"></div>
+                    </div>
+                    <div class="browser-content">
+                        <div style="text-align: center; margin-bottom: 1.5rem;">
+                            <strong style="font-size: 1.25rem;">Shell Application (Browser Runtime)</strong>
+                        </div>
+                        <div class="isolation-modules">
+                            <div class="isolated-module">
+                                <h5>Tax Reporting</h5>
+                                <p style="font-size: 0.85rem; color: var(--gray);">Isolated Bundle</p>
+                                <div class="ag-grid-badge v29">AG Grid v29.3.0</div>
+                            </div>
+                            <div class="isolated-module">
+                                <h5>Financial Reporting</h5>
+                                <p style="font-size: 0.85rem; color: var(--gray);">Isolated Bundle</p>
+                                <div class="ag-grid-badge v30">AG Grid v30.2.0</div>
+                            </div>
+                            <div class="isolated-module">
+                                <h5>Reg Reporting</h5>
+                                <p style="font-size: 0.85rem; color: var(--gray);">Isolated Bundle</p>
+                                <div class="ag-grid-badge v31">AG Grid v31.0.0</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="code-block">
+                    <span class="comment">// Tax Reporting webpack.config.js - Uses AG Grid v29</span><br>
+                    <span class="keyword">new</span> ModuleFederationPlugin({<br>
+                    &nbsp;&nbsp;name: <span class="string">'taxReporting'</span>,<br>
+                    &nbsp;&nbsp;<span class="property">shared</span>: {<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;<span class="string">'ag-grid-community'</span>: {<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="property">singleton</span>: <span class="keyword">false</span>, <span class="comment">// NOT singleton - allows different versions</span><br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="property">requiredVersion</span>: <span class="string">'^29.3.0'</span><br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;}<br>
+                    &nbsp;&nbsp;}<br>
+                    })
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 7: AG Grid Version Matrix -->
+        <div class="slide" data-slide="7">
+            <h2 class="slide-title">AG Grid Version Matrix</h2>
+            <p class="slide-subtitle">Each module with its required version</p>
+
+            <table class="comparison-table">
+                <thead>
+                    <tr>
+                        <th>Module</th>
+                        <th>AG Grid Version</th>
+                        <th>Reason</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Regulatory Reporting</strong></td>
+                        <td><span style="background: var(--success); color: white; padding: 0.25rem 0.75rem; border-radius: 4px;">v31.0.0</span></td>
+                        <td>Latest features for compliance reports</td>
+                        <td>✅ Latest</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Financial Reporting</strong></td>
+                        <td><span style="background: var(--primary); color: white; padding: 0.25rem 0.75rem; border-radius: 4px;">v30.2.0</span></td>
+                        <td>Stable version with specific pivot features</td>
+                        <td>🔄 Planned upgrade</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Expense Reporting</strong></td>
+                        <td><span style="background: var(--success); color: white; padding: 0.25rem 0.75rem; border-radius: 4px;">v31.0.0</span></td>
+                        <td>Latest features for expense tracking</td>
+                        <td>✅ Latest</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Tax Reporting</strong></td>
+                        <td><span style="background: var(--warning); color: white; padding: 0.25rem 0.75rem; border-radius: 4px;">v29.3.0</span></td>
+                        <td>Legacy compatibility for tax calculations</td>
+                        <td>⚠️ Legacy support</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Control Tower</strong></td>
+                        <td><span style="background: var(--success); color: white; padding: 0.25rem 0.75rem; border-radius: 4px;">v31.0.0</span></td>
+                        <td>Dashboard with latest chart integration</td>
+                        <td>✅ Latest</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div style="margin-top: 2rem; text-align: center;">
+                <div class="card" style="display: inline-block; max-width: 600px;">
+                    <p><strong>Key Benefit:</strong> Each team can upgrade AG Grid at their own pace without affecting other modules. Tax team can continue using v29 while others use v31.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 8: New Deployment Architecture -->
+        <div class="slide" data-slide="8">
+            <h2 class="slide-title">New Deployment Architecture</h2>
+            <p class="slide-subtitle">From single pod to distributed micro-frontends</p>
+
+            <div class="deployment-arch">
+                <div class="k8s-cluster">
+                    <div class="k8s-header">
+                        <div style="font-size: 2rem;">☸️</div>
+                        <h4>Azure Kubernetes Service (AKS)</h4>
+                    </div>
+                    
+                    <div class="k8s-pods">
+                        <div class="k8s-pod shell">
+                            <div class="pod-name">🏠 Shell Pod</div>
+                            <div class="pod-version">Host Application - Replicas: 2</div>
+                        </div>
+                        
+                        <div class="k8s-pod">
+                            <div class="pod-name">📋 Reg Reporting</div>
+                            <div class="pod-version">AG Grid v31 - Replicas: 2</div>
+                        </div>
+                        <div class="k8s-pod">
+                            <div class="pod-name">💰 Financial</div>
+                            <div class="pod-version">AG Grid v30 - Replicas: 2</div>
+                        </div>
+                        <div class="k8s-pod">
+                            <div class="pod-name">💳 Expense</div>
+                            <div class="pod-version">AG Grid v31 - Replicas: 2</div>
+                        </div>
+                        <div class="k8s-pod">
+                            <div class="pod-name">📊 Tax</div>
+                            <div class="pod-version">AG Grid v29 - Replicas: 2</div>
+                        </div>
+                        <div class="k8s-pod">
+                            <div class="pod-name">🎛️ Control Tower</div>
+                            <div class="pod-version">AG Grid v31 - Replicas: 2</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="margin-top: 2rem;">
+                    <div class="content-grid content-grid-3">
+                        <div class="card success">
+                            <h4 class="card-title">Independent Scaling</h4>
+                            <p class="card-text">Scale each module based on demand</p>
+                        </div>
+                        <div class="card success">
+                            <h4 class="card-title">Isolated Failures</h4>
+                            <p class="card-text">One module failure doesn't affect others</p>
+                        </div>
+                        <div class="card success">
+                            <h4 class="card-title">Zero-Downtime Updates</h4>
+                            <p class="card-text">Update modules independently</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 9: Build & Deployment Flow -->
+        <div class="slide" data-slide="9">
+            <h2 class="slide-title">Build & Deployment Flow</h2>
+            <p class="slide-subtitle">From code commit to production</p>
+
+            <div class="flow-diagram">
+                <div class="flow-step">
+                    <div style="font-size: 2rem;">📝</div>
+                    <div>Git Push</div>
+                    <div style="font-size: 0.8rem; color: var(--gray);">(Module Repo)</div>
+                </div>
+                <div class="flow-arrow">→</div>
+                <div class="flow-step">
+                    <div style="font-size: 2rem;">🔍</div>
+                    <div>Change Detection</div>
+                    <div style="font-size: 0.8rem; color: var(--gray);">Path-based trigger</div>
+                </div>
+                <div class="flow-arrow">→</div>
+                <div class="flow-step highlight">
+                    <div style="font-size: 2rem;">🔨</div>
+                    <div>Build Module</div>
+                    <div style="font-size: 0.8rem; opacity: 0.9;">Only changed module</div>
+                </div>
+                <div class="flow-arrow">→</div>
+                <div class="flow-step">
+                    <div style="font-size: 2rem;">📦</div>
+                    <div>JFrog Artifact</div>
+                    <div style="font-size: 0.8rem; color: var(--gray);">Versioned package</div>
+                </div>
+                <div class="flow-arrow">→</div>
+                <div class="flow-step">
+                    <div style="font-size: 2rem;">🚀</div>
+                    <div>Deploy to CDN</div>
+                    <div style="font-size: 0.8rem; color: var(--gray);">or AKS</div>
+                </div>
+            </div>
+
+            <div style="max-width: 900px; margin: 2rem auto;">
+                <div class="card">
+                    <h4 class="card-title">CI/CD Pipeline Features</h4>
+                    <div class="content-grid content-grid-2" style="margin-top: 1rem;">
+                        <div>
+                            <ul style="list-style: none;">
+                                <li>✅ Path-based workflow triggers</li>
+                                <li>✅ Module-specific builds only</li>
+                                <li>✅ Independent test suites</li>
+                            </ul>
+                        </div>
+                        <div>
+                            <ul style="list-style: none;">
+                                <li>✅ Versioned artifacts in JFrog</li>
+                                <li>✅ Module registry updates</li>
+                                <li>✅ Automated CDN deployment</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="code-block" style="max-width: 900px; margin: 0 auto;">
+                <span class="comment"># .github/workflows/tax-reporting.yml</span><br>
+                <span class="keyword">on</span>:<br>
+                &nbsp;&nbsp;<span class="property">push</span>:<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;<span class="property">paths</span>:<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;- <span class="string">'apps/tax-reporting/**'</span> <span class="comment"># Only triggers for this module</span><br>
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;- <span class="string">'packages/shared-library/**'</span>
+            </div>
+        </div>
+
+        <!-- Slide 10: Migration Phases -->
+        <div class="slide" data-slide="10">
+            <h2 class="slide-title">Migration Phases</h2>
+            <p class="slide-subtitle">Step-by-step transformation approach</p>
+
+            <div class="timeline">
+                <div class="timeline-item">
+                    <div class="timeline-phase">
+                        <div class="phase-number">1</div>
+                        <div class="phase-label">Foundation</div>
+                    </div>
+                    <div class="timeline-content">
+                        <h4 class="timeline-title">Setup Infrastructure</h4>
+                        <p style="color: var(--gray);">Establish the Module Federation foundation</p>
+                        <ul class="timeline-tasks">
+                            <li>Create monorepo with pnpm workspaces</li>
+                            <li>Configure Webpack Module Federation</li>
+                            <li>Set up Shell (Host) application</li>
+                            <li>Configure shared dependency management</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="timeline-item">
+                    <div class="timeline-phase">
+                        <div class="phase-number">2</div>
+                        <div class="phase-label">Shared Library</div>
+                    </div>
+                    <div class="timeline-content">
+                        <h4 class="timeline-title">Extract Shared Components</h4>
+                        <p style="color: var(--gray);">Create reusable component library</p>
+                        <ul class="timeline-tasks">
+                            <li>Identify common components across modules</li>
+                            <li>Build shared-library package</li>
+                            <li>Configure as federated shared dependency</li>
+                            <li>Implement common hooks and utilities</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="timeline-item">
+                    <div class="timeline-phase">
+                        <div class="phase-number">3</div>
+                        <div class="phase-label">Module Migration</div>
+                    </div>
+                    <div class="timeline-content">
+                        <h4 class="timeline-title">Migrate Modules One by One</h4>
+                        <p style="color: var(--gray);">Incremental migration with rollback capability</p>
+                        <ul class="timeline-tasks">
+                            <li>Control Tower → Federated (simplest first)</li>
+                            <li>Expense Reporting → Federated</li>
+                            <li>Reg Reporting → Federated</li>
+                            <li>Financial Reporting → Federated (AG Grid v30)</li>
+                            <li>Tax Reporting → Federated (AG Grid v29)</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="timeline-item">
+                    <div class="timeline-phase">
+                        <div class="phase-number">4</div>
+                        <div class="phase-label">Production</div>
+                    </div>
+                    <div class="timeline-content">
+                        <h4 class="timeline-title">Deploy & Optimize</h4>
+                        <p style="color: var(--gray);">Production deployment and monitoring</p>
+                        <ul class="timeline-tasks">
+                            <li>Set up independent CI/CD pipelines</li>
+                            <li>Configure AKS with multiple pods</li>
+                            <li>Implement module registry service</li>
+                            <li>Performance optimization and monitoring</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 11: Before vs After -->
+        <div class="slide" data-slide="11">
+            <h2 class="slide-title">Before vs After</h2>
+            <p class="slide-subtitle">Comparison of architectures</p>
+
+            <table class="comparison-table">
+                <thead>
+                    <tr>
+                        <th>Aspect</th>
+                        <th>Current (Monolith)</th>
+                        <th>New (Module Federation)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Deployment</strong></td>
+                        <td class="current">Single image, all modules together</td>
+                        <td class="new">Independent deployment per module</td>
+                    </tr>
+                    <tr>
+                        <td><strong>AG Grid</strong></td>
+                        <td class="current">One version forced for all</td>
+                        <td class="new">Different versions per module (v29, v30, v31)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Build Time</strong></td>
+                        <td class="current">Full rebuild for any change</td>
+                        <td class="new">Only changed module rebuilds</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Team Independence</strong></td>
+                        <td class="current">Wait for code merges</td>
+                        <td class="new">Deploy anytime, no blocking</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Scaling</strong></td>
+                        <td class="current">Scale entire app together</td>
+                        <td class="new">Scale modules independently</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Failure Impact</strong></td>
+                        <td class="current">One failure affects all</td>
+                        <td class="new">Isolated failures per module</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Rollback</strong></td>
+                        <td class="current">Rollback entire application</td>
+                        <td class="new">Rollback specific module only</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Slide 12: JFrog Integration -->
+        <div class="slide" data-slide="12">
+            <h2 class="slide-title">JFrog Artifact Repository</h2>
+            <p class="slide-subtitle">Versioned module packages</p>
+
+            <div class="content-grid content-grid-2" style="max-width: 1100px; margin: 0 auto;">
+                <div class="card">
+                    <h3 class="card-title">📦 Artifact Structure</h3>
+                    <div class="code-block" style="margin-top: 1rem; font-size: 0.85rem;">
+ui-modules/<br>
+├── shell/<br>
+│   ├── 1.0.0/<br>
+│   │   ├── remoteEntry.js<br>
+│   │   └── assets/<br>
+│   └── 1.1.0/<br>
+├── reg-reporting/<br>
+│   ├── 2.1.0/ <span class="comment">(AG Grid v31)</span><br>
+│   └── 2.2.0/<br>
+├── tax-reporting/<br>
+│   ├── 3.0.0/ <span class="comment">(AG Grid v29)</span><br>
+│   └── 3.0.1/<br>
+└── financial-reporting/<br>
+    └── 1.5.0/ <span class="comment">(AG Grid v30)</span>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3 class="card-title">🔄 Version Management</h3>
+                    <ul style="margin-top: 1rem; list-style: none;">
+                        <li style="padding: 0.75rem 0; border-bottom: 1px solid #e2e8f0;">
+                            <strong>Semantic Versioning</strong><br>
+                            <span style="color: var(--gray); font-size: 0.9rem;">Each module follows semver independently</span>
+                        </li>
+                        <li style="padding: 0.75rem 0; border-bottom: 1px solid #e2e8f0;">
+                            <strong>Immutable Artifacts</strong><br>
+                            <span style="color: var(--gray); font-size: 0.9rem;">Once published, artifacts never change</span>
+                        </li>
+                        <li style="padding: 0.75rem 0; border-bottom: 1px solid #e2e8f0;">
+                            <strong>Quick Rollback</strong><br>
+                            <span style="color: var(--gray); font-size: 0.9rem;">Point to previous version instantly</span>
+                        </li>
+                        <li style="padding: 0.75rem 0;">
+                            <strong>Module Registry</strong><br>
+                            <span style="color: var(--gray); font-size: 0.9rem;">Dynamic discovery of module versions</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="code-block" style="max-width: 900px; margin: 2rem auto;">
+                <span class="comment"># Publish to JFrog after build</span><br>
+                jfrog rt upload <span class="string">"dist/*"</span> \<br>
+                &nbsp;&nbsp;<span class="string">"ui-modules/tax-reporting/3.0.1/"</span> \<br>
+                &nbsp;&nbsp;--build-name=<span class="string">"tax-reporting"</span> \<br>
+                &nbsp;&nbsp;--build-number=<span class="string">"3.0.1"</span>
+            </div>
+        </div>
+
+        <!-- Slide 13: Runtime Module Discovery -->
+        <div class="slide" data-slide="13">
+            <h2 class="slide-title">Runtime Module Discovery</h2>
+            <p class="slide-subtitle">Dynamic loading of federated modules</p>
+
+            <div class="content-grid content-grid-2" style="max-width: 1100px; margin: 0 auto;">
+                <div>
+                    <h4 style="margin-bottom: 1rem;">Module Registry Service</h4>
+                    <div class="code-block" style="font-size: 0.85rem;">
+<span class="comment">// GET /api/module-manifest</span><br>
+{<br>
+&nbsp;&nbsp;<span class="property">"modules"</span>: {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="property">"taxReporting"</span>: {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="property">"remoteEntry"</span>: <span class="string">"https://cdn/tax/v3.0.1/remoteEntry.js"</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="property">"agGridVersion"</span>: <span class="string">"29.3.0"</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="property">"version"</span>: <span class="string">"3.0.1"</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;},<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="property">"regReporting"</span>: {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="property">"remoteEntry"</span>: <span class="string">"https://cdn/reg/v2.1.0/remoteEntry.js"</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="property">"agGridVersion"</span>: <span class="string">"31.0.0"</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="property">"version"</span>: <span class="string">"2.1.0"</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;}<br>
+&nbsp;&nbsp;}<br>
+}
+                    </div>
+                </div>
+
+                <div>
+                    <h4 style="margin-bottom: 1rem;">Shell Dynamic Loading</h4>
+                    <div class="code-block" style="font-size: 0.85rem;">
+<span class="comment">// Shell loads modules at runtime</span><br>
+<span class="keyword">const</span> manifest = <span class="keyword">await</span> fetch(<span class="string">'/api/module-manifest'</span>);<br>
+<span class="keyword">const</span> { modules } = <span class="keyword">await</span> manifest.json();<br>
+<br>
+<span class="comment">// Load Tax Reporting with AG Grid v29</span><br>
+<span class="keyword">const</span> TaxApp = <span class="keyword">await</span> loadRemote(<br>
+&nbsp;&nbsp;modules.taxReporting.remoteEntry,<br>
+&nbsp;&nbsp;<span class="string">'./App'</span><br>
+);<br>
+<br>
+<span class="comment">// Render the remote component</span><br>
+&lt;Suspense fallback={&lt;Loading /&gt;}&gt;<br>
+&nbsp;&nbsp;&lt;TaxApp /&gt;<br>
+&lt;/Suspense&gt;
+                    </div>
+                </div>
+            </div>
+
+            <div style="margin-top: 2rem; text-align: center;">
+                <div class="card" style="display: inline-block;">
+                    <strong>Benefits:</strong> Update module versions without redeploying the Shell. A/B testing different module versions. Instant rollback by updating registry.
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 14: Benefits & ROI -->
+        <div class="slide" data-slide="14">
+            <h2 class="slide-title">Benefits & ROI</h2>
+            <p class="slide-subtitle">Measurable improvements from Module Federation</p>
+
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value">80%</div>
+                    <div class="stat-label">Faster Builds</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">5x</div>
+                    <div class="stat-label">Deployment Frequency</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">0</div>
+                    <div class="stat-label">Merge Conflicts</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">3</div>
+                    <div class="stat-label">AG Grid Versions</div>
+                </div>
+            </div>
+
+            <div class="benefits-list" style="margin-top: 2rem;">
+                <div class="benefit-item">
+                    <div class="benefit-icon">🚀</div>
+                    <div class="benefit-content">
+                        <h4>Independent Deployments</h4>
+                        <p>Deploy modules without waiting for other teams. Release anytime, not on a schedule.</p>
+                    </div>
+                </div>
+                <div class="benefit-item">
+                    <div class="benefit-icon">📦</div>
+                    <div class="benefit-content">
+                        <h4>Version Flexibility</h4>
+                        <p>Run AG Grid v29, v30, and v31 simultaneously. Upgrade at your own pace.</p>
+                    </div>
+                </div>
+                <div class="benefit-item">
+                    <div class="benefit-icon">👥</div>
+                    <div class="benefit-content">
+                        <h4>Team Autonomy</h4>
+                        <p>Teams own their modules end-to-end. No more blocking on shared codebase.</p>
+                    </div>
+                </div>
+                <div class="benefit-item">
+                    <div class="benefit-icon">⚡</div>
+                    <div class="benefit-content">
+                        <h4>Faster Time to Market</h4>
+                        <p>Reduced build times and independent releases mean features ship faster.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 15: Next Steps -->
+        <div class="slide" data-slide="15">
+            <h2 class="slide-title">Next Steps</h2>
+            <p class="slide-subtitle">Getting started with Module Federation</p>
+
+            <div class="content-grid content-grid-3" style="margin-bottom: 2rem;">
+                <div class="card highlight">
+                    <div class="card-icon">1️⃣</div>
+                    <h3 class="card-title">Review Architecture</h3>
+                    <p class="card-text">Review the provided codebase and architecture documentation. Understand Module Federation concepts.</p>
+                </div>
+                <div class="card highlight">
+                    <div class="card-icon">2️⃣</div>
+                    <h3 class="card-title">POC Setup</h3>
+                    <p class="card-text">Set up local development environment. Run Shell and one remote module. Validate AG Grid isolation.</p>
+                </div>
+                <div class="card highlight">
+                    <div class="card-icon">3️⃣</div>
+                    <h3 class="card-title">Pilot Module</h3>
+                    <p class="card-text">Migrate Control Tower as pilot. Deploy to staging. Measure build times and deployment frequency.</p>
+                </div>
+            </div>
+
+            <div class="card" style="max-width: 900px; margin: 0 auto; text-align: center;">
+                <h3 class="card-title" style="font-size: 1.5rem; margin-bottom: 1rem;">Resources</h3>
+                <div class="content-grid content-grid-2" style="text-align: left;">
+                    <div>
+                        <p><strong>📁 Codebase:</strong> Complete implementation provided</p>
+                        <p><strong>📖 Documentation:</strong> docs/ARCHITECTURE.md</p>
+                    </div>
+                    <div>
+                        <p><strong>🐳 Docker:</strong> infrastructure/docker/</p>
+                        <p><strong>☸️ Kubernetes:</strong> infrastructure/kubernetes/</p>
+                    </div>
+                </div>
+            </div>
+
+            <div style="text-align: center; margin-top: 3rem;">
+                <div style="background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%); color: white; padding: 2rem 3rem; border-radius: 12px; display: inline-block;">
+                    <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">Ready to Transform Your UI Architecture</div>
+                    <div style="opacity: 0.9;">Module Federation enables independent, scalable micro-frontends</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentSlide = 1;
+        const totalSlides = document.querySelectorAll('.slide').length;
+        document.getElementById('totalSlides').textContent = totalSlides;
+
+        function showSlide(n) {
+            const slides = document.querySelectorAll('.slide');
+            
+            if (n > totalSlides) currentSlide = 1;
+            if (n < 1) currentSlide = totalSlides;
+            
+            slides.forEach(slide => slide.classList.remove('active'));
+            slides[currentSlide - 1].classList.add('active');
+            document.getElementById('currentSlide').textContent = currentSlide;
+        }
+
+        function nextSlide() {
+            currentSlide++;
+            showSlide(currentSlide);
+        }
+
+        function prevSlide() {
+            currentSlide--;
+            showSlide(currentSlide);
+        }
+
+        // Keyboard navigation
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowRight' || e.key === ' ') {
+                nextSlide();
+            } else if (e.key === 'ArrowLeft') {
+                prevSlide();
+            }
+        });
+
+        // Touch swipe support
+        let touchStartX = 0;
+        document.addEventListener('touchstart', (e) => {
+            touchStartX = e.touches[0].clientX;
+        });
+
+        document.addEventListener('touchend', (e) => {
+            const touchEndX = e.changedTouches[0].clientX;
+            const diff = touchStartX - touchEndX;
+            
+            if (Math.abs(diff) > 50) {
+                if (diff > 0) {
+                    nextSlide();
+                } else {
+                    prevSlide();
+                }
+            }
+        });
+    </script>
+</body>
+</html>

@@ -838,10 +838,14 @@ class ExcelToJSONTransformer:
         self.validation_id_service: Optional[ValidationIDService] = None
     
     def load_cards(self, cards_data: List[Dict[str, Any]]):
-        """Load cards from parsed Excel data."""
+        """Load cards from parsed Excel data. Skips rows with empty Card Name."""
         for row in cards_data:
+            card_name = row.get('Card Name', '')
+            # Skip empty card names
+            if not card_name or not str(card_name).strip():
+                continue
             self.cards.append(Card(
-                card_name=row.get('Card Name', ''),
+                card_name=str(card_name).strip(),
                 fiscal_year_end=row.get('fiscal_year_end', ''),
                 reporting_cycle=row.get('reporting_cycle', ''),
                 open_end_close_end=row.get('open_end_close_end', ''),

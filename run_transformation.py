@@ -287,8 +287,8 @@ def run_transformation(input_file: str, output_folder: str, verbose: bool = True
     if kri_master_data:
         transformer.load_kri_master(kri_master_data)
     
-    # Get all card names
-    card_names = transformer.get_card_names()
+    # Get all card names - filter out empty names
+    card_names = [cn for cn in transformer.get_card_names() if cn and cn.strip()]
     
     if verbose:
         print(f"  Found {len(card_names)} card(s)")
@@ -312,6 +312,10 @@ def run_transformation(input_file: str, output_folder: str, verbose: bool = True
     total_files = 0
     
     for card_name in card_names:
+        # Skip empty card names
+        if not card_name or not card_name.strip():
+            continue
+        
         outputs = all_outputs.get(card_name, {})
         if not outputs:
             continue
@@ -322,18 +326,38 @@ def run_transformation(input_file: str, output_folder: str, verbose: bool = True
         if verbose:
             print(f"\n  Card: {card_name}")
         
+        # Check if this card has KRI validations
+        has_kri = False
+        if 'json2' in outputs:
+            json2_data = json.loads(outputs['json2'])
+            has_kri = len(json2_data.get('data', {}).get('kriDetails', [])) > 0
+        
         card_outputs = {}
-        for key in ['json1', 'json2', 'json3', 'json4', 'json5']:
-            if key not in outputs:
-                continue
-            filename = file_names[key]
+        
+        # Always create JSON 1 (combined validations)
+        if 'json1' in outputs:
+            filename = file_names['json1']
             output_path = os.path.join(output_folder, filename)
             with open(output_path, 'w', encoding='utf-8') as f:
-                f.write(outputs[key])
-            card_outputs[key] = output_path
+                f.write(outputs['json1'])
+            card_outputs['json1'] = output_path
             total_files += 1
             if verbose:
                 print(f"    - {filename}")
+        
+        # Only create KRI-related files (json2-json5) if card has KRI validations
+        if has_kri:
+            for key in ['json2', 'json3', 'json4', 'json5']:
+                if key not in outputs:
+                    continue
+                filename = file_names[key]
+                output_path = os.path.join(output_folder, filename)
+                with open(output_path, 'w', encoding='utf-8') as f:
+                    f.write(outputs[key])
+                card_outputs[key] = output_path
+                total_files += 1
+                if verbose:
+                    print(f"    - {filename}")
         
         all_output_paths[card_name] = card_outputs
     
@@ -350,10 +374,13 @@ def run_transformation(input_file: str, output_folder: str, verbose: bool = True
         print(f"\nOutput files created in: {output_folder}")
         
         for card_name in card_names:
-            file_names = get_output_file_names(card_name)
-            print(f"\n  {card_name}:")
-            for key in ['json1', 'json2', 'json3', 'json4', 'json5']:
-                print(f"    - {file_names[key]}")
+            if card_name in all_output_paths:
+                card_files = all_output_paths[card_name]
+                file_names = get_output_file_names(card_name)
+                print(f"\n  {card_name}:")
+                for key in ['json1', 'json2', 'json3', 'json4', 'json5']:
+                    if key in card_files:
+                        print(f"    - {file_names[key]}")
         
         # Print statistics for first card
         if card_names and card_names[0] in all_outputs:

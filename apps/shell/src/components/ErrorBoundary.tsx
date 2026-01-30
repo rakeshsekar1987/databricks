@@ -4,6 +4,7 @@ interface Props {
   children: ReactNode;
   moduleName?: string;
   fallback?: ReactNode;
+  onError?: (error: Error, errorInfo: ErrorInfo) => void;
 }
 
 interface State {
@@ -13,8 +14,8 @@ interface State {
 }
 
 /**
- * Error Boundary for catching errors in federated modules
- * Provides graceful degradation when a module fails to load
+ * Production-ready Error Boundary
+ * Catches JavaScript errors in child component tree and displays fallback UI
  */
 class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
@@ -32,20 +33,45 @@ class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     this.setState({ errorInfo });
-    
-    // Log error to monitoring service
-    console.error('Module Error:', {
+
+    // Log error
+    console.error('[ErrorBoundary] Caught error:', {
       moduleName: this.props.moduleName,
       error: error.message,
-      stack: error.stack,
       componentStack: errorInfo.componentStack,
     });
 
+    // Call error callback if provided
+    this.props.onError?.(error, errorInfo);
+
     // In production, send to error tracking service
-    // errorTrackingService.captureError(error, { moduleName: this.props.moduleName });
+    if (process.env.NODE_ENV === 'production') {
+      this.reportError(error, errorInfo);
+    }
   }
 
-  handleRetry = () => {
+  private reportError(error: Error, errorInfo: ErrorInfo) {
+    // Integration point for error tracking (Sentry, etc.)
+    try {
+      // Example: Send to error tracking API
+      const errorData = {
+        message: error.message,
+        stack: error.stack,
+        componentStack: errorInfo.componentStack,
+        moduleName: this.props.moduleName,
+        timestamp: new Date().toISOString(),
+        url: window.location.href,
+        userAgent: navigator.userAgent,
+      };
+
+      // navigator.sendBeacon('/api/errors', JSON.stringify(errorData));
+      console.error('[ErrorBoundary] Error reported:', errorData);
+    } catch (e) {
+      console.error('[ErrorBoundary] Failed to report error:', e);
+    }
+  }
+
+  private handleRetry = () => {
     this.setState({
       hasError: false,
       error: null,
@@ -54,40 +80,49 @@ class ErrorBoundary extends Component<Props, State> {
   };
 
   render() {
-    if (this.state.hasError) {
-      if (this.props.fallback) {
-        return this.props.fallback;
+    const { hasError, error, errorInfo } = this.state;
+    const { children, fallback, moduleName } = this.props;
+
+    if (hasError) {
+      if (fallback) {
+        return fallback;
       }
 
       return (
         <div className="error-boundary">
-          <div className="error-content">
-            <span className="error-icon">⚠️</span>
-            <h2>Module Failed to Load</h2>
-            {this.props.moduleName && (
+          <div className="error-boundary-content">
+            <div className="error-icon">❌</div>
+            <h2>Something went wrong</h2>
+            {moduleName && (
               <p className="error-module">
-                Module: <strong>{this.props.moduleName}</strong>
+                Module: <strong>{moduleName}</strong>
               </p>
             )}
             <p className="error-message">
-              {this.state.error?.message || 'An unexpected error occurred'}
+              {error?.message || 'An unexpected error occurred'}
             </p>
             <div className="error-actions">
-              <button onClick={this.handleRetry} className="retry-button">
-                🔄 Retry
+              <button onClick={this.handleRetry} className="btn btn-primary">
+                🔄 Try Again
               </button>
               <button
                 onClick={() => window.location.reload()}
-                className="reload-button"
+                className="btn btn-secondary"
               >
                 ↻ Reload Page
               </button>
             </div>
-            {process.env.NODE_ENV === 'development' && this.state.errorInfo && (
+            {process.env.NODE_ENV === 'development' && errorInfo && (
               <details className="error-details">
-                <summary>Error Details</summary>
-                <pre>{this.state.error?.stack}</pre>
-                <pre>{this.state.errorInfo.componentStack}</pre>
+                <summary>Technical Details</summary>
+                <div className="error-stack">
+                  <h4>Error Stack:</h4>
+                  <pre>{error?.stack}</pre>
+                </div>
+                <div className="error-component-stack">
+                  <h4>Component Stack:</h4>
+                  <pre>{errorInfo.componentStack}</pre>
+                </div>
               </details>
             )}
           </div>
@@ -95,7 +130,7 @@ class ErrorBoundary extends Component<Props, State> {
       );
     }
 
-    return this.props.children;
+    return children;
   }
 }
 

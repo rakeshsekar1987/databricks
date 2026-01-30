@@ -1,132 +1,81 @@
-import React, { Suspense } from 'react';
+import React, { Suspense, useEffect, useState } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
-import ModuleLoader from './components/ModuleLoader';
+import RemoteModule from './components/RemoteModule';
 import ErrorBoundary from './components/ErrorBoundary';
 import LoadingSpinner from './components/LoadingSpinner';
+import { getRemoteConfigs, RemoteConfig } from './lib/remoteConfig';
+import { preloadRemoteModule } from './lib/moduleFederation';
+import HomePage from './pages/HomePage';
 
-// Dynamic imports for remote modules using Module Federation
-// Each module is loaded from its remote entry point
-const RegReporting = React.lazy(() => import('regReporting/App'));
-const FinancialReporting = React.lazy(() => import('financialReporting/App'));
-const ExpenseReporting = React.lazy(() => import('expenseReporting/App'));
-const TaxReporting = React.lazy(() => import('taxReporting/App'));
-const ControlTower = React.lazy(() => import('controlTower/App'));
-
-// Home page component
-const HomePage: React.FC = () => (
-  <div className="home-page">
-    <h1>UI Platform</h1>
-    <p>Welcome to the Module Federation powered UI platform.</p>
-    <div className="module-cards">
-      <ModuleCard
-        title="Regulatory Reporting"
-        description="Manage regulatory compliance reports"
-        path="/reg-reporting"
-        icon="📋"
-      />
-      <ModuleCard
-        title="Financial Reporting"
-        description="Financial statements and analytics"
-        path="/financial-reporting"
-        icon="💰"
-      />
-      <ModuleCard
-        title="Expense Reporting"
-        description="Track and manage expenses"
-        path="/expense-reporting"
-        icon="💳"
-      />
-      <ModuleCard
-        title="Tax Reporting"
-        description="Tax calculations and filing"
-        path="/tax-reporting"
-        icon="📊"
-      />
-      <ModuleCard
-        title="Control Tower"
-        description="Dashboard and monitoring"
-        path="/control-tower"
-        icon="🎛️"
-      />
-    </div>
-  </div>
-);
-
-interface ModuleCardProps {
-  title: string;
-  description: string;
-  path: string;
-  icon: string;
-}
-
-const ModuleCard: React.FC<ModuleCardProps> = ({ title, description, path, icon }) => (
-  <a href={path} className="module-card">
-    <span className="module-icon">{icon}</span>
-    <h3>{title}</h3>
-    <p>{description}</p>
-  </a>
-);
-
+/**
+ * Main Application Component
+ * Manages routing and remote module loading
+ */
 const App: React.FC = () => {
+  const [remotes] = useState<Record<string, RemoteConfig>>(getRemoteConfigs());
+  const [isInitialized, setIsInitialized] = useState(false);
+
+  // Initialize and preload critical modules
+  useEffect(() => {
+    const init = async () => {
+      try {
+        // Preload remote entry scripts for faster navigation
+        if (process.env.ENABLE_MODULE_PRELOADING === 'true') {
+          Object.values(remotes).forEach((remote) => {
+            preloadRemoteModule(remote.url);
+          });
+        }
+      } catch (error) {
+        console.error('[App] Initialization error:', error);
+      } finally {
+        setIsInitialized(true);
+      }
+    };
+
+    init();
+  }, [remotes]);
+
+  if (!isInitialized) {
+    return <LoadingSpinner message="Initializing application..." fullScreen />;
+  }
+
   return (
-    <Layout>
-      <ErrorBoundary>
-        <Suspense fallback={<LoadingSpinner message="Loading module..." />}>
+    <ErrorBoundary moduleName="Shell">
+      <Layout>
+        <Suspense fallback={<LoadingSpinner message="Loading page..." />}>
           <Routes>
-            <Route path="/" element={<HomePage />} />
-            
-            {/* Each module is loaded independently with its own error boundary */}
+            {/* Home Page */}
+            <Route path="/" element={<HomePage remotes={remotes} />} />
+
+            {/* Dynamic routes for each remote module */}
             <Route
               path="/reg-reporting/*"
-              element={
-                <ModuleLoader moduleName="Regulatory Reporting">
-                  <RegReporting />
-                </ModuleLoader>
-              }
+              element={<RemoteModule remote={remotes.regReporting} />}
             />
-            
             <Route
               path="/financial-reporting/*"
-              element={
-                <ModuleLoader moduleName="Financial Reporting">
-                  <FinancialReporting />
-                </ModuleLoader>
-              }
+              element={<RemoteModule remote={remotes.financialReporting} />}
             />
-            
             <Route
               path="/expense-reporting/*"
-              element={
-                <ModuleLoader moduleName="Expense Reporting">
-                  <ExpenseReporting />
-                </ModuleLoader>
-              }
+              element={<RemoteModule remote={remotes.expenseReporting} />}
             />
-            
             <Route
               path="/tax-reporting/*"
-              element={
-                <ModuleLoader moduleName="Tax Reporting">
-                  <TaxReporting />
-                </ModuleLoader>
-              }
+              element={<RemoteModule remote={remotes.taxReporting} />}
             />
-            
             <Route
               path="/control-tower/*"
-              element={
-                <ModuleLoader moduleName="Control Tower">
-                  <ControlTower />
-                </ModuleLoader>
-              }
+              element={<RemoteModule remote={remotes.controlTower} />}
             />
-            
+
+            {/* 404 Redirect */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Suspense>
-      </ErrorBoundary>
-    </Layout>
+      </Layout>
+    </ErrorBoundary>
   );
 };
 

@@ -1,0 +1,24 @@
+version: '3.8'
+
+# UI Platform - Development Configuration
+# Uses volume mounts for hot reloading
+
+services:
+  # Module Registry only - other services run locally
+  module-registry:
+    build:
+      context: ../module-registry
+      dockerfile: Dockerfile
+    ports:
+      - "4000:4000"
+    environment:
+      - PORT=4000
+      - NODE_ENV=development
+      - REG_REPORTING_URL=http://host.docker.internal:3001/remoteEntry.js
+      - FINANCIAL_REPORTING_URL=http://host.docker.internal:3002/remoteEntry.js
+      - EXPENSE_REPORTING_URL=http://host.docker.internal:3003/remoteEntry.js
+      - TAX_REPORTING_URL=http://host.docker.internal:3004/remoteEntry.js
+      - CONTROL_TOWER_URL=http://host.docker.internal:3005/remoteEntry.js
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped

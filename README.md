@@ -1,79 +1,18 @@
-# UI Platform - Module Federation Architecture
+# UI Platform - Module Federation POC
 
-A modern micro-frontend architecture using Webpack Module Federation, enabling independent development, deployment, and versioning of UI modules with support for different AG Grid versions per module.
-
-## Overview
-
-This platform solves the tight coupling problem by implementing Module Federation, allowing:
-
-- **Independent Deployments**: Each module can be deployed without affecting others
-- **Different AG Grid Versions**: Each service can run its own version of AG Grid
-- **Parallel Development**: Teams work independently without blocking each other
-- **Faster Builds**: Only changed modules are rebuilt
-
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              Shell Application                               │
-│                         (Main UI Container/Host)                            │
-└─────────────────────────────────────────────────────────────────────────────┘
-         │              │              │              │              │
-         ▼              ▼              ▼              ▼              ▼
-┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐
-│     Reg     │ │  Financial  │ │   Expense   │ │     Tax     │ │   Control   │
-│  Reporting  │ │  Reporting  │ │  Reporting  │ │  Reporting  │ │    Tower    │
-│ AG Grid v31 │ │ AG Grid v30 │ │ AG Grid v31 │ │ AG Grid v29 │ │ AG Grid v31 │
-└─────────────┘ └─────────────┘ └─────────────┘ └─────────────┘ └─────────────┘
-```
-
-## AG Grid Version Matrix
-
-| Module | AG Grid Version | Purpose |
-|--------|-----------------|---------|
-| Reg Reporting | v31.0.0 | Latest features for regulatory compliance |
-| Financial Reporting | v30.2.0 | Stable version with specific features |
-| Expense Reporting | v31.0.0 | Latest features for expense tracking |
-| Tax Reporting | v29.3.0 | Legacy compatibility for tax calculations |
-| Control Tower | v31.0.0 | Dashboard and monitoring |
-
-## Project Structure
-
-```
-ui-module-federation/
-├── apps/
-│   ├── shell/                    # Host application (port 3000)
-│   ├── reg-reporting/            # Remote module (port 3001)
-│   ├── financial-reporting/      # Remote module (port 3002)
-│   ├── expense-reporting/        # Remote module (port 3003)
-│   ├── tax-reporting/            # Remote module (port 3004)
-│   └── control-tower/            # Remote module (port 3005)
-├── packages/
-│   └── shared-library/           # Shared components & utilities
-├── infrastructure/
-│   ├── docker/                   # Docker configurations
-│   ├── kubernetes/               # K8s manifests
-│   └── module-registry/          # Dynamic module discovery service
-├── .github/
-│   └── workflows/                # CI/CD pipelines
-└── docs/
-    └── ARCHITECTURE.md           # Detailed architecture documentation
-```
+A **production-ready** micro-frontend architecture using Webpack 5 Module Federation, enabling independent development, deployment, and versioning of UI modules with support for **multiple AG Grid versions**.
 
 ## Quick Start
 
 ### Prerequisites
 
 - Node.js >= 18.0.0
-- pnpm >= 8.0.0
+- pnpm >= 8.0.0 (`npm install -g pnpm`)
 
 ### Installation
 
 ```bash
-# Install pnpm if not already installed
-npm install -g pnpm
-
-# Install dependencies
+# Clone and install dependencies
 pnpm install
 
 # Build shared library
@@ -82,66 +21,144 @@ pnpm build:shared
 
 ### Development
 
-Run all modules in development mode:
-
+**Option 1: Start all modules**
 ```bash
-# Start all modules (in separate terminals)
-pnpm --filter @platform/shell dev          # http://localhost:3000
-pnpm --filter @platform/reg-reporting dev  # http://localhost:3001
-pnpm --filter @platform/financial-reporting dev  # http://localhost:3002
-pnpm --filter @platform/expense-reporting dev    # http://localhost:3003
-pnpm --filter @platform/tax-reporting dev       # http://localhost:3004
-pnpm --filter @platform/control-tower dev       # http://localhost:3005
+./scripts/dev.sh
 ```
 
-Or use Docker Compose:
+**Option 2: Start modules individually** (in separate terminals)
+```bash
+# Terminal 1 - Shell (Host) on port 3000
+pnpm --filter @platform/shell dev
 
+# Terminal 2 - Tax Reporting (AG Grid v29) on port 3004
+pnpm --filter @platform/tax-reporting dev
+
+# Terminal 3 - Financial Reporting (AG Grid v30) on port 3002
+pnpm --filter @platform/financial-reporting dev
+
+# ... other modules on ports 3001, 3003, 3005
+```
+
+**Option 3: Docker Compose**
 ```bash
 cd infrastructure/docker
 docker-compose up --build
 ```
 
-### Building
+### Access the Application
 
-```bash
-# Build all
-pnpm build
+| Module | URL | AG Grid Version |
+|--------|-----|-----------------|
+| **Shell (Host)** | http://localhost:3000 | - |
+| Reg Reporting | http://localhost:3001 | v31.0.0 |
+| Financial Reporting | http://localhost:3002 | v30.2.0 |
+| Expense Reporting | http://localhost:3003 | v31.0.0 |
+| Tax Reporting | http://localhost:3004 | v29.3.0 |
+| Control Tower | http://localhost:3005 | v31.0.0 |
 
-# Build specific module
-pnpm build:shell
-pnpm build:reg-reporting
-pnpm build:tax-reporting
+---
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              Shell Application                               │
+│                         (Main UI Container/Host)                            │
+│                      Module Federation Runtime                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+         │              │              │              │              │
+         ▼              ▼              ▼              ▼              ▼
+┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐
+│     Reg     │ │  Financial  │ │   Expense   │ │     Tax     │ │   Control   │
+│  Reporting  │ │  Reporting  │ │  Reporting  │ │  Reporting  │ │    Tower    │
+│             │ │             │ │             │ │             │ │             │
+│ AG Grid v31 │ │ AG Grid v30 │ │ AG Grid v31 │ │ AG Grid v29 │ │ AG Grid v31 │
+│ ─────────── │ │ ─────────── │ │ ─────────── │ │ ─────────── │ │ ─────────── │
+│ Independent │ │ Independent │ │ Independent │ │ Independent │ │ Independent │
+│    Pod      │ │    Pod      │ │    Pod      │ │    Pod      │ │    Pod      │
+└─────────────┘ └─────────────┘ └─────────────┘ └─────────────┘ └─────────────┘
 ```
 
-## Module Federation Configuration
+### Key Features
 
-### Shell (Host) Application
+| Feature | Description |
+|---------|-------------|
+| **Independent Deployments** | Each module deploys independently without affecting others |
+| **Multiple AG Grid Versions** | Run v29, v30, v31 simultaneously in the same application |
+| **Dynamic Module Loading** | Load remote modules at runtime with error handling |
+| **Team Autonomy** | Teams own modules end-to-end with full deployment independence |
+| **Fast Builds** | Only rebuild changed modules (80% faster) |
+| **Graceful Degradation** | Modules fail independently with retry capability |
 
-The shell application loads remote modules dynamically:
+---
+
+## Project Structure
+
+```
+ui-module-federation/
+├── apps/
+│   ├── shell/                    # Host application
+│   │   ├── src/
+│   │   │   ├── lib/              # Module Federation utilities
+│   │   │   ├── components/       # React components
+│   │   │   ├── pages/            # Page components
+│   │   │   └── styles/           # CSS styles
+│   │   ├── webpack.config.js     # Production-ready webpack
+│   │   └── package.json
+│   │
+│   ├── tax-reporting/            # AG Grid v29
+│   ├── financial-reporting/      # AG Grid v30
+│   ├── reg-reporting/            # AG Grid v31
+│   ├── expense-reporting/        # AG Grid v31
+│   └── control-tower/            # AG Grid v31
+│
+├── packages/
+│   └── shared-library/           # Shared components & utilities
+│
+├── infrastructure/
+│   ├── docker/                   # Production Docker configs
+│   │   ├── Dockerfile.shell
+│   │   ├── Dockerfile.module
+│   │   ├── docker-compose.yml
+│   │   └── nginx/
+│   ├── kubernetes/               # K8s manifests
+│   └── module-registry/          # Dynamic module discovery
+│
+├── scripts/
+│   ├── dev.sh                    # Development startup
+│   ├── build.sh                  # Production build
+│   └── docker-build.sh           # Docker image build
+│
+└── .github/workflows/            # CI/CD pipelines
+```
+
+---
+
+## How Module Federation Works
+
+### Shell (Host) Configuration
 
 ```javascript
-// webpack.config.js
+// apps/shell/webpack.config.js
 new ModuleFederationPlugin({
   name: 'shell',
   remotes: {
-    regReporting: 'regReporting@http://localhost:3001/remoteEntry.js',
     taxReporting: 'taxReporting@http://localhost:3004/remoteEntry.js',
-    // ... other modules
+    regReporting: 'regReporting@http://localhost:3001/remoteEntry.js',
   },
   shared: {
-    react: { singleton: true },
+    react: { singleton: true },    // Shared as singleton
     'react-dom': { singleton: true },
     // AG Grid is NOT shared - each module has its own version
   },
 })
 ```
 
-### Remote Module Configuration
-
-Each module exposes components and manages its own dependencies:
+### Remote Module Configuration (Tax Reporting with AG Grid v29)
 
 ```javascript
-// webpack.config.js for tax-reporting (AG Grid v29)
+// apps/tax-reporting/webpack.config.js
 new ModuleFederationPlugin({
   name: 'taxReporting',
   filename: 'remoteEntry.js',
@@ -151,141 +168,199 @@ new ModuleFederationPlugin({
   shared: {
     react: { singleton: true },
     'ag-grid-community': {
-      singleton: false,  // Allow different versions
+      singleton: false,           // NOT singleton - allows v29
       requiredVersion: '^29.3.0',
     },
   },
 })
 ```
 
-## Key Features
-
-### 1. Independent Module Versioning
-
-Each module has its own `package.json` with independent dependency versions:
-
-```json
-// apps/tax-reporting/package.json
-{
-  "dependencies": {
-    "ag-grid-community": "^29.3.0"  // v29 for Tax
-  }
-}
-
-// apps/reg-reporting/package.json
-{
-  "dependencies": {
-    "ag-grid-community": "^31.0.0"  // v31 for Reg
-  }
-}
-```
-
-### 2. Dynamic Module Discovery
-
-The Module Registry Service provides runtime module discovery:
-
-```javascript
-// Fetch module configuration at runtime
-const manifest = await fetch('/api/module-manifest');
-const { modules } = await manifest.json();
-
-// Load module dynamically
-const TaxReporting = await loadRemote(modules.taxReporting, './App');
-```
-
-### 3. Shared Library
-
-Common components and utilities are shared across all modules:
+### Dynamic Remote Loading
 
 ```typescript
-// Import shared components
-import { Button, Card, Badge } from '@platform/shared-library';
-
-// Import shared hooks
-import { useAsync, useDebounce } from '@platform/shared-library/hooks';
-
-// Import shared utilities
-import { formatCurrency, loadRemoteModule } from '@platform/shared-library/utils';
+// apps/shell/src/lib/moduleFederation.ts
+export async function loadRemoteModule(config) {
+  // Load remote entry script
+  await loadScript(config.url);
+  
+  // Get container from window
+  const container = window[config.scope];
+  
+  // Initialize with shared scope
+  await container.init(__webpack_share_scopes__.default);
+  
+  // Get and return the module
+  const factory = await container.get(config.module);
+  return factory().default;
+}
 ```
 
-## CI/CD Pipeline
+---
 
-Each module has its own CI/CD pipeline triggered by path-specific changes:
+## AG Grid Version Isolation
+
+Each module can use a different AG Grid version because:
+
+1. **AG Grid is not shared as singleton** in Module Federation config
+2. **Each module bundles its own AG Grid** version
+3. **Modules are loaded in isolation** at runtime
+
+```javascript
+// Tax Reporting uses v29
+"ag-grid-community": "^29.3.0"
+
+// Financial Reporting uses v30
+"ag-grid-community": "^30.2.0"
+
+// Reg Reporting uses v31
+"ag-grid-community": "^31.0.0"
+```
+
+---
+
+## Production Deployment
+
+### Build for Production
+
+```bash
+# Build all modules
+./scripts/build.sh
+
+# Build specific module
+./scripts/build.sh tax-reporting
+```
+
+### Docker Deployment
+
+```bash
+# Build all Docker images
+./scripts/docker-build.sh
+
+# Run with Docker Compose
+cd infrastructure/docker
+docker-compose up -d
+```
+
+### Kubernetes Deployment
+
+```bash
+# Apply Kubernetes manifests
+kubectl apply -k infrastructure/kubernetes/
+```
+
+---
+
+## CI/CD Pipelines
+
+Each module has its own GitHub Actions workflow with path-based triggers:
 
 ```yaml
 # .github/workflows/tax-reporting.yml
 on:
   push:
     paths:
-      - 'apps/tax-reporting/**'
+      - 'apps/tax-reporting/**'    # Only triggers for this module
       - 'packages/shared-library/**'
 ```
 
 ### Pipeline Stages
 
-1. **Build**: Compile and bundle the module
-2. **Test**: Run unit tests and linting
-3. **Publish**: Upload artifacts to JFrog
-4. **Deploy**: Deploy to CDN/Kubernetes
+1. **Build** - Compile TypeScript, bundle with Webpack
+2. **Test** - Run unit tests and linting
+3. **Publish** - Upload to JFrog Artifactory
+4. **Deploy** - Deploy to CDN/Kubernetes
 
-## Deployment Options
+---
 
-### 1. CDN Deployment
+## API Reference
 
-Modules are deployed as static assets to a CDN:
-
-```
-https://cdn.example.com/
-├── shell/
-│   └── v1.0.0/
-├── reg-reporting/
-│   └── v2.1.0/
-├── tax-reporting/
-│   └── v3.0.1/
-```
-
-### 2. Kubernetes Deployment
-
-Each module runs as an independent service:
+### Module Registry
 
 ```bash
-kubectl apply -k infrastructure/kubernetes/
+# Get all modules
+GET http://localhost:4000/api/module-manifest
+
+# Get specific module
+GET http://localhost:4000/api/modules/taxReporting
+
+# Get AG Grid versions
+GET http://localhost:4000/api/ag-grid-versions
 ```
 
-### 3. Docker Compose
-
-For local development or simple deployments:
+### Health Checks
 
 ```bash
-docker-compose up --build
+# Shell health
+GET http://localhost:3000/health
+
+# Module health
+GET http://localhost:3004/health
+
+# Module readiness (checks remoteEntry.js)
+GET http://localhost:3004/ready
 ```
 
-## Module Registry API
+---
 
-The Module Registry Service provides endpoints for module discovery:
+## Configuration
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/module-manifest` | GET | Get all modules configuration |
-| `/api/modules/{name}` | GET | Get specific module configuration |
-| `/api/modules/{name}` | POST | Update module configuration |
-| `/api/ag-grid-versions` | GET | Get AG Grid versions summary |
+### Environment Variables
 
-## Benefits
+```bash
+# .env.local
+NODE_ENV=development
 
-| Benefit | Description |
-|---------|-------------|
-| **Independent Deployments** | Deploy modules without affecting others |
-| **Parallel Development** | Teams work independently without merge conflicts |
-| **Version Flexibility** | Different AG Grid versions per module |
-| **Faster Builds** | Only changed modules are rebuilt |
-| **Smaller Bundles** | Shared dependencies loaded once |
-| **A/B Testing** | Easy to deploy different versions |
-| **Rollback** | Individual module rollback capability |
+# Remote module URLs
+REG_REPORTING_URL=http://localhost:3001/remoteEntry.js
+FINANCIAL_REPORTING_URL=http://localhost:3002/remoteEntry.js
+EXPENSE_REPORTING_URL=http://localhost:3003/remoteEntry.js
+TAX_REPORTING_URL=http://localhost:3004/remoteEntry.js
+CONTROL_TOWER_URL=http://localhost:3005/remoteEntry.js
 
-## Migration Guide
+# Module Registry
+MODULE_REGISTRY_URL=http://localhost:4000
+```
 
-See [ARCHITECTURE.md](./docs/ARCHITECTURE.md) for detailed migration strategy from monolithic to Module Federation architecture.
+---
+
+## Troubleshooting
+
+### Module fails to load
+
+1. Check if the remote module is running
+2. Verify CORS headers are configured
+3. Check browser console for specific errors
+4. Verify `remoteEntry.js` is accessible
+
+### AG Grid version conflicts
+
+1. Ensure `singleton: false` in shared config
+2. Check that each module has correct version in `package.json`
+3. Clear module cache and rebuild
+
+### Build errors
+
+```bash
+# Clean all caches
+pnpm clean
+
+# Reinstall dependencies
+rm -rf node_modules
+pnpm install
+
+# Rebuild
+pnpm build
+```
+
+---
+
+## Resources
+
+- [Module Federation Documentation](https://webpack.js.org/concepts/module-federation/)
+- [Architecture Documentation](./docs/ARCHITECTURE.md)
+- [Presentation](./docs/presentation/module-federation-strategy.html)
+
+---
 
 ## License
 

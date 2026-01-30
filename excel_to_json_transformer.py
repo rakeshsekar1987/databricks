@@ -108,6 +108,9 @@ class Validation:
     is_kri: bool = False
     # Additional fields that may come from Excel
     row_index: int = 0
+    # NEW: Fields from Validations-KRI tab for KRI validations
+    risk_level: str = ""  # From Validations-KRI.Risk Level column (e.g., "High", "Medium", "Low")
+    threshold_chart: str = ""  # From Validations-KRI.Threshold Chart column (e.g., "Green: <5%\nYellow: 5% - 7%\nRed: >7%")
 
 
 # =============================================================================
@@ -207,6 +210,72 @@ def build_values_used_in_formula(kri_variables: Dict[str, Any]) -> str:
         return ""
     
     return json.dumps(result)
+
+
+def transform_threshold_chart_to_json(threshold_chart: str) -> str:
+    """
+    Transform Threshold Chart from Excel format to JSON format.
+    
+    Input format (from Validations-KRI.Threshold Chart):
+        "Green: <5%
+         Yellow: 5% - 7%
+         Red: >7%"
+    
+    Output format (for JSON threshold field):
+        '{"High": ">7%", "Medium": ">=5% and <=7%", "Low": "<5%"}'
+    
+    Mapping:
+        Green → Low
+        Yellow → Medium (X% - Y% becomes >=X% and <=Y%)
+        Red → High
+    """
+    if not threshold_chart or not threshold_chart.strip():
+        return ""
+    
+    result = {}
+    
+    # Split by newlines and process each line
+    lines = threshold_chart.strip().split('\n')
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        
+        # Parse "Color: value" format
+        if ':' in line:
+            parts = line.split(':', 1)
+            color = parts[0].strip().lower()
+            value = parts[1].strip()
+            
+            # Map colors to risk levels
+            if color == 'green':
+                result['Low'] = value
+            elif color == 'yellow':
+                # Transform "X% - Y%" to ">=X% and <=Y%"
+                if ' - ' in value:
+                    range_parts = value.split(' - ')
+                    if len(range_parts) == 2:
+                        low_val = range_parts[0].strip()
+                        high_val = range_parts[1].strip()
+                        result['Medium'] = f">={low_val} and <={high_val}"
+                    else:
+                        result['Medium'] = value
+                else:
+                    result['Medium'] = value
+            elif color == 'red':
+                result['High'] = value
+    
+    if not result:
+        return ""
+    
+    # Return as JSON string with specific order: High, Medium, Low
+    ordered = {}
+    for key in ['High', 'Medium', 'Low']:
+        if key in result:
+            ordered[key] = result[key]
+    
+    return json.dumps(ordered)
 
 
 def generate_file_name_from_card(card_name: str, suffix: str = "") -> str:
@@ -712,7 +781,9 @@ class JSON2Builder(BaseJSONBuilder):
     Builder for JSON 2: KRI Details grouped by KRI type.
     All values derived from data.
     
-    Risk is business-provided from KRI Master, NOT calculated from BPS Impact.
+    Risk Level and Threshold Chart come from Validations-KRI tab columns:
+    - Risk Level: "High", "Medium", "Low" (direct from Excel)
+    - Threshold Chart: "Green: <5%\nYellow: 5% - 7%\nRed: >7%" (transformed to JSON)
     """
     
     def __init__(self, kri_validations: List[Validation],
@@ -743,11 +814,14 @@ class JSON2Builder(BaseJSONBuilder):
             # Get description from first validation's Control Procedures
             kri_desc = clean_text(validations[0].control_procedures)
             
-            # Get threshold from master (business-provided)
-            threshold = self.kri_mapping.get_kri_threshold(kri_name)
+            # Get threshold from Validations-KRI.Threshold Chart column
+            # Transform from "Green: <5%\nYellow: 5% - 7%\nRed: >7%" to JSON
+            threshold_chart = validations[0].threshold_chart if validations else ""
+            threshold = transform_threshold_chart_to_json(threshold_chart)
             
-            # Get risk from master (business-provided, NOT calculated from BPS)
-            business_risk = self.kri_mapping.get_kri_risk(kri_name)
+            # If no threshold from validation, try KRI Master as fallback
+            if not threshold:
+                threshold = self.kri_mapping.get_kri_threshold(kri_name)
             
             fund_details = []
             for v in validations:
@@ -756,14 +830,18 @@ class JSON2Builder(BaseJSONBuilder):
                 
                 bps = parse_number(v.bps_impact) or 0
                 
-                # Risk is from business (KRI Master), not calculated
-                # If no business risk provided, leave empty (no hardcoded default)
-                risk = business_risk if business_risk else ""
+                # Risk is from Validations-KRI.Risk Level column (direct from Excel)
+                # NOT calculated from BPS Impact
+                risk = v.risk_level if v.risk_level else ""
+                
+                # Fallback to KRI Master if no risk_level in validation
+                if not risk:
+                    risk = self.kri_mapping.get_kri_risk(kri_name)
                 
                 values_formula = build_values_used_in_formula(v.kri_variables)
                 
                 fund_details.append({
-                    "risk": risk,  # Business-provided from KRI Master (NOT calculated)
+                    "risk": risk,  # From Validations-KRI.Risk Level (NOT calculated)
                     "threshold": None,
                     "fundName": fund_name,  # From Funds.Book_New
                     "fundCode": v.fund,  # From Validations.Fund
@@ -778,7 +856,7 @@ class JSON2Builder(BaseJSONBuilder):
                 "kriName": kri_name,  # From Validations.Validation
                 "kriId": kri_id,  # Generated or from KRI Master
                 "kriDesc": kri_desc,  # From Control Procedures
-                "threshold": threshold,
+                "threshold": threshold,  # Transformed from Validations-KRI.Threshold Chart
                 "fundDetails": fund_details
             })
         
@@ -1047,7 +1125,10 @@ class ExcelToJSONTransformer:
             threshold_abs=row.get('Threshold Abs', ''),
             kri_variables=kri_variables,
             is_kri=is_kri,
-            row_index=row_index
+            row_index=row_index,
+            # NEW: Parse Risk Level and Threshold Chart from Validations-KRI tab
+            risk_level=row.get('Risk Level', ''),  # "High", "Medium", "Low"
+            threshold_chart=row.get('Threshold Chart', '')  # "Green: <5%\nYellow: 5% - 7%\nRed: >7%"
         )
     
     def load_validations_trimmed(self, validations_data: List[Dict[str, Any]]):
@@ -1336,6 +1417,7 @@ def example_usage():
     ]
     
     # Sample Validations - KRI data
+    # NEW: Includes Risk Level and Threshold Chart columns from Validations-KRI tab
     validations_kri_data = [
         {
             "Card": "12/31/2024 Canada Annual",
@@ -1345,6 +1427,8 @@ def example_usage():
             "Validation Status": "Passed",
             "Validation": "Interest Expense versus Average Borrowings",
             "Statement Type": "KRI",
+            "Risk Level": "High",  # NEW: Direct from Excel
+            "Threshold Chart": "Green: <5%\nYellow: 5% - 7%\nRed: >7%",  # NEW: Direct from Excel
             "Section": "",
             "Line Item Description": "",
             "Control Procedures": "Percent difference between the Interest Expense versus the Average Borrowings throughout the period multiplied by the Weighted Average Interest rate.((Average borrowings x Weighted Average Interest rate) - Interest Expense) / Interest Expense",
@@ -1376,6 +1460,8 @@ def example_usage():
             "Validation Status": "Passed",
             "Validation": "Defaulted Securities Review",
             "Statement Type": "KRI",
+            "Risk Level": "Medium",  # NEW: Direct from Excel
+            "Threshold Chart": "Green: <3%\nYellow: 3% - 5%\nRed: >5%",  # NEW: Direct from Excel
             "Section": "",
             "Line Item Description": "",
             "Control Procedures": "Total Market Value of Securities in Default as a percentage of Net Assets.  Total Market Value of Securities in Default / Net Assets",
@@ -1405,6 +1491,8 @@ def example_usage():
             "Validation Status": "Passed",
             "Validation": "Effective Leverage: Year Over Year Change",
             "Statement Type": "KRI",
+            "Risk Level": "Low",  # NEW: Direct from Excel
+            "Threshold Chart": "Green: <5%\nYellow: 5% - 10%\nRed: >10%",  # NEW: Direct from Excel
             "Section": "",
             "Line Item Description": "",
             "Control Procedures": "Period over period change for a Fund's Total Effective Leverage.  (Total Effective Leverage CY - Total Effective Leverage PY) / Total Effective Leverage PY",

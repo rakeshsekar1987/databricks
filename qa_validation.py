@@ -167,11 +167,13 @@ class QAValidator:
             'Threshold Amount': '', 'Threshold Desc': '--', 'Threshold Percent (%)': '--', 'Threshold Abs': ''
         }])
         
-        # Load Validations - KRI
+        # Load Validations - KRI (with Risk Level and Threshold Chart columns)
         self.transformer.load_validations_kri([
             {'Card': '12/31/2024 Canada Annual', 'Fund': 'CAN2', 'Priority': 'Standard',
              'Workflow Status': 'EY L1 Review', 'Validation Status': 'Passed',
              'Validation': 'Interest Expense versus Average Borrowings', 'Statement Type': 'KRI',
+             'Risk Level': 'High',  # NEW: Direct from Excel
+             'Threshold Chart': 'Green: <5%\nYellow: 5% - 7%\nRed: >7%',  # NEW: Direct from Excel
              'Section': '', 'Line Item Description': '',
              'Control Procedures': 'Percent difference between the Interest Expense versus the Average Borrowings throughout the period multiplied by the Weighted Average Interest rate.((Average borrowings x Weighted Average Interest rate) - Interest Expense) / Interest Expense',
              'Share Class': '', 'Control Value': -25.06, 'FS Value': -1633, 'Variance': -25.06, 'BPS Impact': 1.53,
@@ -183,6 +185,8 @@ class QAValidator:
             {'Card': '12/31/2024 Canada Annual', 'Fund': 'CAN2', 'Priority': 'Standard',
              'Workflow Status': 'EY L1 Review', 'Validation Status': 'Passed',
              'Validation': 'Defaulted Securities Review', 'Statement Type': 'KRI',
+             'Risk Level': 'Medium',  # NEW: Direct from Excel
+             'Threshold Chart': 'Green: <3%\nYellow: 3% - 5%\nRed: >5%',  # NEW: Direct from Excel
              'Section': '', 'Line Item Description': '',
              'Control Procedures': 'Total Market Value of Securities in Default as a percentage of Net Assets. Total Market Value of Securities in Default / Net Assets',
              'Share Class': '', 'Control Value': 0, 'FS Value': '7,98,606.00', 'Variance': 0, 'BPS Impact': 0,
@@ -193,6 +197,8 @@ class QAValidator:
             {'Card': '12/31/2024 Canada Annual', 'Fund': 'CAN3', 'Priority': 'Standard',
              'Workflow Status': 'EY L1 Review', 'Validation Status': 'Passed',
              'Validation': 'Effective Leverage: Year Over Year Change', 'Statement Type': 'KRI',
+             'Risk Level': 'Low',  # NEW: Direct from Excel
+             'Threshold Chart': 'Green: <5%\nYellow: 5% - 10%\nRed: >10%',  # NEW: Direct from Excel
              'Section': '', 'Line Item Description': '',
              'Control Procedures': 'Period over period change for a Fund Total Effective Leverage. (Total Effective Leverage CY - Total Effective Leverage PY) / Total Effective Leverage PY',
              'Share Class': '', 'Control Value': 0.02, 'FS Value': 0.02, 'Variance': 0, 'BPS Impact': 116.87,

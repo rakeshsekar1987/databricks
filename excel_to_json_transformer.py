@@ -12,7 +12,7 @@ import hashlib
 import uuid
 import re
 from datetime import datetime
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, List, Any, Optional, Tuple, Set
 from dataclasses import dataclass, field
 from abc import ABC, abstractmethod
 from collections import OrderedDict
@@ -410,45 +410,79 @@ class DataLookupService:
 
 
 # =============================================================================
-# Global KRI Mapping Service - Consistent IDs Across All Cards
+# Global KRI Mapping Service - Unique IDs Across All Cards
 # =============================================================================
 
 class GlobalKRIMappingService:
     """
-    Service for mapping KRI validation names to KRI IDs globally.
-    Ensures same KRI Name gets same KRI ID regardless of which card it appears in.
+    Service for mapping KRI validations to unique IDs globally.
+    Each KRI validation instance gets a unique ID across all cards.
+    
+    Example with 5 KRI validations across 2 cards:
+    - Canada: Interest Expense (KRI_1), Defaulted Securities (KRI_2), Effective Leverage (KRI_3)
+    - America: Interest Expense (KRI_4), Effective Leverage (KRI_5)
+    
+    Each gets a unique KRI ID and validation ID.
     """
     
     def __init__(self, all_kri_validations: List[Validation]):
-        self._kri_id_map: Dict[str, str] = {}  # name -> kri_id
-        self._validation_id_map: Dict[str, str] = {}  # name -> validation_id
-        self._kri_order: List[str] = []  # Track order of unique KRIs globally
+        # Map: (card, fund, validation_name) -> (kri_id, validation_id)
+        self._kri_instance_map: Dict[Tuple[str, str, str], Tuple[str, str]] = {}
+        self._kri_order: List[Tuple[str, str, str]] = []  # Track order of all KRI instances
+        self._unique_kri_names: List[str] = []  # Track unique KRI names in order
         
-        # Register all KRIs from all validations to establish global order
+        # Register all KRI validations to establish global order
+        kri_counter = 0
         for v in all_kri_validations:
-            if v.validation not in self._kri_order:
-                self._kri_order.append(v.validation)
-        
-        # Generate consistent IDs based on global order
-        for idx, kri_name in enumerate(self._kri_order):
-            self._kri_id_map[kri_name] = f"KRI_{idx + 1}"
-            self._validation_id_map[kri_name] = str(999990 + idx + 1)
+            key = (v.card, v.fund, v.validation)
+            if key not in self._kri_instance_map:
+                kri_counter += 1
+                kri_id = f"KRI_{kri_counter}"
+                val_id = str(999990 + kri_counter)
+                self._kri_instance_map[key] = (kri_id, val_id)
+                self._kri_order.append(key)
+            
+            # Track unique KRI names
+            if v.validation not in self._unique_kri_names:
+                self._unique_kri_names.append(v.validation)
     
-    def get_kri_id(self, validation_name: str) -> str:
-        """Get globally consistent KRI ID for a validation name."""
-        return self._kri_id_map.get(validation_name, "")
+    def get_kri_id(self, card: str, fund: str, validation_name: str) -> str:
+        """Get unique KRI ID for a specific validation instance."""
+        key = (card, fund, validation_name)
+        if key in self._kri_instance_map:
+            return self._kri_instance_map[key][0]
+        return ""
     
-    def get_validation_id(self, validation_name: str) -> str:
-        """Get globally consistent validation ID for a KRI."""
-        return self._validation_id_map.get(validation_name, "")
+    def get_validation_id(self, card: str, fund: str, validation_name: str) -> str:
+        """Get unique validation ID for a specific KRI instance."""
+        key = (card, fund, validation_name)
+        if key in self._kri_instance_map:
+            return self._kri_instance_map[key][1]
+        return ""
+    
+    def get_kri_id_by_name(self, validation_name: str) -> str:
+        """Get the first KRI ID for a validation name (for backward compatibility)."""
+        for key, (kri_id, _) in self._kri_instance_map.items():
+            if key[2] == validation_name:
+                return kri_id
+        return ""
     
     def get_all_kri_names(self) -> List[str]:
-        """Get all registered KRI names in global order."""
-        return self._kri_order.copy()
+        """Get all unique KRI names in order."""
+        return self._unique_kri_names.copy()
     
     def get_total_kri_count(self) -> int:
-        """Get total number of unique KRIs globally."""
-        return len(self._kri_order)
+        """Get total number of unique KRI instances globally."""
+        return len(self._kri_instance_map)
+    
+    def get_kri_instances_for_card(self, card: str) -> List[Tuple[str, str, str, str]]:
+        """Get all KRI instances for a specific card: (fund, name, kri_id, val_id)."""
+        results = []
+        for key in self._kri_order:
+            if key[0] == card:
+                kri_id, val_id = self._kri_instance_map[key]
+                results.append((key[1], key[2], kri_id, val_id))
+        return results
 
 
 # =============================================================================
@@ -525,7 +559,8 @@ class JSON1Builder(BaseJSONBuilder):
         
         # Get validation ID
         if validation.is_kri:
-            validation_id = self.global_kri_mapping.get_validation_id(validation.validation)
+            validation_id = self.global_kri_mapping.get_validation_id(
+                validation.card, validation.fund, validation.validation)
         else:
             validation_id = self.val_id_service.get_validation_id(validation)
         
@@ -614,6 +649,7 @@ class JSON1Builder(BaseJSONBuilder):
 class JSON2Builder(BaseJSONBuilder):
     """
     Builder for JSON 2: KRI Details grouped by KRI type for a specific card.
+    Each KRI instance gets a unique KRI ID across all cards.
     """
     
     def __init__(self, kri_validations: List[Validation],
@@ -624,55 +660,43 @@ class JSON2Builder(BaseJSONBuilder):
         self.global_kri_mapping = global_kri_mapping
     
     def build(self) -> Dict[str, Any]:
-        # Group validations by KRI name
-        kri_groups: OrderedDict[str, List[Validation]] = OrderedDict()
-        for v in self.kri_validations:
-            if v.validation not in kri_groups:
-                kri_groups[v.validation] = []
-            kri_groups[v.validation].append(v)
-        
+        # Build KRI details - each validation is a separate KRI entry with unique ID
         kri_details = []
         
-        for kri_name, validations in kri_groups.items():
-            first_val = validations[0]
-            
-            # Get globally consistent KRI ID
-            kri_id = self.global_kri_mapping.get_kri_id(kri_name)
+        for v in self.kri_validations:
+            # Get unique KRI ID and validation ID for this specific instance
+            kri_id = self.global_kri_mapping.get_kri_id(v.card, v.fund, v.validation)
+            val_id = self.global_kri_mapping.get_validation_id(v.card, v.fund, v.validation)
             
             # Get description from Control Procedures
-            kri_desc = clean_text(first_val.control_procedures)
+            kri_desc = clean_text(v.control_procedures)
             
             # Transform threshold chart to JSON
-            threshold_chart = first_val.threshold_chart if first_val.threshold_chart else ""
+            threshold_chart = v.threshold_chart if v.threshold_chart else ""
             threshold = transform_threshold_chart_to_json(threshold_chart)
             
-            fund_details = []
-            for v in validations:
-                fund_name = self.lookup.get_book(v.fund)
-                bps = parse_number(v.bps_impact) or 0
-                
-                # Risk from Excel column
-                risk = v.risk_level if v.risk_level else ""
-                
-                # Validation ID
-                val_id = self.global_kri_mapping.get_validation_id(v.validation)
-                
-                values_formula = build_values_used_in_formula(v.kri_variables)
-                
-                fund_details.append({
-                    "risk": risk,
-                    "threshold": None,
-                    "fundName": fund_name,
-                    "fundCode": v.fund,
-                    "result": str(bps),
-                    "strategy": "Credit - Diversified Income",
-                    "validationStatus": v.validation_status,
-                    "validationId": val_id,
-                    "valuesUsedInFormula": values_formula
-                })
+            fund_name = self.lookup.get_book(v.fund)
+            bps = parse_number(v.bps_impact) or 0
+            
+            # Risk from Excel column
+            risk = v.risk_level if v.risk_level else ""
+            
+            values_formula = build_values_used_in_formula(v.kri_variables)
+            
+            fund_details = [{
+                "risk": risk,
+                "threshold": None,
+                "fundName": fund_name,
+                "fundCode": v.fund,
+                "result": str(bps),
+                "strategy": "Credit - Diversified Income",
+                "validationStatus": v.validation_status,
+                "validationId": val_id,
+                "valuesUsedInFormula": values_formula
+            }]
             
             kri_details.append({
-                "kriName": kri_name,
+                "kriName": v.validation,
                 "kriId": kri_id,
                 "kriDesc": kri_desc,
                 "threshold": threshold,
@@ -693,6 +717,7 @@ class JSON3Builder(BaseJSONBuilder):
     """
     Builder for JSON 3: Fund KRI Status Count for a specific card.
     Only includes funds belonging to the same Trust as the card.
+    Each KRI instance has a unique ID.
     """
     
     def __init__(self, kri_validations: List[Validation],
@@ -703,9 +728,8 @@ class JSON3Builder(BaseJSONBuilder):
         self.global_kri_mapping = global_kri_mapping
     
     def build(self) -> Dict[str, Any]:
-        # Get unique KRIs for this card
-        unique_kris_in_card = list(OrderedDict.fromkeys(v.validation for v in self.kri_validations))
-        kri_total_count = str(len(unique_kris_in_card))
+        # Count total KRI validations for this card
+        kri_total_count = str(len(self.kri_validations))
         
         # Count KRIs per fund
         fund_kri_counts: Dict[str, int] = {}
@@ -727,15 +751,15 @@ class JSON3Builder(BaseJSONBuilder):
                 "fundName": fund_name
             })
         
-        # Build KRI filter list only for KRIs present in this card
+        # Build KRI filter list - each KRI validation has unique ID
         kri_filter = []
-        for kri_name in unique_kris_in_card:
-            kri_id = self.global_kri_mapping.get_kri_id(kri_name)
-            val_id = self.global_kri_mapping.get_validation_id(kri_name)
+        for v in self.kri_validations:
+            kri_id = self.global_kri_mapping.get_kri_id(v.card, v.fund, v.validation)
+            val_id = self.global_kri_mapping.get_validation_id(v.card, v.fund, v.validation)
             
             kri_filter.append({
                 "kriId": kri_id,
-                "kriName": kri_name,
+                "kriName": v.validation,
                 "validationId": val_id
             })
         
@@ -762,11 +786,8 @@ class JSON4Builder(BaseJSONBuilder):
         self.kri_validations = kri_validations
     
     def build(self) -> Dict[str, Any]:
-        # Count unique KRI types in this card
-        unique_kris = set(v.validation for v in self.kri_validations)
-        kri_total_count = str(len(unique_kris))
-        
-        # Total KRI validations in this card
+        # Total KRI validations in this card (each is unique)
+        kri_total_count = str(len(self.kri_validations))
         kri_status_count = str(len(self.kri_validations))
         
         return {
@@ -787,7 +808,7 @@ class JSON4Builder(BaseJSONBuilder):
 class JSON5Builder(BaseJSONBuilder):
     """
     Builder for JSON 5: Simple KRI Details list for a specific card.
-    Only includes KRIs that appear in this card.
+    Each KRI instance has a unique ID.
     """
     
     def __init__(self, kri_validations: List[Validation],
@@ -796,17 +817,15 @@ class JSON5Builder(BaseJSONBuilder):
         self.global_kri_mapping = global_kri_mapping
     
     def build(self) -> Dict[str, Any]:
-        # Get unique KRIs in order encountered in this card
-        unique_kris = list(OrderedDict.fromkeys(v.validation for v in self.kri_validations))
-        
+        # Each KRI validation gets a unique entry
         kri_details = []
-        for kri_name in unique_kris:
-            kri_id = self.global_kri_mapping.get_kri_id(kri_name)
-            val_id = self.global_kri_mapping.get_validation_id(kri_name)
+        for v in self.kri_validations:
+            kri_id = self.global_kri_mapping.get_kri_id(v.card, v.fund, v.validation)
+            val_id = self.global_kri_mapping.get_validation_id(v.card, v.fund, v.validation)
             
             kri_details.append({
                 "kriId": kri_id,
-                "kriName": kri_name,
+                "kriName": v.validation,
                 "validationId": val_id
             })
         

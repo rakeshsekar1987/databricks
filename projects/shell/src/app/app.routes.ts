@@ -18,8 +18,9 @@ export const routes: Routes = [
   {
     path: 'reg-reporting',
     loadChildren: () => loadRemoteModule({
-      type: 'module',
+      type: 'script',
       remoteEntry: 'http://localhost:4201/remoteEntry.js',
+      remoteName: 'regReporting',
       exposedModule: './routes'
     }).then(m => m.REG_REPORTING_ROUTES).catch(err => {
       console.error('Failed to load Reg Reporting module:', err);
@@ -32,8 +33,9 @@ export const routes: Routes = [
   {
     path: 'financial-reporting',
     loadChildren: () => loadRemoteModule({
-      type: 'module',
+      type: 'script',
       remoteEntry: 'http://localhost:4202/remoteEntry.js',
+      remoteName: 'financialReporting',
       exposedModule: './routes'
     }).then(m => m.FINANCIAL_REPORTING_ROUTES).catch(err => {
       console.error('Failed to load Financial Reporting module:', err);
@@ -46,8 +48,9 @@ export const routes: Routes = [
   {
     path: 'expense-reporting',
     loadChildren: () => loadRemoteModule({
-      type: 'module',
+      type: 'script',
       remoteEntry: 'http://localhost:4203/remoteEntry.js',
+      remoteName: 'expenseReporting',
       exposedModule: './routes'
     }).then(m => m.EXPENSE_REPORTING_ROUTES).catch(err => {
       console.error('Failed to load Expense Reporting module:', err);
@@ -60,8 +63,9 @@ export const routes: Routes = [
   {
     path: 'tax-reporting',
     loadChildren: () => loadRemoteModule({
-      type: 'module',
+      type: 'script',
       remoteEntry: 'http://localhost:4204/remoteEntry.js',
+      remoteName: 'taxReporting',
       exposedModule: './routes'
     }).then(m => m.TAX_REPORTING_ROUTES).catch(err => {
       console.error('Failed to load Tax Reporting module:', err);
@@ -74,8 +78,9 @@ export const routes: Routes = [
   {
     path: 'control-tower',
     loadChildren: () => loadRemoteModule({
-      type: 'module',
+      type: 'script',
       remoteEntry: 'http://localhost:4205/remoteEntry.js',
+      remoteName: 'controlTower',
       exposedModule: './routes'
     }).then(m => m.CONTROL_TOWER_ROUTES).catch(err => {
       console.error('Failed to load Control Tower module:', err);

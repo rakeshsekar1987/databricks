@@ -10,14 +10,10 @@ const share = mf.share;
 module.exports = {
   output: {
     uniqueName: 'controlTower',
-    publicPath: 'auto',
-    scriptType: 'text/javascript'
+    publicPath: 'auto'
   },
   optimization: {
     runtimeChunk: false
-  },
-  experiments: {
-    outputModule: true
   },
   plugins: [
     new ModuleFederationPlugin({

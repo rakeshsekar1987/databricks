@@ -8,20 +8,16 @@ const share = mf.share;
  * This is the main container application that dynamically loads remote modules.
  * Angular core libraries are shared as singletons for consistency across modules.
  * 
- * NOTE: Remotes are empty - we use loadRemoteModule for dynamic loading.
+ * NOTE: Uses type 'script' for loadRemoteModule (not ES modules)
  */
 
 module.exports = {
   output: {
     uniqueName: 'shell',
-    publicPath: 'auto',
-    scriptType: 'text/javascript'
+    publicPath: 'auto'
   },
   optimization: {
     runtimeChunk: false
-  },
-  experiments: {
-    outputModule: true
   },
   plugins: [
     new ModuleFederationPlugin({
@@ -32,7 +28,6 @@ module.exports = {
       remotes: {},
       
       // Shared dependencies - Angular core as singletons
-      // NOTE: zone.js is loaded as a polyfill and should NOT be shared
       shared: share({
         '@angular/core': { singleton: true, strictVersion: true, requiredVersion: 'auto' },
         '@angular/common': { singleton: true, strictVersion: true, requiredVersion: 'auto' },

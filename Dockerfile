@@ -15,6 +15,9 @@
 #
 # =============================================================================
 
+# Global ARG - available to all stages
+ARG MODULE_NAME=reg-reporting
+
 # -----------------------------------------------------------------------------
 # Stage 1: Base - Common dependencies and setup
 # -----------------------------------------------------------------------------
@@ -26,11 +29,10 @@ WORKDIR /app
 RUN apk add --no-cache python3 make g++
 
 # Copy package files for dependency installation
-COPY package*.json ./
+COPY package.json package-lock.json ./
 COPY angular.json tsconfig.json ./
 
 # Install all dependencies using lock file for reproducible builds
-COPY package-lock.json ./
 RUN npm ci --legacy-peer-deps
 
 # -----------------------------------------------------------------------------
@@ -70,10 +72,11 @@ RUN npm run build:shell
 # -----------------------------------------------------------------------------
 FROM build-shared AS build-module
 
-ARG MODULE_NAME=reg-reporting
+# Re-declare ARG to use in this stage
+ARG MODULE_NAME
 
 # Build the specified module
-RUN npm run build:${MODULE_NAME}
+RUN echo "Building module: ${MODULE_NAME}" && npm run build:${MODULE_NAME}
 
 # -----------------------------------------------------------------------------
 # Stage 6: Shell Production Image
@@ -84,7 +87,7 @@ FROM nginx:alpine AS shell
 COPY infrastructure/docker/nginx/shell.conf /etc/nginx/conf.d/default.conf
 
 # Copy built shell application
-COPY --from=build-shell /app/dist/shell/browser /usr/share/nginx/html
+COPY --from=build-shell /app/dist/shell /usr/share/nginx/html
 
 # Create health check endpoint
 RUN mkdir -p /usr/share/nginx/html/health
@@ -108,13 +111,14 @@ CMD ["nginx", "-g", "daemon off;"]
 # -----------------------------------------------------------------------------
 FROM nginx:alpine AS module
 
-ARG MODULE_NAME=reg-reporting
+# Re-declare ARG to use in this stage
+ARG MODULE_NAME
 
 # Copy custom nginx configuration
 COPY infrastructure/docker/nginx/module.conf /etc/nginx/conf.d/default.conf
 
-# Copy built module - handle both possible output paths
-COPY --from=build-module /app/dist/${MODULE_NAME}/browser /usr/share/nginx/html
+# Copy built module
+COPY --from=build-module /app/dist/${MODULE_NAME} /usr/share/nginx/html
 
 # Set proper permissions
 RUN chown -R nginx:nginx /usr/share/nginx/html && \

@@ -31,8 +31,6 @@ services:
       context: .
       dockerfile: Dockerfile
       target: shell
-      args:
-        - MODULE_NAME=shell
     container_name: mf-shell
     ports:
       - "4200:80"
@@ -41,26 +39,14 @@ services:
     networks:
       - module-federation-network
     depends_on:
-      reg-reporting:
-        condition: service_healthy
-      financial-reporting:
-        condition: service_healthy
-      expense-reporting:
-        condition: service_healthy
-      tax-reporting:
-        condition: service_healthy
-      control-tower:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:80/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
+      - reg-reporting
+      - financial-reporting
+      - expense-reporting
+      - tax-reporting
+      - control-tower
     restart: unless-stopped
     labels:
       - "com.module-federation.service=shell"
-      - "com.module-federation.ag-grid=shared"
 
   # ===========================================================================
   # Regulatory Reporting Module - AG Grid v31
@@ -71,21 +57,14 @@ services:
       dockerfile: Dockerfile
       target: module
       args:
-        - MODULE_NAME=reg-reporting
+        MODULE_NAME: reg-reporting
     container_name: mf-reg-reporting
     ports:
       - "4201:80"
     environment:
       - NODE_ENV=production
-      - AG_GRID_VERSION=31.0.0
     networks:
       - module-federation-network
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:80/remoteEntry.js"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
     restart: unless-stopped
     labels:
       - "com.module-federation.service=reg-reporting"
@@ -100,21 +79,14 @@ services:
       dockerfile: Dockerfile
       target: module
       args:
-        - MODULE_NAME=financial-reporting
+        MODULE_NAME: financial-reporting
     container_name: mf-financial-reporting
     ports:
       - "4202:80"
     environment:
       - NODE_ENV=production
-      - AG_GRID_VERSION=30.2.0
     networks:
       - module-federation-network
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:80/remoteEntry.js"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
     restart: unless-stopped
     labels:
       - "com.module-federation.service=financial-reporting"
@@ -129,21 +101,14 @@ services:
       dockerfile: Dockerfile
       target: module
       args:
-        - MODULE_NAME=expense-reporting
+        MODULE_NAME: expense-reporting
     container_name: mf-expense-reporting
     ports:
       - "4203:80"
     environment:
       - NODE_ENV=production
-      - AG_GRID_VERSION=31.0.0
     networks:
       - module-federation-network
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:80/remoteEntry.js"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
     restart: unless-stopped
     labels:
       - "com.module-federation.service=expense-reporting"
@@ -158,21 +123,14 @@ services:
       dockerfile: Dockerfile
       target: module
       args:
-        - MODULE_NAME=tax-reporting
+        MODULE_NAME: tax-reporting
     container_name: mf-tax-reporting
     ports:
       - "4204:80"
     environment:
       - NODE_ENV=production
-      - AG_GRID_VERSION=29.3.0
     networks:
       - module-federation-network
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:80/remoteEntry.js"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
     restart: unless-stopped
     labels:
       - "com.module-federation.service=tax-reporting"
@@ -187,21 +145,14 @@ services:
       dockerfile: Dockerfile
       target: module
       args:
-        - MODULE_NAME=control-tower
+        MODULE_NAME: control-tower
     container_name: mf-control-tower
     ports:
       - "4205:80"
     environment:
       - NODE_ENV=production
-      - AG_GRID_VERSION=31.0.0
     networks:
       - module-federation-network
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:80/remoteEntry.js"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
     restart: unless-stopped
     labels:
       - "com.module-federation.service=control-tower"
@@ -214,10 +165,3 @@ networks:
   module-federation-network:
     driver: bridge
     name: module-federation-network
-
-# =============================================================================
-# Volumes (for future use with persistent data)
-# =============================================================================
-volumes:
-  shell-logs:
-  module-logs:

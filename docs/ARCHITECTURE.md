@@ -1,36 +1,37 @@
-# UI/UX Module Federation Architecture
+# Angular Module Federation Architecture
 
 ## Overview
 
-This document describes the Module Federation architecture for the UI/UX platform, enabling independent development, deployment, and versioning of micro-frontends.
+This document describes the Angular Module Federation architecture for the UI/UX platform, enabling independent development, deployment, and versioning of micro-frontends with Motif Design System integration.
 
 ## Problem Statement
 
 ### Current Challenges
-1. **Tight Coupling**: All UI modules are in a single codebase requiring coordinated releases
+1. **Tight Coupling**: All UI modules in a single codebase requiring coordinated releases
 2. **Deployment Bottlenecks**: Teams wait for code merges before deploying
-3. **Version Conflicts**: Cannot run different versions of dependencies (e.g., AG Grid) across modules
+3. **Version Conflicts**: Cannot run different versions of AG Grid across modules
 4. **Slow CI/CD**: Full builds required even for small changes
 
-### Solution: Module Federation
+### Solution: Angular Module Federation
 
-Module Federation (Webpack 5) allows loading separately compiled and deployed code at runtime, enabling:
+Module Federation (Webpack 5) with Angular enables:
 - Independent deployments per module
-- Different dependency versions per module
+- Different AG Grid versions per module (v29, v30, v31)
 - Parallel team development
-- Shared code optimization
+- Shared Motif components optimization
 
 ## Architecture Overview
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                              Shell Application                               │
-│                         (Main UI Container/Host)                            │
+│                         (Angular 17 Host Container)                          │
 │  ┌─────────────────────────────────────────────────────────────────────────┐│
 │  │                        Module Federation Runtime                        ││
-│  │  - Dynamic Remote Loading                                               ││
-│  │  - Shared Dependencies Management                                       ││
-│  │  - Version Negotiation                                                  ││
+│  │  - @angular-architects/module-federation                               ││
+│  │  - Dynamic Remote Loading                                              ││
+│  │  - Shared Dependencies (Angular, Motif)                                ││
+│  │  - Version Negotiation                                                 ││
 │  └─────────────────────────────────────────────────────────────────────────┘│
 └─────────────────────────────────────────────────────────────────────────────┘
          │              │              │              │              │
@@ -45,221 +46,164 @@ Module Federation (Webpack 5) allows loading separately compiled and deployed co
          │              │              │              │              │
          └──────────────┴──────────────┼──────────────┴──────────────┘
                                        ▼
-                          ┌─────────────────────────┐
-                          │    Shared Library       │
-                          │  - Common Components    │
-                          │  - Utils & Helpers      │
-                          │  - Design System        │
-                          │  - Auth Context         │
-                          └─────────────────────────┘
+              ┌───────────────────────────────────────────────────┐
+              │              Shared Libraries                      │
+              │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐│
+              │  │   @shared   │  │  @mfs/motif │  │   Angular   ││
+              │  │    -lib     │  │  (Singleton)│  │  (Singleton)││
+              │  └─────────────┘  └─────────────┘  └─────────────┘│
+              └───────────────────────────────────────────────────┘
 ```
 
 ## Module Structure
 
 ### 1. Shell Application (Host)
-The main container application that:
-- Provides global navigation and layout
-- Manages authentication/authorization
-- Dynamically loads remote modules
-- Handles routing between modules
+
+The main container application responsible for:
+- Global navigation and layout (Header, Sidebar, Footer)
+- Authentication/authorization context
+- Dynamic remote module loading via routes
+- Error boundaries and fallback UI
+- Motif theme configuration
 
 ### 2. Remote Modules
+
 Each business domain is a separate federated module:
 
-| Module | Description | Repository | Independent AG Grid |
-|--------|-------------|------------|---------------------|
-| Reg Reporting | Regulatory reporting features | `reg-reporting-ui` | ✅ |
-| Financial Reporting | Financial statements & reports | `financial-reporting-ui` | ✅ |
-| Expense Reporting | Expense management | `expense-reporting-ui` | ✅ |
-| Tax Reporting | Tax calculations & filing | `tax-reporting-ui` | ✅ |
-| Control Tower | Dashboard & monitoring | `control-tower-ui` | ✅ |
+| Module | AG Grid | Port | Responsibility |
+|--------|---------|------|----------------|
+| Reg Reporting | v31 | 4201 | Regulatory compliance |
+| Financial Reporting | v30 | 4202 | Financial statements |
+| Expense Reporting | v31 | 4203 | Expense management |
+| Tax Reporting | v29 | 4204 | Tax calculations |
+| Control Tower | v31 | 4205 | Dashboard & monitoring |
 
 ### 3. Shared Library
-Common code shared across all modules:
-- UI Component Library (Design System)
-- Authentication utilities
-- API clients
-- Common hooks and utilities
 
-## AG Grid Versioning Strategy
+Common code shared as singleton across modules:
+- Motif-styled UI components (Button, Card, Alert, etc.)
+- Common services (API, Storage, Notification)
+- TypeScript interfaces and models
+- Utility functions (formatters, validators)
 
-### Problem
-Different modules need different AG Grid versions due to:
-- Feature requirements
-- Migration timelines
-- Stability concerns
+## AG Grid Version Isolation
 
-### Solution: Isolated AG Grid Instances
+### Strategy
+
+Each module bundles its own AG Grid version by:
+
+1. **Not sharing AG Grid as singleton** in webpack config
+2. **Each module declares its version** in package.json
+3. **Webpack bundles AG Grid** with the module
 
 ```javascript
-// Each module declares its own AG Grid version
-// webpack.config.js for Tax Reporting (needs v29)
-new ModuleFederationPlugin({
-  name: 'taxReporting',
-  shared: {
-    'ag-grid-community': {
-      singleton: false, // Allow multiple versions
-      requiredVersion: '^29.0.0'
-    },
-    'ag-grid-react': {
-      singleton: false,
-      requiredVersion: '^29.0.0'
-    }
-  }
-})
-```
-
-### Version Isolation Pattern
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Shell Application                         │
-│  ┌────────────────┐  ┌────────────────┐  ┌────────────────┐ │
-│  │  Tax Module    │  │ Finance Module │  │ Control Tower  │ │
-│  │  ┌──────────┐  │  │  ┌──────────┐  │  │  ┌──────────┐  │ │
-│  │  │AG Grid   │  │  │  │AG Grid   │  │  │  │AG Grid   │  │ │
-│  │  │v29.x     │  │  │  │v30.x     │  │  │  │v31.x     │  │ │
-│  │  └──────────┘  │  │  └──────────┘  │  │  └──────────┘  │ │
-│  └────────────────┘  └────────────────┘  └────────────────┘ │
-└─────────────────────────────────────────────────────────────┘
-```
-
-## Build & Deployment Flow
-
-```
-┌──────────────┐     ┌───────────────────┐     ┌──────────────┐
-│   Git Push   │────▶│  Change Detection │────▶│ Selective    │
-│   (Module)   │     │  (CI Pipeline)    │     │ Build        │
-└──────────────┘     └───────────────────┘     └──────────────┘
-                                                      │
-                                                      ▼
-┌──────────────┐     ┌───────────────────┐     ┌──────────────┐
-│  Deployment  │◀────│  JFrog Artifact   │◀────│  Package &   │
-│  (CDN/K8s)   │     │  Repository       │     │  Version     │
-└──────────────┘     └───────────────────┘     └──────────────┘
-```
-
-### Independent Deployment Process
-
-1. **Developer pushes to module repo** (e.g., `tax-reporting-ui`)
-2. **CI detects changes** and triggers module-specific build
-3. **Module is built and packaged** with unique version
-4. **Artifact published to JFrog** with semantic versioning
-5. **Shell application updated** to reference new module version (or uses dynamic discovery)
-6. **Module deployed to CDN/K8s** independently
-
-## Runtime Module Discovery
-
-### Static Configuration
-```json
-{
-  "modules": {
-    "regReporting": "https://cdn.example.com/reg-reporting/v2.1.0/remoteEntry.js",
-    "financialReporting": "https://cdn.example.com/financial-reporting/v1.5.0/remoteEntry.js",
-    "taxReporting": "https://cdn.example.com/tax-reporting/v3.0.0/remoteEntry.js"
+// projects/tax-reporting/webpack.config.js
+shared: {
+  'ag-grid-community': {
+    singleton: false,  // Critical: allows different versions
+    requiredVersion: '^29.3.0'
   }
 }
 ```
 
-### Dynamic Discovery (Recommended)
+### Version Matrix
+
+| Module | AG Grid Version | Reason |
+|--------|----------------|--------|
+| Tax Reporting | v29.3.0 | Legacy compatibility |
+| Financial Reporting | v30.2.0 | Specific feature requirements |
+| Others | v31.0.0 | Latest features |
+
+## Build & Deployment Architecture
+
+```
+┌──────────────┐     ┌───────────────────┐     ┌──────────────┐
+│   Git Push   │────▶│  Path-based CI    │────▶│   Selective  │
+│   (Module)   │     │  Detection        │     │   Build      │
+└──────────────┘     └───────────────────┘     └──────────────┘
+                                                      │
+                                                      ▼
+┌──────────────┐     ┌───────────────────┐     ┌──────────────┐
+│  Kubernetes  │◀────│  Container        │◀────│   Docker     │
+│  Deployment  │     │  Registry         │     │   Build      │
+└──────────────┘     └───────────────────┘     └──────────────┘
+```
+
+### Independent Deployment Flow
+
+1. Developer pushes to module directory
+2. CI detects changed paths, triggers module-specific build
+3. Module compiled with standalone AG Grid version
+4. Docker image built and pushed to registry
+5. Kubernetes deploys module independently
+6. Shell loads updated remote at runtime
+
+## Motif Design System Integration
+
+### Shared as Singleton
+
+Motif library is shared across all modules:
+
 ```javascript
-// Runtime module discovery from configuration service
-const moduleRegistry = await fetch('/api/module-registry');
-const { modules } = await moduleRegistry.json();
-
-// Load modules dynamically
-const TaxReporting = await loadRemote(modules.taxReporting, './TaxApp');
+shared: {
+  '@mfs/motif': {
+    singleton: true,
+    strictVersion: false
+  }
+}
 ```
 
-## Directory Structure
+### Theme Configuration
 
-```
-ui-module-federation/
-├── apps/
-│   ├── shell/                    # Host application
-│   │   ├── src/
-│   │   │   ├── App.tsx
-│   │   │   ├── bootstrap.tsx
-│   │   │   ├── components/
-│   │   │   │   ├── Layout.tsx
-│   │   │   │   ├── Navigation.tsx
-│   │   │   │   └── ModuleLoader.tsx
-│   │   │   └── routes/
-│   │   ├── webpack.config.js
-│   │   └── package.json
-│   │
-│   ├── reg-reporting/            # Remote module
-│   │   ├── src/
-│   │   │   ├── App.tsx
-│   │   │   ├── bootstrap.tsx
-│   │   │   └── components/
-│   │   ├── webpack.config.js
-│   │   └── package.json
-│   │
-│   ├── financial-reporting/      # Remote module
-│   ├── expense-reporting/        # Remote module
-│   ├── tax-reporting/            # Remote module
-│   └── control-tower/            # Remote module
-│
-├── packages/
-│   └── shared-library/           # Shared components & utils
-│       ├── src/
-│       │   ├── components/
-│       │   ├── hooks/
-│       │   ├── utils/
-│       │   └── index.ts
-│       └── package.json
-│
-├── infrastructure/
-│   ├── docker/
-│   ├── kubernetes/
-│   └── terraform/
-│
-├── .github/
-│   └── workflows/
-│       ├── shell.yml
-│       ├── reg-reporting.yml
-│       ├── financial-reporting.yml
-│       ├── expense-reporting.yml
-│       ├── tax-reporting.yml
-│       └── control-tower.yml
-│
-├── package.json                  # Workspace root
-├── pnpm-workspace.yaml
-└── turbo.json                    # Turborepo config
+Global CSS variables in shell's `styles.scss`:
+
+```scss
+:root {
+  --motif-primary: #1976d2;
+  --motif-secondary: #424242;
+  --motif-success: #4caf50;
+  --motif-error: #f44336;
+  // ... more design tokens
+}
 ```
 
-## Benefits
+## Best Practices
 
-| Benefit | Description |
-|---------|-------------|
-| **Independent Deployments** | Each module can be deployed without affecting others |
-| **Parallel Development** | Teams work independently without merge conflicts |
-| **Version Flexibility** | Different AG Grid versions per module |
-| **Faster Builds** | Only changed modules are rebuilt |
-| **Smaller Bundles** | Shared dependencies loaded once |
-| **A/B Testing** | Easy to deploy different versions |
-| **Rollback** | Individual module rollback capability |
+### Angular Patterns
+- **Standalone Components**: No NgModules, cleaner imports
+- **Signals**: Reactive state without complex RxJS
+- **OnPush Change Detection**: Better performance
+- **Lazy Loading**: Routes load on demand
+
+### Module Federation Patterns
+- **Dynamic Remotes**: Runtime URL configuration
+- **Error Boundaries**: Graceful module failure handling
+- **Preloading**: Critical modules load early
+- **Health Checks**: Monitor module availability
+
+### Security Considerations
+- CORS headers configured for remote loading
+- Content Security Policy for trusted origins
+- No sensitive data in frontend bundles
 
 ## Migration Strategy
 
-### Phase 1: Setup Infrastructure
-- Create monorepo structure
+### Phase 1: Setup (Week 1-2)
+- Create Angular workspace
 - Configure Module Federation
-- Set up CI/CD pipelines
+- Setup shared library
 
-### Phase 2: Extract Shared Library
-- Identify common components
-- Create shared package
-- Configure sharing in Module Federation
+### Phase 2: Shell Development (Week 3-4)
+- Implement shell layout
+- Configure routing
+- Add error handling
 
-### Phase 3: Migrate Modules (One at a Time)
-1. Reg Reporting → Federated Module
-2. Financial Reporting → Federated Module
-3. Expense Reporting → Federated Module
-4. Tax Reporting → Federated Module
-5. Control Tower → Federated Module
+### Phase 3: Module Migration (Week 5-8)
+- Migrate one module at a time
+- Validate AG Grid isolation
+- Update CI/CD pipelines
 
-### Phase 4: Optimize
-- Performance tuning
-- Shared dependency optimization
-- Monitoring and observability
+### Phase 4: Production (Week 9-10)
+- Performance optimization
+- Monitoring setup
+- Documentation

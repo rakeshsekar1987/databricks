@@ -2,10 +2,10 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: shell
-  namespace: ui-platform
+  namespace: module-federation
   labels:
     app: shell
-    component: host
+    tier: frontend
 spec:
   replicas: 2
   selector:
@@ -15,47 +15,42 @@ spec:
     metadata:
       labels:
         app: shell
-        component: host
     spec:
       containers:
         - name: shell
-          image: ${ACR_REGISTRY}/ui-platform/shell:${VERSION}
+          image: ${REGISTRY}/shell:${VERSION}
           ports:
             - containerPort: 80
           resources:
             requests:
-              memory: "64Mi"
-              cpu: "50m"
-            limits:
               memory: "128Mi"
               cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
           livenessProbe:
             httpGet:
               path: /health
               port: 80
             initialDelaySeconds: 10
-            periodSeconds: 10
+            periodSeconds: 30
           readinessProbe:
             httpGet:
               path: /health
               port: 80
             initialDelaySeconds: 5
-            periodSeconds: 5
-          env:
-            - name: NODE_ENV
-              value: "production"
+            periodSeconds: 10
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: shell
-  namespace: ui-platform
+  namespace: module-federation
 spec:
   selector:
     app: shell
   ports:
-    - protocol: TCP
-      port: 80
+    - port: 80
       targetPort: 80
   type: ClusterIP
 ---
@@ -63,17 +58,13 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: shell-ingress
-  namespace: ui-platform
+  namespace: module-federation
   annotations:
-    kubernetes.io/ingress.class: nginx
-    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/rewrite-target: /
 spec:
-  tls:
-    - hosts:
-        - ui.example.com
-      secretName: ui-platform-tls
+  ingressClassName: nginx
   rules:
-    - host: ui.example.com
+    - host: ui-platform.example.com
       http:
         paths:
           - path: /

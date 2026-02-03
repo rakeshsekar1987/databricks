@@ -1,0 +1,12 @@
+{
+  "name": "@platform/tax-reporting",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Tax Reporting Module - AG Grid v29",
+  "dependencies": {
+    "ag-grid-angular": "^29.3.0",
+    "ag-grid-community": "^29.3.0",
+    "ag-grid-enterprise": "^29.3.0"
+  },
+  "agGridVersion": "29.3.0"
+}

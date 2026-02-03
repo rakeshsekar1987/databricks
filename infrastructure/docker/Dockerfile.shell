@@ -1,105 +1,41 @@
-# Shell Application - Production Dockerfile
-# Multi-stage build for optimized production image
+# Shell Application Dockerfile
+# Production-ready multi-stage build for Angular Module Federation host
 
-# ============================================
-# Stage 1: Dependencies
-# ============================================
-FROM node:18-alpine AS deps
-
-WORKDIR /app
-
-# Install pnpm
-RUN corepack enable && corepack prepare pnpm@8.15.0 --activate
-
-# Copy workspace configuration files
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY turbo.json ./
-COPY tsconfig.base.json ./
-
-# Copy package.json files for dependency resolution
-COPY packages/shared-library/package.json ./packages/shared-library/
-COPY apps/shell/package.json ./apps/shell/
-
-# Install dependencies
-RUN pnpm install --frozen-lockfile --prefer-offline
-
-# ============================================
-# Stage 2: Builder
-# ============================================
+# Stage 1: Build
 FROM node:18-alpine AS builder
 
 WORKDIR /app
 
-# Install pnpm
-RUN corepack enable && corepack prepare pnpm@8.15.0 --activate
+# Install dependencies first for better caching
+COPY package*.json ./
+COPY angular.json tsconfig.json ./
+RUN npm ci --legacy-peer-deps
 
-# Copy dependencies from deps stage
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/packages/shared-library/node_modules ./packages/shared-library/node_modules
-COPY --from=deps /app/apps/shell/node_modules ./apps/shell/node_modules
-
-# Copy source code
-COPY packages/shared-library ./packages/shared-library
-COPY apps/shell ./apps/shell
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.base.json ./
+# Copy source and build
+COPY projects/shell ./projects/shell
+COPY projects/shared-lib ./projects/shared-lib
 
 # Build shared library first
-RUN pnpm --filter @platform/shared-library build
+RUN npm run build:shared
 
 # Build shell application
-ARG NODE_ENV=production
-ARG REG_REPORTING_URL
-ARG FINANCIAL_REPORTING_URL
-ARG EXPENSE_REPORTING_URL
-ARG TAX_REPORTING_URL
-ARG CONTROL_TOWER_URL
+RUN npm run build:shell
 
-ENV NODE_ENV=${NODE_ENV}
-ENV REG_REPORTING_URL=${REG_REPORTING_URL}
-ENV FINANCIAL_REPORTING_URL=${FINANCIAL_REPORTING_URL}
-ENV EXPENSE_REPORTING_URL=${EXPENSE_REPORTING_URL}
-ENV TAX_REPORTING_URL=${TAX_REPORTING_URL}
-ENV CONTROL_TOWER_URL=${CONTROL_TOWER_URL}
-
-RUN pnpm --filter @platform/shell build
-
-# ============================================
-# Stage 3: Production
-# ============================================
-FROM nginx:alpine AS production
-
-# Install curl for health checks
-RUN apk add --no-cache curl
-
-# Create non-root user for security
-RUN addgroup -g 1001 -S appgroup && \
-    adduser -u 1001 -S appuser -G appgroup
+# Stage 2: Production
+FROM nginx:alpine
 
 # Copy nginx configuration
 COPY infrastructure/docker/nginx/shell.conf /etc/nginx/conf.d/default.conf
 
 # Copy built assets
-COPY --from=builder /app/apps/shell/dist /usr/share/nginx/html
+COPY --from=builder /app/dist/shell /usr/share/nginx/html
 
-# Set ownership
-RUN chown -R appuser:appgroup /usr/share/nginx/html && \
-    chown -R appuser:appgroup /var/cache/nginx && \
-    chown -R appuser:appgroup /var/log/nginx && \
-    touch /var/run/nginx.pid && \
-    chown -R appuser:appgroup /var/run/nginx.pid
-
-# Security: Remove unnecessary files
-RUN rm -rf /usr/share/nginx/html/*.map 2>/dev/null || true
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-    CMD curl -f http://localhost/health || exit 1
+# Add health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD wget -q --spider http://localhost/health || exit 1
 
 # Expose port
 EXPOSE 80
-
-# Run as non-root user
-USER appuser
 
 # Start nginx
 CMD ["nginx", "-g", "daemon off;"]

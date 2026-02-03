@@ -1,14 +1,11 @@
-# Template for module deployments
-# Replace ${MODULE_NAME}, ${VERSION}, ${AG_GRID_VERSION}, ${PORT}
-
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: ${MODULE_NAME}
-  namespace: ui-platform
+  namespace: module-federation
   labels:
     app: ${MODULE_NAME}
-    component: remote-module
+    tier: frontend
     ag-grid-version: "${AG_GRID_VERSION}"
 spec:
   replicas: 2
@@ -19,70 +16,45 @@ spec:
     metadata:
       labels:
         app: ${MODULE_NAME}
-        component: remote-module
         ag-grid-version: "${AG_GRID_VERSION}"
     spec:
       containers:
         - name: ${MODULE_NAME}
-          image: ${ACR_REGISTRY}/ui-platform/${MODULE_NAME}:${VERSION}
+          image: ${REGISTRY}/${MODULE_NAME}:${VERSION}
           ports:
             - containerPort: 80
+          env:
+            - name: AG_GRID_VERSION
+              value: "${AG_GRID_VERSION}"
           resources:
             requests:
-              memory: "64Mi"
-              cpu: "50m"
-            limits:
               memory: "128Mi"
               cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
           livenessProbe:
             httpGet:
               path: /health
               port: 80
             initialDelaySeconds: 10
-            periodSeconds: 10
+            periodSeconds: 30
           readinessProbe:
             httpGet:
               path: /remoteEntry.js
               port: 80
             initialDelaySeconds: 5
-            periodSeconds: 5
+            periodSeconds: 10
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: ${MODULE_NAME}
-  namespace: ui-platform
-  labels:
-    app: ${MODULE_NAME}
-    ag-grid-version: "${AG_GRID_VERSION}"
+  namespace: module-federation
 spec:
   selector:
     app: ${MODULE_NAME}
   ports:
-    - protocol: TCP
-      port: 80
+    - port: 80
       targetPort: 80
   type: ClusterIP
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: ${MODULE_NAME}-ingress
-  namespace: ui-platform
-  annotations:
-    kubernetes.io/ingress.class: nginx
-    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
-    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, OPTIONS"
-    nginx.ingress.kubernetes.io/enable-cors: "true"
-spec:
-  rules:
-    - host: modules.example.com
-      http:
-        paths:
-          - path: /${MODULE_NAME}
-            pathType: Prefix
-            backend:
-              service:
-                name: ${MODULE_NAME}
-                port:
-                  number: 80

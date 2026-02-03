@@ -1,22 +1,22 @@
-# UI Platform - Module Federation POC
+# Angular Module Federation Platform
 
-A **production-ready** micro-frontend architecture using Webpack 5 Module Federation, enabling independent development, deployment, and versioning of UI modules with support for **multiple AG Grid versions**.
+A **production-ready** micro-frontend architecture using Angular 17 with Webpack 5 Module Federation, enabling independent development, deployment, and versioning of UI modules with support for **multiple AG Grid versions** and **Motif Design System** integration.
 
 ## Quick Start
 
 ### Prerequisites
 
 - Node.js >= 18.0.0
-- pnpm >= 8.0.0 (`npm install -g pnpm`)
+- npm >= 9.0.0
 
 ### Installation
 
 ```bash
-# Clone and install dependencies
-pnpm install
+# Install dependencies
+npm install --legacy-peer-deps
 
 # Build shared library
-pnpm build:shared
+npm run build:shared
 ```
 
 ### Development
@@ -28,16 +28,16 @@ pnpm build:shared
 
 **Option 2: Start modules individually** (in separate terminals)
 ```bash
-# Terminal 1 - Shell (Host) on port 3000
-pnpm --filter @platform/shell dev
+# Terminal 1 - Shell (Host) on port 4200
+npm run start:shell
 
-# Terminal 2 - Tax Reporting (AG Grid v29) on port 3004
-pnpm --filter @platform/tax-reporting dev
+# Terminal 2 - Tax Reporting (AG Grid v29) on port 4204
+npm run start:tax-reporting
 
-# Terminal 3 - Financial Reporting (AG Grid v30) on port 3002
-pnpm --filter @platform/financial-reporting dev
+# Terminal 3 - Financial Reporting (AG Grid v30) on port 4202
+npm run start:financial-reporting
 
-# ... other modules on ports 3001, 3003, 3005
+# ... other modules on ports 4201, 4203, 4205
 ```
 
 **Option 3: Docker Compose**
@@ -50,12 +50,12 @@ docker-compose up --build
 
 | Module | URL | AG Grid Version |
 |--------|-----|-----------------|
-| **Shell (Host)** | http://localhost:3000 | - |
-| Reg Reporting | http://localhost:3001 | v31.0.0 |
-| Financial Reporting | http://localhost:3002 | v30.2.0 |
-| Expense Reporting | http://localhost:3003 | v31.0.0 |
-| Tax Reporting | http://localhost:3004 | v29.3.0 |
-| Control Tower | http://localhost:3005 | v31.0.0 |
+| **Shell (Host)** | http://localhost:4200 | - |
+| Reg Reporting | http://localhost:4201 | v31.0.0 |
+| Financial Reporting | http://localhost:4202 | v30.2.0 |
+| Expense Reporting | http://localhost:4203 | v31.0.0 |
+| Tax Reporting | http://localhost:4204 | v29.3.0 |
+| Control Tower | http://localhost:4205 | v31.0.0 |
 
 ---
 
@@ -64,8 +64,8 @@ docker-compose up --build
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                              Shell Application                               │
-│                         (Main UI Container/Host)                            │
-│                      Module Federation Runtime                              │
+│                    (Angular 17 Host + Module Federation)                     │
+│                      Dynamic Remote Loading + Routing                        │
 └─────────────────────────────────────────────────────────────────────────────┘
          │              │              │              │              │
          ▼              ▼              ▼              ▼              ▼
@@ -78,59 +78,86 @@ docker-compose up --build
 │ Independent │ │ Independent │ │ Independent │ │ Independent │ │ Independent │
 │    Pod      │ │    Pod      │ │    Pod      │ │    Pod      │ │    Pod      │
 └─────────────┘ └─────────────┘ └─────────────┘ └─────────────┘ └─────────────┘
+         │              │              │              │              │
+         └──────────────┴──────────────┼──────────────┴──────────────┘
+                                       ▼
+                          ┌─────────────────────────┐
+                          │    Shared Library       │
+                          │  - Motif Components     │
+                          │  - Common Services      │
+                          │  - Utility Functions    │
+                          └─────────────────────────┘
 ```
 
 ### Key Features
 
 | Feature | Description |
 |---------|-------------|
-| **Independent Deployments** | Each module deploys independently without affecting others |
-| **Multiple AG Grid Versions** | Run v29, v30, v31 simultaneously in the same application |
-| **Dynamic Module Loading** | Load remote modules at runtime with error handling |
-| **Team Autonomy** | Teams own modules end-to-end with full deployment independence |
-| **Fast Builds** | Only rebuild changed modules (80% faster) |
-| **Graceful Degradation** | Modules fail independently with retry capability |
+| **Angular 17** | Latest Angular with standalone components and signals |
+| **Module Federation** | Webpack 5 for dynamic runtime module loading |
+| **Motif Design System** | Shared UI component library across all modules |
+| **Multiple AG Grid Versions** | Run v29, v30, v31 simultaneously |
+| **Independent Deployments** | Each module deploys without affecting others |
+| **Production Ready** | Docker, Kubernetes, and CI/CD pipelines included |
 
 ---
 
 ## Project Structure
 
 ```
-ui-module-federation/
-├── apps/
-│   ├── shell/                    # Host application
+angular-module-federation/
+├── projects/
+│   ├── shell/                      # Host application
 │   │   ├── src/
-│   │   │   ├── lib/              # Module Federation utilities
-│   │   │   ├── components/       # React components
-│   │   │   ├── pages/            # Page components
-│   │   │   └── styles/           # CSS styles
-│   │   ├── webpack.config.js     # Production-ready webpack
-│   │   └── package.json
+│   │   │   ├── app/
+│   │   │   │   ├── core/           # Core services, guards, interceptors
+│   │   │   │   ├── shared/         # Shared components, directives, pipes
+│   │   │   │   ├── features/       # Feature modules (home, error)
+│   │   │   │   ├── layouts/        # Layout components (header, sidebar, footer)
+│   │   │   │   ├── app.component.ts
+│   │   │   │   ├── app.config.ts
+│   │   │   │   └── app.routes.ts
+│   │   │   ├── environments/       # Environment configurations
+│   │   │   └── styles.scss         # Global styles with Motif CSS variables
+│   │   ├── webpack.config.js       # Module Federation config
+│   │   └── tsconfig.app.json
 │   │
-│   ├── tax-reporting/            # AG Grid v29
-│   ├── financial-reporting/      # AG Grid v30
-│   ├── reg-reporting/            # AG Grid v31
-│   ├── expense-reporting/        # AG Grid v31
-│   └── control-tower/            # AG Grid v31
-│
-├── packages/
-│   └── shared-library/           # Shared components & utilities
+│   ├── reg-reporting/              # Remote module - AG Grid v31
+│   ├── financial-reporting/        # Remote module - AG Grid v30
+│   ├── expense-reporting/          # Remote module - AG Grid v31
+│   ├── tax-reporting/              # Remote module - AG Grid v29
+│   ├── control-tower/              # Remote module - AG Grid v31
+│   │
+│   └── shared-lib/                 # Shared library with Motif integration
+│       ├── src/
+│       │   ├── lib/
+│       │   │   ├── components/     # Button, Card, Alert, Badge, Modal, Spinner
+│       │   │   ├── services/       # Notification, Storage, API services
+│       │   │   ├── models/         # Common TypeScript interfaces
+│       │   │   └── utils/          # Formatters, Validators
+│       │   └── public-api.ts       # Public exports
+│       └── ng-package.json
 │
 ├── infrastructure/
-│   ├── docker/                   # Production Docker configs
+│   ├── docker/                     # Docker configurations
 │   │   ├── Dockerfile.shell
 │   │   ├── Dockerfile.module
 │   │   ├── docker-compose.yml
 │   │   └── nginx/
-│   ├── kubernetes/               # K8s manifests
-│   └── module-registry/          # Dynamic module discovery
+│   └── kubernetes/                 # Kubernetes manifests
 │
 ├── scripts/
-│   ├── dev.sh                    # Development startup
-│   ├── build.sh                  # Production build
-│   └── docker-build.sh           # Docker image build
+│   ├── dev.sh                      # Development startup
+│   ├── build.sh                    # Production build
+│   └── docker-build.sh             # Docker image build
 │
-└── .github/workflows/            # CI/CD pipelines
+├── .github/workflows/              # CI/CD pipelines
+│   ├── shell.yml
+│   └── modules.yml
+│
+├── angular.json                    # Angular workspace configuration
+├── package.json                    # Root dependencies
+└── tsconfig.json                   # TypeScript configuration
 ```
 
 ---
@@ -140,16 +167,17 @@ ui-module-federation/
 ### Shell (Host) Configuration
 
 ```javascript
-// apps/shell/webpack.config.js
+// projects/shell/webpack.config.js
 new ModuleFederationPlugin({
   name: 'shell',
   remotes: {
-    taxReporting: 'taxReporting@http://localhost:3004/remoteEntry.js',
-    regReporting: 'regReporting@http://localhost:3001/remoteEntry.js',
+    taxReporting: 'taxReporting@http://localhost:4204/remoteEntry.js',
+    regReporting: 'regReporting@http://localhost:4201/remoteEntry.js',
   },
   shared: {
-    react: { singleton: true },    // Shared as singleton
-    'react-dom': { singleton: true },
+    '@angular/core': { singleton: true },
+    '@angular/common': { singleton: true },
+    '@mfs/motif': { singleton: true },  // Shared Motif library
     // AG Grid is NOT shared - each module has its own version
   },
 })
@@ -158,15 +186,16 @@ new ModuleFederationPlugin({
 ### Remote Module Configuration (Tax Reporting with AG Grid v29)
 
 ```javascript
-// apps/tax-reporting/webpack.config.js
+// projects/tax-reporting/webpack.config.js
 new ModuleFederationPlugin({
   name: 'taxReporting',
   filename: 'remoteEntry.js',
   exposes: {
-    './App': './src/App',
+    './routes': './projects/tax-reporting/src/app/app.routes.ts',
   },
   shared: {
-    react: { singleton: true },
+    '@angular/core': { singleton: true },
+    '@mfs/motif': { singleton: true },
     'ag-grid-community': {
       singleton: false,           // NOT singleton - allows v29
       requiredVersion: '^29.3.0',
@@ -175,23 +204,17 @@ new ModuleFederationPlugin({
 })
 ```
 
-### Dynamic Remote Loading
+### Dynamic Route Loading
 
 ```typescript
-// apps/shell/src/lib/moduleFederation.ts
-export async function loadRemoteModule(config) {
-  // Load remote entry script
-  await loadScript(config.url);
-  
-  // Get container from window
-  const container = window[config.scope];
-  
-  // Initialize with shared scope
-  await container.init(__webpack_share_scopes__.default);
-  
-  // Get and return the module
-  const factory = await container.get(config.module);
-  return factory().default;
+// projects/shell/src/app/app.routes.ts
+{
+  path: 'tax-reporting',
+  loadChildren: () => loadRemoteModule({
+    type: 'module',
+    remoteEntry: 'http://localhost:4204/remoteEntry.js',
+    exposedModule: './routes'
+  }).then(m => m.TAX_REPORTING_ROUTES)
 }
 ```
 
@@ -199,10 +222,10 @@ export async function loadRemoteModule(config) {
 
 ## AG Grid Version Isolation
 
-Each module can use a different AG Grid version because:
+Each module bundles its own AG Grid version because:
 
-1. **AG Grid is not shared as singleton** in Module Federation config
-2. **Each module bundles its own AG Grid** version
+1. **AG Grid is NOT shared as singleton** in Module Federation config
+2. **Each module declares its version** in `package.json`
 3. **Modules are loaded in isolation** at runtime
 
 ```javascript
@@ -215,6 +238,27 @@ Each module can use a different AG Grid version because:
 // Reg Reporting uses v31
 "ag-grid-community": "^31.0.0"
 ```
+
+---
+
+## Shared Library (Motif Integration)
+
+The shared library provides Motif-styled components:
+
+```typescript
+// Usage in any module
+import { ButtonComponent, CardComponent, AlertComponent } from '@shared-lib';
+import { NotificationService, ApiService } from '@shared-lib';
+import { formatCurrency, isValidEmail } from '@shared-lib';
+```
+
+### Available Components
+- `lib-button` - Primary, secondary, danger, success variants
+- `lib-card` - Container with header, body, footer
+- `lib-alert` - Info, success, warning, error alerts
+- `lib-badge` - Status badges
+- `lib-spinner` - Loading indicator
+- `lib-modal` - Dialog overlay
 
 ---
 
@@ -244,7 +288,6 @@ docker-compose up -d
 ### Kubernetes Deployment
 
 ```bash
-# Apply Kubernetes manifests
 kubectl apply -k infrastructure/kubernetes/
 ```
 
@@ -252,74 +295,47 @@ kubectl apply -k infrastructure/kubernetes/
 
 ## CI/CD Pipelines
 
-Each module has its own GitHub Actions workflow with path-based triggers:
+Each module has independent CI/CD with path-based triggers:
 
 ```yaml
-# .github/workflows/tax-reporting.yml
+# .github/workflows/modules.yml
 on:
   push:
     paths:
-      - 'apps/tax-reporting/**'    # Only triggers for this module
-      - 'packages/shared-library/**'
+      - 'projects/tax-reporting/**'  # Only triggers for this module
+      - 'projects/shared-lib/**'
 ```
 
 ### Pipeline Stages
 
-1. **Build** - Compile TypeScript, bundle with Webpack
+1. **Build** - Compile Angular, bundle with Webpack
 2. **Test** - Run unit tests and linting
-3. **Publish** - Upload to JFrog Artifactory
-4. **Deploy** - Deploy to CDN/Kubernetes
+3. **Docker** - Build and push container images
+4. **Deploy** - Deploy to Kubernetes
 
 ---
 
-## API Reference
+## Best Practices Implemented
 
-### Module Registry
+### Angular Best Practices
+- Standalone components (no NgModules)
+- Signals for reactive state
+- OnPush change detection
+- Lazy loading for all routes
+- Strict TypeScript configuration
 
-```bash
-# Get all modules
-GET http://localhost:4000/api/module-manifest
+### Module Federation Best Practices
+- Singleton sharing for framework libraries
+- Version isolation for AG Grid
+- Dynamic remote loading with error handling
+- Graceful degradation when modules fail
 
-# Get specific module
-GET http://localhost:4000/api/modules/taxReporting
-
-# Get AG Grid versions
-GET http://localhost:4000/api/ag-grid-versions
-```
-
-### Health Checks
-
-```bash
-# Shell health
-GET http://localhost:3000/health
-
-# Module health
-GET http://localhost:3004/health
-
-# Module readiness (checks remoteEntry.js)
-GET http://localhost:3004/ready
-```
-
----
-
-## Configuration
-
-### Environment Variables
-
-```bash
-# .env.local
-NODE_ENV=development
-
-# Remote module URLs
-REG_REPORTING_URL=http://localhost:3001/remoteEntry.js
-FINANCIAL_REPORTING_URL=http://localhost:3002/remoteEntry.js
-EXPENSE_REPORTING_URL=http://localhost:3003/remoteEntry.js
-TAX_REPORTING_URL=http://localhost:3004/remoteEntry.js
-CONTROL_TOWER_URL=http://localhost:3005/remoteEntry.js
-
-# Module Registry
-MODULE_REGISTRY_URL=http://localhost:4000
-```
+### Project Structure Best Practices
+- Feature-based organization
+- Core module for services/guards
+- Shared module for common components
+- Environment-specific configurations
+- Comprehensive typing with TypeScript
 
 ---
 
@@ -334,31 +350,19 @@ MODULE_REGISTRY_URL=http://localhost:4000
 
 ### AG Grid version conflicts
 
-1. Ensure `singleton: false` in shared config
+1. Ensure `singleton: false` in webpack shared config
 2. Check that each module has correct version in `package.json`
-3. Clear module cache and rebuild
+3. Clear browser cache and rebuild
 
 ### Build errors
 
 ```bash
-# Clean all caches
-pnpm clean
-
-# Reinstall dependencies
-rm -rf node_modules
-pnpm install
-
-# Rebuild
-pnpm build
+# Clean and rebuild
+rm -rf node_modules dist
+npm install --legacy-peer-deps
+npm run build:shared
+npm run build
 ```
-
----
-
-## Resources
-
-- [Module Federation Documentation](https://webpack.js.org/concepts/module-federation/)
-- [Architecture Documentation](./docs/ARCHITECTURE.md)
-- [Presentation](./docs/presentation/module-federation-strategy.html)
 
 ---
 

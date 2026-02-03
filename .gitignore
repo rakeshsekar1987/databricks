@@ -1,42 +1,51 @@
 # Dependencies
 node_modules/
-.pnpm-store/
+.npm
 
 # Build outputs
 dist/
-build/
-.next/
-out/
-
-# Environment files
-.env
-.env.local
-.env.*.local
+out-tsc/
+.angular/
 
 # IDE
 .idea/
 .vscode/
 *.swp
 *.swo
+*~
 
-# OS files
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# OS
 .DS_Store
 Thumbs.db
 
-# Logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
+# Environment
+.env
+.env.local
+.env.*.local
 
-# Testing
+# Test coverage
 coverage/
-.nyc_output/
 
-# Turbo
-.turbo/
+# Temporary files
+tmp/
+temp/
 
-# Cache
-.cache/
+# Editor directories
+.project
+.classpath
+.settings/
+
+# TypeScript
 *.tsbuildinfo
+
+# Angular specific
+.angular/cache
+
+# Miscellaneous
+*.orig
+*.rej

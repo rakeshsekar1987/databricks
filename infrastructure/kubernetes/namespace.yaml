@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: ui-platform
+  name: module-federation
   labels:
-    app.kubernetes.io/name: ui-platform
-    app.kubernetes.io/part-of: module-federation
+    app.kubernetes.io/name: module-federation
+    app.kubernetes.io/part-of: ui-platform

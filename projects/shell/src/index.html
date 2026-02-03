@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="UI Module Federation Platform - Angular micro-frontends with independent deployments">
+  <title>UI Platform - Module Federation</title>
+  <base href="/">
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
+  
+  <!-- Preconnect to remote module origins for faster loading -->
+  <link rel="preconnect" href="http://localhost:4201">
+  <link rel="preconnect" href="http://localhost:4202">
+  <link rel="preconnect" href="http://localhost:4203">
+  <link rel="preconnect" href="http://localhost:4204">
+  <link rel="preconnect" href="http://localhost:4205">
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <app-root></app-root>
+  
+  <!-- Loading indicator before Angular bootstraps -->
+  <noscript>
+    <div style="padding: 48px; text-align: center;">
+      <h1>JavaScript Required</h1>
+      <p>Please enable JavaScript to use this application.</p>
+    </div>
+  </noscript>
+</body>
+</html>

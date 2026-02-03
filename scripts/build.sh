@@ -1,73 +1,38 @@
 #!/bin/bash
-
 # Build Script - Build all modules for production
-# Usage: ./scripts/build.sh [module]
 
 set -e
 
-# Colors
-GREEN='\033[0;32m'
-BLUE='\033[0;34m'
-NC='\033[0m'
+echo "🔨 Building Angular Module Federation Platform..."
+echo ""
 
-print_message() {
-    echo -e "${GREEN}[BUILD]${NC} $1"
-}
+# Parse arguments
+MODULE=$1
 
-# Check pnpm
-check_pnpm() {
-    if ! command -v pnpm &> /dev/null; then
-        echo "Installing pnpm..."
-        npm install -g pnpm
-    fi
-}
+# Install dependencies if needed
+if [ ! -d "node_modules" ]; then
+  echo "📦 Installing dependencies..."
+  npm ci --legacy-peer-deps
+fi
 
-# Build function
-build_module() {
-    local module=$1
-    print_message "Building $module..."
-    pnpm --filter @platform/$module build
-}
+# Build shared library first
+echo "📚 Building shared library..."
+npm run build:shared
 
-# Build all
-build_all() {
-    print_message "Building all modules for production..."
-    
-    # Build shared library first
-    build_module "shared-library"
-    
-    # Build all apps in parallel
-    pnpm run build
-    
-    print_message "Build complete!"
-    
-    echo ""
-    echo -e "${BLUE}Build outputs:${NC}"
-    echo "  - apps/shell/dist"
-    echo "  - apps/reg-reporting/dist"
-    echo "  - apps/financial-reporting/dist"
-    echo "  - apps/expense-reporting/dist"
-    echo "  - apps/tax-reporting/dist"
-    echo "  - apps/control-tower/dist"
-}
+if [ -z "$MODULE" ]; then
+  # Build all modules
+  echo "🏗️ Building all modules..."
+  npm run build:shell
+  npm run build:reg-reporting
+  npm run build:financial-reporting
+  npm run build:expense-reporting
+  npm run build:tax-reporting
+  npm run build:control-tower
+else
+  # Build specific module
+  echo "🏗️ Building $MODULE..."
+  npm run build:$MODULE
+fi
 
-# Main
-main() {
-    cd "$(dirname "$0")/.."
-    
-    check_pnpm
-    
-    if [ ! -d "node_modules" ]; then
-        print_message "Installing dependencies..."
-        pnpm install
-    fi
-
-    if [ -n "$1" ]; then
-        build_module "shared-library"
-        build_module "$1"
-    else
-        build_all
-    fi
-}
-
-main "$@"
+echo ""
+echo "✅ Build complete! Output in ./dist/"

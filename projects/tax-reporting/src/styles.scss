@@ -1,0 +1,14 @@
+/* Tax Reporting Module Styles */
+@import 'ag-grid-community/styles/ag-grid.css';
+@import 'ag-grid-community/styles/ag-theme-alpine.css';
+
+:root {
+  --module-primary: #7c3aed;
+  --module-primary-dark: #6d28d9;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  margin: 0;
+  padding: 0;
+}

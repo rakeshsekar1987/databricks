@@ -1,182 +1,99 @@
 version: '3.8'
 
-# UI Platform - Module Federation
-# Production-ready Docker Compose configuration
-
 services:
-  # ============================================
   # Shell Application (Host)
-  # ============================================
   shell:
     build:
       context: ../..
       dockerfile: infrastructure/docker/Dockerfile.shell
-      args:
-        NODE_ENV: production
-        REG_REPORTING_URL: http://reg-reporting/remoteEntry.js
-        FINANCIAL_REPORTING_URL: http://financial-reporting/remoteEntry.js
-        EXPENSE_REPORTING_URL: http://expense-reporting/remoteEntry.js
-        TAX_REPORTING_URL: http://tax-reporting/remoteEntry.js
-        CONTROL_TOWER_URL: http://control-tower/remoteEntry.js
     ports:
-      - "3000:80"
-    depends_on:
-      reg-reporting:
-        condition: service_healthy
-      financial-reporting:
-        condition: service_healthy
-      expense-reporting:
-        condition: service_healthy
-      tax-reporting:
-        condition: service_healthy
-      control-tower:
-        condition: service_healthy
+      - "4200:80"
+    environment:
+      - NODE_ENV=production
     networks:
-      - ui-network
-    restart: unless-stopped
+      - module-federation
+    depends_on:
+      - reg-reporting
+      - financial-reporting
+      - expense-reporting
+      - tax-reporting
+      - control-tower
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 10s
 
-  # ============================================
-  # Regulatory Reporting (AG Grid v31)
-  # ============================================
+  # Regulatory Reporting Module - AG Grid v31
   reg-reporting:
     build:
       context: ../..
       dockerfile: infrastructure/docker/Dockerfile.module
       args:
         MODULE_NAME: reg-reporting
-        NODE_ENV: production
     ports:
-      - "3001:80"
+      - "4201:80"
+    environment:
+      - AG_GRID_VERSION=31.0.0
     networks:
-      - ui-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
+      - module-federation
 
-  # ============================================
-  # Financial Reporting (AG Grid v30)
-  # ============================================
+  # Financial Reporting Module - AG Grid v30
   financial-reporting:
     build:
       context: ../..
       dockerfile: infrastructure/docker/Dockerfile.module
       args:
         MODULE_NAME: financial-reporting
-        NODE_ENV: production
     ports:
-      - "3002:80"
+      - "4202:80"
+    environment:
+      - AG_GRID_VERSION=30.2.0
     networks:
-      - ui-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
+      - module-federation
 
-  # ============================================
-  # Expense Reporting (AG Grid v31)
-  # ============================================
+  # Expense Reporting Module - AG Grid v31
   expense-reporting:
     build:
       context: ../..
       dockerfile: infrastructure/docker/Dockerfile.module
       args:
         MODULE_NAME: expense-reporting
-        NODE_ENV: production
     ports:
-      - "3003:80"
+      - "4203:80"
+    environment:
+      - AG_GRID_VERSION=31.0.0
     networks:
-      - ui-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
+      - module-federation
 
-  # ============================================
-  # Tax Reporting (AG Grid v29)
-  # ============================================
+  # Tax Reporting Module - AG Grid v29
   tax-reporting:
     build:
       context: ../..
       dockerfile: infrastructure/docker/Dockerfile.module
       args:
         MODULE_NAME: tax-reporting
-        NODE_ENV: production
     ports:
-      - "3004:80"
+      - "4204:80"
+    environment:
+      - AG_GRID_VERSION=29.3.0
     networks:
-      - ui-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
+      - module-federation
 
-  # ============================================
-  # Control Tower (AG Grid v31)
-  # ============================================
+  # Control Tower Module - AG Grid v31
   control-tower:
     build:
       context: ../..
       dockerfile: infrastructure/docker/Dockerfile.module
       args:
         MODULE_NAME: control-tower
-        NODE_ENV: production
     ports:
-      - "3005:80"
-    networks:
-      - ui-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-
-  # ============================================
-  # Module Registry Service
-  # ============================================
-  module-registry:
-    build:
-      context: ../module-registry
-      dockerfile: Dockerfile
-    ports:
-      - "4000:4000"
+      - "4205:80"
     environment:
-      - PORT=4000
-      - REG_REPORTING_URL=http://reg-reporting/remoteEntry.js
-      - FINANCIAL_REPORTING_URL=http://financial-reporting/remoteEntry.js
-      - EXPENSE_REPORTING_URL=http://expense-reporting/remoteEntry.js
-      - TAX_REPORTING_URL=http://tax-reporting/remoteEntry.js
-      - CONTROL_TOWER_URL=http://control-tower/remoteEntry.js
+      - AG_GRID_VERSION=31.0.0
     networks:
-      - ui-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      - module-federation
 
 networks:
-  ui-network:
+  module-federation:
     driver: bridge
-    name: ui-platform-network

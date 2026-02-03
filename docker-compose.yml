@@ -1,31 +1,9 @@
-# =============================================================================
 # Angular Module Federation POC - Docker Compose
-# =============================================================================
-# 
-# Single-command deployment for the complete micro-frontend architecture
-#
-# Usage:
-#   Start:   docker-compose up -d --build
-#   Stop:    docker-compose down
-#   Logs:    docker-compose logs -f
-#   Rebuild: docker-compose up -d --build --force-recreate
-#
-# Access Points:
-#   Shell (Host):         http://localhost:4200
-#   Reg Reporting:        http://localhost:4201
-#   Financial Reporting:  http://localhost:4202
-#   Expense Reporting:    http://localhost:4203
-#   Tax Reporting:        http://localhost:4204
-#   Control Tower:        http://localhost:4205
-#
-# =============================================================================
+# Usage: run.bat (Windows) or ./run.sh (Linux/Mac)
 
 version: '3.8'
 
 services:
-  # ===========================================================================
-  # Shell Application (Host Container)
-  # ===========================================================================
   shell:
     build:
       context: .
@@ -34,10 +12,8 @@ services:
     container_name: mf-shell
     ports:
       - "4200:80"
-    environment:
-      - NODE_ENV=production
     networks:
-      - module-federation-network
+      - mf-network
     depends_on:
       - reg-reporting
       - financial-reporting
@@ -45,12 +21,7 @@ services:
       - tax-reporting
       - control-tower
     restart: unless-stopped
-    labels:
-      - "com.module-federation.service=shell"
 
-  # ===========================================================================
-  # Regulatory Reporting Module - AG Grid v31
-  # ===========================================================================
   reg-reporting:
     build:
       context: .
@@ -61,18 +32,10 @@ services:
     container_name: mf-reg-reporting
     ports:
       - "4201:80"
-    environment:
-      - NODE_ENV=production
     networks:
-      - module-federation-network
+      - mf-network
     restart: unless-stopped
-    labels:
-      - "com.module-federation.service=reg-reporting"
-      - "com.module-federation.ag-grid=v31"
 
-  # ===========================================================================
-  # Financial Reporting Module - AG Grid v30
-  # ===========================================================================
   financial-reporting:
     build:
       context: .
@@ -83,18 +46,10 @@ services:
     container_name: mf-financial-reporting
     ports:
       - "4202:80"
-    environment:
-      - NODE_ENV=production
     networks:
-      - module-federation-network
+      - mf-network
     restart: unless-stopped
-    labels:
-      - "com.module-federation.service=financial-reporting"
-      - "com.module-federation.ag-grid=v30"
 
-  # ===========================================================================
-  # Expense Reporting Module - AG Grid v31
-  # ===========================================================================
   expense-reporting:
     build:
       context: .
@@ -105,18 +60,10 @@ services:
     container_name: mf-expense-reporting
     ports:
       - "4203:80"
-    environment:
-      - NODE_ENV=production
     networks:
-      - module-federation-network
+      - mf-network
     restart: unless-stopped
-    labels:
-      - "com.module-federation.service=expense-reporting"
-      - "com.module-federation.ag-grid=v31"
 
-  # ===========================================================================
-  # Tax Reporting Module - AG Grid v29
-  # ===========================================================================
   tax-reporting:
     build:
       context: .
@@ -127,18 +74,10 @@ services:
     container_name: mf-tax-reporting
     ports:
       - "4204:80"
-    environment:
-      - NODE_ENV=production
     networks:
-      - module-federation-network
+      - mf-network
     restart: unless-stopped
-    labels:
-      - "com.module-federation.service=tax-reporting"
-      - "com.module-federation.ag-grid=v29"
 
-  # ===========================================================================
-  # Control Tower Module - AG Grid v31
-  # ===========================================================================
   control-tower:
     build:
       context: .
@@ -149,19 +88,10 @@ services:
     container_name: mf-control-tower
     ports:
       - "4205:80"
-    environment:
-      - NODE_ENV=production
     networks:
-      - module-federation-network
+      - mf-network
     restart: unless-stopped
-    labels:
-      - "com.module-federation.service=control-tower"
-      - "com.module-federation.ag-grid=v31"
 
-# =============================================================================
-# Networks
-# =============================================================================
 networks:
-  module-federation-network:
+  mf-network:
     driver: bridge
-    name: module-federation-network

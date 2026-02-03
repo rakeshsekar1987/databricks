@@ -1,20 +1,25 @@
-import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterOutlet } from '@angular/router';
+import { RouterOutlet, Router, NavigationEnd } from '@angular/router';
+import { filter, map } from 'rxjs/operators';
+import { toSignal } from '@angular/core/rxjs-interop';
 
 import { HeaderComponent } from './layouts/header/header.component';
 import { SidebarComponent } from './layouts/sidebar/sidebar.component';
 import { FooterComponent } from './layouts/footer/footer.component';
 import { LoadingService } from './core/services/loading.service';
+import { AuthService } from './core/auth/auth.service';
 
 /**
  * Root Application Component
  * 
  * Provides the main layout structure with:
- * - Header with navigation
- * - Sidebar for module navigation
+ * - Header with navigation (only when authenticated)
+ * - Sidebar for module navigation (only when authenticated)
  * - Main content area with router outlet
- * - Footer with version info
+ * - Footer with version info (only when authenticated)
+ * 
+ * Login and auth callback pages render without the shell layout.
  */
 @Component({
   selector: 'app-root',
@@ -27,26 +32,32 @@ import { LoadingService } from './core/services/loading.service';
     FooterComponent
   ],
   template: `
-    <div class="app-container">
-      <app-header></app-header>
-      
-      <div class="app-body">
-        <app-sidebar></app-sidebar>
+    @if (showShellLayout()) {
+      <!-- Authenticated Layout with Shell -->
+      <div class="app-container">
+        <app-header></app-header>
         
-        <main class="main-content" role="main">
-          @if (isLoading$ | async) {
-            <div class="loading-overlay">
-              <div class="loading-spinner"></div>
-              <p>Loading module...</p>
-            </div>
-          }
+        <div class="app-body">
+          <app-sidebar></app-sidebar>
           
-          <router-outlet></router-outlet>
-        </main>
+          <main class="main-content" role="main">
+            @if (isLoading$ | async) {
+              <div class="loading-overlay">
+                <div class="loading-spinner"></div>
+                <p>Loading module...</p>
+              </div>
+            }
+            
+            <router-outlet></router-outlet>
+          </main>
+        </div>
+        
+        <app-footer></app-footer>
       </div>
-      
-      <app-footer></app-footer>
-    </div>
+    } @else {
+      <!-- Standalone Layout for Login/Auth pages -->
+      <router-outlet></router-outlet>
+    }
   `,
   styles: [`
     .app-container {
@@ -96,10 +107,34 @@ import { LoadingService } from './core/services/loading.service';
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class AppComponent implements OnInit {
+  private readonly loadingService = inject(LoadingService);
+  private readonly authService = inject(AuthService);
+  private readonly router = inject(Router);
+  
   title = 'UI Module Federation Platform';
   isLoading$ = this.loadingService.isLoading$;
   
-  constructor(private loadingService: LoadingService) {}
+  // Routes that should NOT show the shell layout (header/sidebar/footer)
+  private readonly standaloneRoutes = ['/login', '/auth/callback'];
+  
+  // Track current route to determine layout
+  private readonly currentUrl = toSignal(
+    this.router.events.pipe(
+      filter((event): event is NavigationEnd => event instanceof NavigationEnd),
+      map(event => event.urlAfterRedirects)
+    ),
+    { initialValue: this.router.url }
+  );
+  
+  /**
+   * Determines if shell layout should be shown
+   * Shell layout is hidden for login and auth callback pages
+   */
+  showShellLayout = () => {
+    const url = this.currentUrl();
+    const isStandaloneRoute = this.standaloneRoutes.some(route => url.startsWith(route));
+    return !isStandaloneRoute && this.authService.isAuthenticated();
+  };
   
   ngOnInit(): void {
     console.log('[Shell] Application initialized');

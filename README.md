@@ -339,6 +339,87 @@ on:
 
 ---
 
+## Test Cases
+
+### 1.1 OAuth 2.0 SSO Login with domain_name.com
+
+The POC implements OAuth 2.0 Authentication with PKCE flow:
+
+```
+┌─────────────┐     ┌──────────────────┐     ┌─────────────────┐
+│   Browser   │────▶│  Shell App       │────▶│ domain_name.com │
+│             │     │  /login          │     │ OAuth Provider  │
+└─────────────┘     └──────────────────┘     └─────────────────┘
+                           │                         │
+                           │ 1. Generate PKCE        │
+                           │ 2. Redirect to          │
+                           │    /oauth2/authorize    │
+                           │                         │
+                           │◀────────────────────────│
+                           │ 3. Auth Code Callback   │
+                           │                         │
+                           │ 4. Exchange Code        │────▶
+                           │    for Tokens           │
+                           │                         │◀────
+                           │ 5. Store Token          │
+                           │ 6. Navigate to Home     │
+```
+
+**Files:**
+- `projects/shell/src/app/core/auth/auth.service.ts` - OAuth logic
+- `projects/shell/src/app/core/auth/auth.guard.ts` - Route protection
+- `projects/shell/src/app/features/login/login.component.ts` - Login UI
+
+**Testing:**
+1. Navigate to `http://localhost:4200/login`
+2. Click "Continue as Demo User" (mock mode enabled by default)
+3. User is authenticated and redirected to home
+
+### 1.2 Module-to-Module Navigation
+
+All remote modules include cross-navigation capabilities:
+
+| From Module | Navigation Options |
+|-------------|-------------------|
+| Reg Reporting | Financial, Expense, Tax, Control Tower |
+| Financial Reporting | Reg, Expense, Tax, Control Tower |
+| Expense Reporting | Reg, Financial, Tax, Control Tower |
+| Tax Reporting | Reg, Financial, Expense, Control Tower |
+| Control Tower | All modules with full descriptions |
+
+**Testing:**
+1. Login and navigate to any module (e.g., `/tax-reporting`)
+2. Scroll to "Navigate to Other Modules" section
+3. Click any module card to navigate
+4. Verify seamless transition between modules
+
+### 1.3 Mock JSON Data
+
+Mock data files are provided for all modules:
+
+| File | Content | Location |
+|------|---------|----------|
+| `tax-reports.json` | 8 tax filings with status, liability | `/assets/mock-data/` |
+| `financial-statements.json` | 6 income statements, balance sheets | `/assets/mock-data/` |
+| `regulatory-reports.json` | 7 compliance reports (Basel III, MiFID) | `/assets/mock-data/` |
+| `expenses.json` | 8 expense records with categories | `/assets/mock-data/` |
+| `modules-status.json` | Health metrics for Control Tower | `/assets/mock-data/` |
+
+**Usage:**
+```typescript
+import { MockDataService } from './core/services/mock-data.service';
+
+constructor(private mockDataService: MockDataService) {}
+
+ngOnInit() {
+  this.mockDataService.getTaxReports().subscribe(data => {
+    this.rowData = data;
+  });
+}
+```
+
+---
+
 ## Troubleshooting
 
 ### Module fails to load

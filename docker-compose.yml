@@ -1,0 +1,223 @@
+# =============================================================================
+# Angular Module Federation POC - Docker Compose
+# =============================================================================
+# 
+# Single-command deployment for the complete micro-frontend architecture
+#
+# Usage:
+#   Start:   docker-compose up -d --build
+#   Stop:    docker-compose down
+#   Logs:    docker-compose logs -f
+#   Rebuild: docker-compose up -d --build --force-recreate
+#
+# Access Points:
+#   Shell (Host):         http://localhost:4200
+#   Reg Reporting:        http://localhost:4201
+#   Financial Reporting:  http://localhost:4202
+#   Expense Reporting:    http://localhost:4203
+#   Tax Reporting:        http://localhost:4204
+#   Control Tower:        http://localhost:4205
+#
+# =============================================================================
+
+version: '3.8'
+
+services:
+  # ===========================================================================
+  # Shell Application (Host Container)
+  # ===========================================================================
+  shell:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: shell
+      args:
+        - MODULE_NAME=shell
+    container_name: mf-shell
+    ports:
+      - "4200:80"
+    environment:
+      - NODE_ENV=production
+    networks:
+      - module-federation-network
+    depends_on:
+      reg-reporting:
+        condition: service_healthy
+      financial-reporting:
+        condition: service_healthy
+      expense-reporting:
+        condition: service_healthy
+      tax-reporting:
+        condition: service_healthy
+      control-tower:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:80/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    labels:
+      - "com.module-federation.service=shell"
+      - "com.module-federation.ag-grid=shared"
+
+  # ===========================================================================
+  # Regulatory Reporting Module - AG Grid v31
+  # ===========================================================================
+  reg-reporting:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: module
+      args:
+        - MODULE_NAME=reg-reporting
+    container_name: mf-reg-reporting
+    ports:
+      - "4201:80"
+    environment:
+      - NODE_ENV=production
+      - AG_GRID_VERSION=31.0.0
+    networks:
+      - module-federation-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:80/remoteEntry.js"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    labels:
+      - "com.module-federation.service=reg-reporting"
+      - "com.module-federation.ag-grid=v31"
+
+  # ===========================================================================
+  # Financial Reporting Module - AG Grid v30
+  # ===========================================================================
+  financial-reporting:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: module
+      args:
+        - MODULE_NAME=financial-reporting
+    container_name: mf-financial-reporting
+    ports:
+      - "4202:80"
+    environment:
+      - NODE_ENV=production
+      - AG_GRID_VERSION=30.2.0
+    networks:
+      - module-federation-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:80/remoteEntry.js"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    labels:
+      - "com.module-federation.service=financial-reporting"
+      - "com.module-federation.ag-grid=v30"
+
+  # ===========================================================================
+  # Expense Reporting Module - AG Grid v31
+  # ===========================================================================
+  expense-reporting:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: module
+      args:
+        - MODULE_NAME=expense-reporting
+    container_name: mf-expense-reporting
+    ports:
+      - "4203:80"
+    environment:
+      - NODE_ENV=production
+      - AG_GRID_VERSION=31.0.0
+    networks:
+      - module-federation-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:80/remoteEntry.js"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    labels:
+      - "com.module-federation.service=expense-reporting"
+      - "com.module-federation.ag-grid=v31"
+
+  # ===========================================================================
+  # Tax Reporting Module - AG Grid v29
+  # ===========================================================================
+  tax-reporting:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: module
+      args:
+        - MODULE_NAME=tax-reporting
+    container_name: mf-tax-reporting
+    ports:
+      - "4204:80"
+    environment:
+      - NODE_ENV=production
+      - AG_GRID_VERSION=29.3.0
+    networks:
+      - module-federation-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:80/remoteEntry.js"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    labels:
+      - "com.module-federation.service=tax-reporting"
+      - "com.module-federation.ag-grid=v29"
+
+  # ===========================================================================
+  # Control Tower Module - AG Grid v31
+  # ===========================================================================
+  control-tower:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: module
+      args:
+        - MODULE_NAME=control-tower
+    container_name: mf-control-tower
+    ports:
+      - "4205:80"
+    environment:
+      - NODE_ENV=production
+      - AG_GRID_VERSION=31.0.0
+    networks:
+      - module-federation-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:80/remoteEntry.js"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    labels:
+      - "com.module-federation.service=control-tower"
+      - "com.module-federation.ag-grid=v31"
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  module-federation-network:
+    driver: bridge
+    name: module-federation-network
+
+# =============================================================================
+# Volumes (for future use with persistent data)
+# =============================================================================
+volumes:
+  shell-logs:
+  module-logs:

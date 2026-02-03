@@ -4,13 +4,36 @@ A **production-ready** micro-frontend architecture using Angular 17 with Webpack
 
 ## Quick Start
 
-### Prerequisites
+### Option 1: Docker (Recommended - Single Click)
 
+The fastest way to run the complete POC:
+
+```bash
+# Linux/macOS
+./run.sh
+
+# Windows
+run.bat
+```
+
+This will build and start all 6 micro-frontends with a single command.
+
+**Docker Commands:**
+| Command | Description |
+|---------|-------------|
+| `./run.sh` | Build and start all services |
+| `./run.sh stop` | Stop all services |
+| `./run.sh logs` | View container logs |
+| `./run.sh status` | Show container status |
+| `./run.sh clean` | Remove all containers and images |
+
+### Option 2: Local Development
+
+**Prerequisites:**
 - Node.js >= 18.0.0
 - npm >= 9.0.0
 
-### Installation
-
+**Installation:**
 ```bash
 # Install dependencies
 npm install --legacy-peer-deps
@@ -19,14 +42,16 @@ npm install --legacy-peer-deps
 npm run build:shared
 ```
 
-### Development
-
-**Option 1: Start all modules**
+**Start all modules:**
 ```bash
+# Using the dev script
 ./scripts/dev.sh
+
+# Or using npm
+npm start
 ```
 
-**Option 2: Start modules individually** (in separate terminals)
+**Start modules individually** (in separate terminals):
 ```bash
 # Terminal 1 - Shell (Host) on port 4200
 npm run start:shell
@@ -38,12 +63,6 @@ npm run start:tax-reporting
 npm run start:financial-reporting
 
 # ... other modules on ports 4201, 4203, 4205
-```
-
-**Option 3: Docker Compose**
-```bash
-cd infrastructure/docker
-docker-compose up --build
 ```
 
 ### Access the Application

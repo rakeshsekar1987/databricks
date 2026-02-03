@@ -58,6 +58,7 @@ REM Stop and remove any existing containers first
 echo Cleaning up old containers...
 docker stop mf-shell mf-reg-reporting mf-financial-reporting mf-expense-reporting mf-tax-reporting mf-control-tower 2>nul
 docker rm mf-shell mf-reg-reporting mf-financial-reporting mf-expense-reporting mf-tax-reporting mf-control-tower 2>nul
+docker network rm mf-network 2>nul
 docker network rm module-federation-network 2>nul
 
 echo.
@@ -103,6 +104,7 @@ echo Removing all containers and images...
 docker stop mf-shell mf-reg-reporting mf-financial-reporting mf-expense-reporting mf-tax-reporting mf-control-tower 2>nul
 docker rm mf-shell mf-reg-reporting mf-financial-reporting mf-expense-reporting mf-tax-reporting mf-control-tower 2>nul
 %COMPOSE_CMD% down --rmi all --volumes --remove-orphans
+docker network rm mf-network 2>nul
 docker network rm module-federation-network 2>nul
 echo Done.
 pause

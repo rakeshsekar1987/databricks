@@ -65,11 +65,17 @@ build_and_start() {
     check_docker
     COMPOSE_CMD=$(get_compose_cmd)
     
+    echo -e "${YELLOW}Cleaning up old containers...${NC}"
+    docker stop mf-shell mf-reg-reporting mf-financial-reporting mf-expense-reporting mf-tax-reporting mf-control-tower 2>/dev/null || true
+    docker rm mf-shell mf-reg-reporting mf-financial-reporting mf-expense-reporting mf-tax-reporting mf-control-tower 2>/dev/null || true
+    docker network rm mf-network 2>/dev/null || true
+    docker network rm module-federation-network 2>/dev/null || true
+    
     echo -e "${YELLOW}Building and starting all services...${NC}"
     echo -e "${YELLOW}This may take several minutes on first run.${NC}"
     echo ""
     
-    $COMPOSE_CMD up -d --build
+    $COMPOSE_CMD up -d --build --force-recreate
     
     echo ""
     echo -e "${GREEN}All services started!${NC}"

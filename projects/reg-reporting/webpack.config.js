@@ -39,7 +39,6 @@ module.exports = {
         '@angular/platform-browser': { singleton: true, strictVersion: true, requiredVersion: 'auto' },
         '@angular/platform-browser-dynamic': { singleton: true, strictVersion: true, requiredVersion: 'auto' },
         'rxjs': { singleton: true, strictVersion: false, requiredVersion: 'auto' },
-        'zone.js': { singleton: true, strictVersion: false, requiredVersion: 'auto' },
         'ag-grid-community': { singleton: false, strictVersion: false, requiredVersion: 'auto' },
         'ag-grid-angular': { singleton: false, strictVersion: false, requiredVersion: 'auto' }
       })

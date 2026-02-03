@@ -7,6 +7,8 @@ const share = mf.share;
  * 
  * This is the main container application that dynamically loads remote modules.
  * Angular core libraries are shared as singletons for consistency across modules.
+ * 
+ * NOTE: Remotes are empty - we use loadRemoteModule for dynamic loading.
  */
 
 module.exports = {
@@ -26,16 +28,11 @@ module.exports = {
       name: 'shell',
       filename: 'remoteEntry.js',
       
-      // Remote modules configuration
-      remotes: {
-        'regReporting': 'regReporting@http://localhost:4201/remoteEntry.js',
-        'financialReporting': 'financialReporting@http://localhost:4202/remoteEntry.js',
-        'expenseReporting': 'expenseReporting@http://localhost:4203/remoteEntry.js',
-        'taxReporting': 'taxReporting@http://localhost:4204/remoteEntry.js',
-        'controlTower': 'controlTower@http://localhost:4205/remoteEntry.js'
-      },
+      // Remotes are empty - we load them dynamically via loadRemoteModule
+      remotes: {},
       
       // Shared dependencies - Angular core as singletons
+      // NOTE: zone.js is loaded as a polyfill and should NOT be shared
       shared: share({
         '@angular/core': { singleton: true, strictVersion: true, requiredVersion: 'auto' },
         '@angular/common': { singleton: true, strictVersion: true, requiredVersion: 'auto' },
@@ -45,8 +42,7 @@ module.exports = {
         '@angular/animations': { singleton: true, strictVersion: true, requiredVersion: 'auto' },
         '@angular/platform-browser': { singleton: true, strictVersion: true, requiredVersion: 'auto' },
         '@angular/platform-browser-dynamic': { singleton: true, strictVersion: true, requiredVersion: 'auto' },
-        'rxjs': { singleton: true, strictVersion: false, requiredVersion: 'auto' },
-        'zone.js': { singleton: true, strictVersion: false, requiredVersion: 'auto' }
+        'rxjs': { singleton: true, strictVersion: false, requiredVersion: 'auto' }
       })
     })
   ]

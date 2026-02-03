@@ -1,6 +1,6 @@
 import { Component, OnInit, ChangeDetectionStrategy, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterLink } from '@angular/router';
+import { Router } from '@angular/router';
 import { TaxReportingGridComponent } from '../components/tax-reporting-grid/tax-reporting-grid.component';
 
 /**
@@ -12,7 +12,7 @@ import { TaxReportingGridComponent } from '../components/tax-reporting-grid/tax-
 @Component({
   selector: 'app-tax-entry',
   standalone: true,
-  imports: [CommonModule, RouterLink, TaxReportingGridComponent],
+  imports: [CommonModule, TaxReportingGridComponent],
   template: `
     <div class="module-container">
       <header class="module-header">
@@ -71,6 +71,20 @@ import { TaxReportingGridComponent } from '../components/tax-reporting-grid/tax-
             <p>Filing history coming soon...</p>
           </div>
         }
+      </section>
+      
+      <!-- Cross-Module Navigation -->
+      <section class="quick-nav">
+        <h3>Navigate to Other Modules</h3>
+        <div class="nav-cards">
+          @for (module of otherModules; track module.path) {
+            <button class="nav-card" (click)="navigateTo(module.path)">
+              <span class="nav-icon">{{ module.icon }}</span>
+              <span class="nav-name">{{ module.name }}</span>
+              <span class="nav-version">{{ module.agGrid }}</span>
+            </button>
+          }
+        </div>
       </section>
       
       <footer class="module-footer">
@@ -213,6 +227,62 @@ import { TaxReportingGridComponent } from '../components/tax-reporting-grid/tax-
       color: #9ca3af;
       font-size: 0.85rem;
     }
+    
+    .quick-nav {
+      margin-top: 24px;
+      padding: 24px;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    
+    .quick-nav h3 {
+      margin: 0 0 16px 0;
+      font-size: 1rem;
+      color: #374151;
+    }
+    
+    .nav-cards {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    
+    .nav-card {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 16px;
+      background: #f3f4f6;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .nav-card:hover {
+      background: #e5e7eb;
+      border-color: #d1d5db;
+      transform: translateY(-1px);
+    }
+    
+    .nav-icon {
+      font-size: 1.25rem;
+    }
+    
+    .nav-name {
+      font-weight: 500;
+      color: #374151;
+    }
+    
+    .nav-version {
+      padding: 2px 6px;
+      background: #dbeafe;
+      color: #1d4ed8;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      font-weight: 600;
+    }
   `],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
@@ -220,11 +290,26 @@ export class EntryComponent implements OnInit {
   activeTab = signal<'grid' | 'summary' | 'filings'>('grid');
   isOnline = signal(true);
   
+  // Other modules for cross-navigation
+  otherModules = [
+    { path: '/reg-reporting', name: 'Regulatory', icon: '📋', agGrid: 'v31' },
+    { path: '/financial-reporting', name: 'Financial', icon: '💰', agGrid: 'v30' },
+    { path: '/expense-reporting', name: 'Expense', icon: '💳', agGrid: 'v31' },
+    { path: '/control-tower', name: 'Control Tower', icon: '🎯', agGrid: 'v31' }
+  ];
+  
+  constructor(private router: Router) {}
+  
   ngOnInit(): void {
     console.log('[TaxReporting] Module loaded - AG Grid v29.3.0');
   }
   
   setActiveTab(tab: 'grid' | 'summary' | 'filings'): void {
     this.activeTab.set(tab);
+  }
+  
+  navigateTo(path: string): void {
+    // Navigate using the shell's router
+    this.router.navigate([path]);
   }
 }

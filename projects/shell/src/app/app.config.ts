@@ -6,6 +6,7 @@ import { provideAnimations } from '@angular/platform-browser/animations';
 import { routes } from './app.routes';
 import { GlobalErrorHandler } from './core/services/global-error-handler.service';
 import { loggingInterceptor } from './core/interceptors/logging.interceptor';
+import { authInterceptor } from './core/auth/auth.interceptor';
 
 /**
  * Application Configuration
@@ -28,9 +29,9 @@ export const appConfig: ApplicationConfig = {
       })
     ),
     
-    // HTTP client with logging interceptor
+    // HTTP client with auth and logging interceptors
     provideHttpClient(
-      withInterceptors([loggingInterceptor])
+      withInterceptors([authInterceptor, loggingInterceptor])
     ),
     
     // Enable animations for Motif components

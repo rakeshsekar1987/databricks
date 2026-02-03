@@ -46,8 +46,8 @@
   --motif-spacing-lg: 24px;
   --motif-spacing-xl: 32px;
   
-  /* Typography */
-  --motif-font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  /* Typography - System font stack (no external dependencies) */
+  --motif-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
   --motif-font-size-xs: 0.75rem;
   --motif-font-size-sm: 0.875rem;
   --motif-font-size-md: 1rem;

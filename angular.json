@@ -135,7 +135,11 @@
             "tsConfig": "projects/reg-reporting/tsconfig.app.json",
             "inlineStyleLanguage": "scss",
             "assets": ["projects/reg-reporting/src/assets"],
-            "styles": ["projects/reg-reporting/src/styles.scss"],
+            "styles": [
+              "node_modules/ag-grid-community/styles/ag-grid.css",
+              "node_modules/ag-grid-community/styles/ag-theme-alpine.css",
+              "projects/reg-reporting/src/styles.scss"
+            ],
             "scripts": [],
             "extraWebpackConfig": "projects/reg-reporting/webpack.config.js",
             "commonChunk": false
@@ -194,7 +198,11 @@
             "tsConfig": "projects/financial-reporting/tsconfig.app.json",
             "inlineStyleLanguage": "scss",
             "assets": ["projects/financial-reporting/src/assets"],
-            "styles": ["projects/financial-reporting/src/styles.scss"],
+            "styles": [
+              "node_modules/ag-grid-community/styles/ag-grid.css",
+              "node_modules/ag-grid-community/styles/ag-theme-alpine.css",
+              "projects/financial-reporting/src/styles.scss"
+            ],
             "scripts": [],
             "extraWebpackConfig": "projects/financial-reporting/webpack.config.js",
             "commonChunk": false
@@ -253,7 +261,11 @@
             "tsConfig": "projects/expense-reporting/tsconfig.app.json",
             "inlineStyleLanguage": "scss",
             "assets": ["projects/expense-reporting/src/assets"],
-            "styles": ["projects/expense-reporting/src/styles.scss"],
+            "styles": [
+              "node_modules/ag-grid-community/styles/ag-grid.css",
+              "node_modules/ag-grid-community/styles/ag-theme-alpine.css",
+              "projects/expense-reporting/src/styles.scss"
+            ],
             "scripts": [],
             "extraWebpackConfig": "projects/expense-reporting/webpack.config.js",
             "commonChunk": false
@@ -312,7 +324,11 @@
             "tsConfig": "projects/tax-reporting/tsconfig.app.json",
             "inlineStyleLanguage": "scss",
             "assets": ["projects/tax-reporting/src/assets"],
-            "styles": ["projects/tax-reporting/src/styles.scss"],
+            "styles": [
+              "node_modules/ag-grid-community/styles/ag-grid.css",
+              "node_modules/ag-grid-community/styles/ag-theme-alpine.css",
+              "projects/tax-reporting/src/styles.scss"
+            ],
             "scripts": [],
             "extraWebpackConfig": "projects/tax-reporting/webpack.config.js",
             "commonChunk": false
@@ -371,7 +387,11 @@
             "tsConfig": "projects/control-tower/tsconfig.app.json",
             "inlineStyleLanguage": "scss",
             "assets": ["projects/control-tower/src/assets"],
-            "styles": ["projects/control-tower/src/styles.scss"],
+            "styles": [
+              "node_modules/ag-grid-community/styles/ag-grid.css",
+              "node_modules/ag-grid-community/styles/ag-theme-alpine.css",
+              "projects/control-tower/src/styles.scss"
+            ],
             "scripts": [],
             "extraWebpackConfig": "projects/control-tower/webpack.config.js",
             "commonChunk": false

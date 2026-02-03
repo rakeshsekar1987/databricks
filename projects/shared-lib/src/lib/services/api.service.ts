@@ -9,12 +9,6 @@ export interface ApiOptions {
   retries?: number;
 }
 
-export interface ApiResponse<T> {
-  data: T;
-  message?: string;
-  status: number;
-}
-
 /**
  * API Service
  * 

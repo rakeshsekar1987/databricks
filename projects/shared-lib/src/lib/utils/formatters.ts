@@ -51,14 +51,14 @@ export function formatDate(
 ): string {
   const d = typeof date === 'string' ? new Date(date) : date;
   
-  const options: Intl.DateTimeFormatOptions = {
+  const formatOptions: Record<string, Intl.DateTimeFormatOptions> = {
     short: { month: 'numeric', day: 'numeric', year: '2-digit' },
     medium: { month: 'short', day: 'numeric', year: 'numeric' },
     long: { month: 'long', day: 'numeric', year: 'numeric' },
     full: { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }
-  }[format];
+  };
   
-  return new Intl.DateTimeFormat(locale, options).format(d);
+  return new Intl.DateTimeFormat(locale, formatOptions[format]).format(d);
 }
 
 /**

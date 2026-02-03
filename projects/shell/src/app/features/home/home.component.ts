@@ -59,7 +59,7 @@ import { ModuleRegistryService, ModuleConfig } from '../../core/services/module-
         <h2>Available Modules</h2>
         <div class="modules-grid">
           @for (module of modules; track module.name) {
-            <a [routerLink]="'/' + module.name.replace(/([A-Z])/g, '-$1').toLowerCase().substring(1)" 
+            <a [routerLink]="getModuleRoute(module.name)" 
                class="module-card">
               <div class="module-header">
                 <span class="module-icon">{{ getModuleIcon(module.name) }}</span>
@@ -71,7 +71,7 @@ import { ModuleRegistryService, ModuleConfig } from '../../core/services/module-
                 <span class="status-indicator" [class]="module.status">
                   {{ module.status }}
                 </span>
-                <span class="module-link">Open →</span>
+                <span class="module-link">Open</span>
               </div>
             </a>
           }
@@ -293,5 +293,17 @@ export class HomeComponent implements OnInit {
   
   getModuleIcon(moduleName: string): string {
     return this.moduleIcons[moduleName] || '📦';
+  }
+  
+  getModuleRoute(moduleName: string): string {
+    // Convert camelCase to kebab-case route
+    const routeMap: Record<string, string> = {
+      regReporting: '/reg-reporting',
+      financialReporting: '/financial-reporting',
+      expenseReporting: '/expense-reporting',
+      taxReporting: '/tax-reporting',
+      controlTower: '/control-tower'
+    };
+    return routeMap[moduleName] || '/';
   }
 }

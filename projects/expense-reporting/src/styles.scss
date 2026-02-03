@@ -1,4 +1,13 @@
-@import 'ag-grid-community/styles/ag-grid.css';
-@import 'ag-grid-community/styles/ag-theme-alpine.css';
-:root { --module-primary: #f59e0b; }
-body { font-family: 'Inter', sans-serif; margin: 0; padding: 0; }
+/* Expense Reporting Module Styles */
+/* AG Grid styles are imported via angular.json */
+
+:root {
+  --module-primary: #ed6c02;
+  --module-primary-dark: #e65100;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  margin: 0;
+  padding: 0;
+}

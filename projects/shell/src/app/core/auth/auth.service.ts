@@ -146,7 +146,7 @@ export class AuthService {
       this.authState.update(state => ({
         ...state,
         isLoading: false,
-        error: params.errorDescription || params.error
+        error: params.errorDescription ?? params.error ?? 'Authentication error'
       }));
       return of(false);
     }

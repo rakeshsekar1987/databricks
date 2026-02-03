@@ -7,7 +7,7 @@ const share = mf.share;
  * Shell (Host) Application - Webpack Module Federation Configuration
  * 
  * This is the main container application that dynamically loads remote modules.
- * It shares Angular core libraries as singletons and loads Motif library as shared.
+ * It shares Angular core libraries as singletons for consistency across modules.
  */
 
 const sharedMappings = new mf.SharedMappings();
@@ -95,13 +95,6 @@ module.exports = {
           strictVersion: true,
           requiredVersion: 'auto',
           eager: true
-        },
-        
-        // Motif Library - Shared as singleton across all modules
-        '@mfs/motif': {
-          singleton: true,
-          strictVersion: false,
-          requiredVersion: 'auto'
         },
         
         // RxJS shared

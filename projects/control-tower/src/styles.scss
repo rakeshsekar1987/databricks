@@ -1,4 +1,13 @@
-@import 'ag-grid-community/styles/ag-grid.css';
-@import 'ag-grid-community/styles/ag-theme-alpine.css';
-:root { --module-primary: #dc2626; }
-body { font-family: 'Inter', sans-serif; margin: 0; padding: 0; }
+/* Control Tower Module Styles */
+/* AG Grid styles are imported via angular.json */
+
+:root {
+  --module-primary: #9c27b0;
+  --module-primary-dark: #7b1fa2;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  margin: 0;
+  padding: 0;
+}

@@ -29,7 +29,8 @@ RUN apk add --no-cache python3 make g++
 COPY package*.json ./
 COPY angular.json tsconfig.json ./
 
-# Install all dependencies
+# Install all dependencies using lock file for reproducible builds
+COPY package-lock.json ./
 RUN npm ci --legacy-peer-deps
 
 # -----------------------------------------------------------------------------

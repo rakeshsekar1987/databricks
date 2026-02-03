@@ -2,7 +2,7 @@
   "name": "ui-module-federation-angular",
   "version": "1.0.0",
   "private": true,
-  "description": "Angular Module Federation Platform - Independent micro-frontends with Motif library and separate AG Grid versions",
+  "description": "Angular Module Federation Platform - Independent micro-frontends with separate AG Grid versions",
   "scripts": {
     "start": "npm run start:all",
     "start:all": "concurrently \"npm run start:shell\" \"npm run start:reg-reporting\" \"npm run start:financial-reporting\" \"npm run start:expense-reporting\" \"npm run start:tax-reporting\" \"npm run start:control-tower\"",
@@ -35,7 +35,8 @@
     "@angular/platform-browser-dynamic": "^17.3.0",
     "@angular/router": "^17.3.0",
     "@angular-architects/module-federation": "^17.0.0",
-    "@mfs/motif": "^10.0.0",
+    "ag-grid-angular": "^31.0.0",
+    "ag-grid-community": "^31.0.0",
     "rxjs": "~7.8.0",
     "tslib": "^2.6.0",
     "zone.js": "~0.14.0"

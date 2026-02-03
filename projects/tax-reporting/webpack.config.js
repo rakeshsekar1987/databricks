@@ -87,28 +87,16 @@ module.exports = {
           requiredVersion: 'auto'
         },
         
-        // Motif Library - Shared singleton
-        '@mfs/motif': {
-          singleton: true,
-          strictVersion: false,
-          requiredVersion: 'auto'
-        },
-        
-        // AG Grid v29 - NOT singleton, allows different versions
+        // AG Grid - NOT singleton, allows different versions per module
         'ag-grid-community': {
           singleton: false,
           strictVersion: false,
-          requiredVersion: '^29.3.0'
+          requiredVersion: 'auto'
         },
         'ag-grid-angular': {
           singleton: false,
           strictVersion: false,
-          requiredVersion: '^29.3.0'
-        },
-        'ag-grid-enterprise': {
-          singleton: false,
-          strictVersion: false,
-          requiredVersion: '^29.3.0'
+          requiredVersion: 'auto'
         },
         
         'rxjs': {

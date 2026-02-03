@@ -9,9 +9,7 @@ import {
   ICellRendererParams 
 } from 'ag-grid-community';
 
-// AG Grid v29 styles
-import 'ag-grid-community/styles/ag-grid.css';
-import 'ag-grid-community/styles/ag-theme-alpine.css';
+// Note: AG Grid styles are included via angular.json or styles.scss
 
 interface TaxReport {
   id: string;
@@ -28,8 +26,8 @@ interface TaxReport {
 /**
  * Tax Reporting Grid Component
  * 
- * Displays tax reports using AG Grid v29.3.0.
- * Demonstrates version isolation in Module Federation.
+ * Displays tax reports using AG Grid v31 Community.
+ * Demonstrates Module Federation with shared grid components.
  */
 @Component({
   selector: 'app-tax-reporting-grid',
@@ -254,13 +252,13 @@ export class TaxReportingGridComponent implements OnInit {
       field: 'jurisdiction',
       headerName: 'Jurisdiction',
       width: 130,
-      filter: 'agSetColumnFilter'
+      filter: 'agTextColumnFilter'
     },
     {
       field: 'status',
       headerName: 'Status',
       width: 120,
-      filter: 'agSetColumnFilter',
+      filter: 'agTextColumnFilter',
       cellRenderer: this.statusCellRenderer
     },
     {

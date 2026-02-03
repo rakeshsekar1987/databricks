@@ -1,0 +1,99 @@
+version: '3.8'
+
+services:
+  # Shell Application (Host)
+  shell:
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/Dockerfile.shell
+    ports:
+      - "4200:80"
+    environment:
+      - NODE_ENV=production
+    networks:
+      - module-federation
+    depends_on:
+      - reg-reporting
+      - financial-reporting
+      - expense-reporting
+      - tax-reporting
+      - control-tower
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Regulatory Reporting Module - AG Grid v31
+  reg-reporting:
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/Dockerfile.module
+      args:
+        MODULE_NAME: reg-reporting
+    ports:
+      - "4201:80"
+    environment:
+      - AG_GRID_VERSION=31.0.0
+    networks:
+      - module-federation
+
+  # Financial Reporting Module - AG Grid v30
+  financial-reporting:
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/Dockerfile.module
+      args:
+        MODULE_NAME: financial-reporting
+    ports:
+      - "4202:80"
+    environment:
+      - AG_GRID_VERSION=30.2.0
+    networks:
+      - module-federation
+
+  # Expense Reporting Module - AG Grid v31
+  expense-reporting:
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/Dockerfile.module
+      args:
+        MODULE_NAME: expense-reporting
+    ports:
+      - "4203:80"
+    environment:
+      - AG_GRID_VERSION=31.0.0
+    networks:
+      - module-federation
+
+  # Tax Reporting Module - AG Grid v29
+  tax-reporting:
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/Dockerfile.module
+      args:
+        MODULE_NAME: tax-reporting
+    ports:
+      - "4204:80"
+    environment:
+      - AG_GRID_VERSION=29.3.0
+    networks:
+      - module-federation
+
+  # Control Tower Module - AG Grid v31
+  control-tower:
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/Dockerfile.module
+      args:
+        MODULE_NAME: control-tower
+    ports:
+      - "4205:80"
+    environment:
+      - AG_GRID_VERSION=31.0.0
+    networks:
+      - module-federation
+
+networks:
+  module-federation:
+    driver: bridge

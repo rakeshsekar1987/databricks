@@ -1,0 +1,24 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: module-federation
+
+resources:
+  - namespace.yaml
+  - shell-deployment.yaml
+
+# Module deployments would be generated dynamically using:
+# - module-deployment.yaml as a template
+# - envsubst or similar tools to substitute variables
+
+# Example for reg-reporting:
+# MODULE_NAME=reg-reporting AG_GRID_VERSION=31.0.0 envsubst < module-deployment.yaml
+
+commonLabels:
+  app.kubernetes.io/part-of: ui-platform
+  app.kubernetes.io/managed-by: kustomize
+
+images:
+  - name: shell
+    newName: your-registry.com/ui-platform/shell
+    newTag: latest

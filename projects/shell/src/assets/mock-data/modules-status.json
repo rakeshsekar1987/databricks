@@ -1,0 +1,112 @@
+{
+  "meta": {
+    "version": "1.0.0",
+    "generated": "2024-03-15T10:00:00Z",
+    "module": "control-tower"
+  },
+  "modules": [
+    {
+      "name": "regReporting",
+      "displayName": "Regulatory Reporting",
+      "description": "Regulatory compliance and reporting",
+      "status": "online",
+      "version": "1.0.0",
+      "agGridVersion": "31.0.0",
+      "lastDeployment": "2024-03-14T08:30:00Z",
+      "health": {
+        "status": "healthy",
+        "uptime": 99.95,
+        "lastCheck": "2024-03-15T10:00:00Z"
+      },
+      "metrics": {
+        "requestsPerMinute": 45,
+        "averageResponseTime": 120,
+        "errorRate": 0.01
+      }
+    },
+    {
+      "name": "financialReporting",
+      "displayName": "Financial Reporting",
+      "description": "Financial statements and analysis",
+      "status": "online",
+      "version": "1.0.0",
+      "agGridVersion": "30.2.0",
+      "lastDeployment": "2024-03-13T14:15:00Z",
+      "health": {
+        "status": "healthy",
+        "uptime": 99.98,
+        "lastCheck": "2024-03-15T10:00:00Z"
+      },
+      "metrics": {
+        "requestsPerMinute": 62,
+        "averageResponseTime": 95,
+        "errorRate": 0.005
+      }
+    },
+    {
+      "name": "expenseReporting",
+      "displayName": "Expense Reporting",
+      "description": "Expense tracking and management",
+      "status": "online",
+      "version": "1.0.0",
+      "agGridVersion": "31.0.0",
+      "lastDeployment": "2024-03-15T06:00:00Z",
+      "health": {
+        "status": "healthy",
+        "uptime": 99.99,
+        "lastCheck": "2024-03-15T10:00:00Z"
+      },
+      "metrics": {
+        "requestsPerMinute": 28,
+        "averageResponseTime": 85,
+        "errorRate": 0.002
+      }
+    },
+    {
+      "name": "taxReporting",
+      "displayName": "Tax Reporting",
+      "description": "Tax calculations and filing",
+      "status": "online",
+      "version": "1.0.0",
+      "agGridVersion": "29.3.0",
+      "lastDeployment": "2024-03-10T12:00:00Z",
+      "health": {
+        "status": "healthy",
+        "uptime": 99.92,
+        "lastCheck": "2024-03-15T10:00:00Z"
+      },
+      "metrics": {
+        "requestsPerMinute": 18,
+        "averageResponseTime": 150,
+        "errorRate": 0.02
+      }
+    },
+    {
+      "name": "controlTower",
+      "displayName": "Control Tower",
+      "description": "Dashboard and monitoring",
+      "status": "online",
+      "version": "1.0.0",
+      "agGridVersion": "31.0.0",
+      "lastDeployment": "2024-03-15T09:00:00Z",
+      "health": {
+        "status": "healthy",
+        "uptime": 100,
+        "lastCheck": "2024-03-15T10:00:00Z"
+      },
+      "metrics": {
+        "requestsPerMinute": 12,
+        "averageResponseTime": 45,
+        "errorRate": 0
+      }
+    }
+  ],
+  "summary": {
+    "totalModules": 5,
+    "onlineModules": 5,
+    "offlineModules": 0,
+    "degradedModules": 0,
+    "averageUptime": 99.968,
+    "totalRequestsPerMinute": 165
+  }
+}

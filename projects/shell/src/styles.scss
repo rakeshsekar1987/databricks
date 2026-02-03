@@ -1,0 +1,281 @@
+/**
+ * Global Styles - Shell Application
+ * 
+ * Defines global CSS variables, resets, and base styles.
+ * Integrates with Motif Design System.
+ */
+
+/* CSS Variables - Design Tokens */
+:root {
+  /* Colors */
+  --motif-primary: #1976d2;
+  --motif-primary-dark: #1565c0;
+  --motif-primary-light: #42a5f5;
+  --motif-secondary: #424242;
+  --motif-accent: #ff4081;
+  
+  /* Status Colors */
+  --motif-success: #4caf50;
+  --motif-warning: #ff9800;
+  --motif-error: #f44336;
+  --motif-info: #2196f3;
+  
+  /* Backgrounds */
+  --motif-bg-primary: #f5f5f5;
+  --motif-bg-secondary: #ffffff;
+  --motif-bg-tertiary: #fafafa;
+  
+  /* Text */
+  --motif-text-primary: #212121;
+  --motif-text-secondary: #666666;
+  --motif-text-disabled: #9e9e9e;
+  
+  /* Borders */
+  --motif-border-color: #e0e0e0;
+  --motif-border-radius: 8px;
+  
+  /* Shadows */
+  --motif-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --motif-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
+  --motif-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+  
+  /* Spacing */
+  --motif-spacing-xs: 4px;
+  --motif-spacing-sm: 8px;
+  --motif-spacing-md: 16px;
+  --motif-spacing-lg: 24px;
+  --motif-spacing-xl: 32px;
+  
+  /* Typography - System font stack (no external dependencies) */
+  --motif-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  --motif-font-size-xs: 0.75rem;
+  --motif-font-size-sm: 0.875rem;
+  --motif-font-size-md: 1rem;
+  --motif-font-size-lg: 1.25rem;
+  --motif-font-size-xl: 1.5rem;
+  
+  /* Transitions */
+  --motif-transition-fast: 150ms ease;
+  --motif-transition-normal: 250ms ease;
+  --motif-transition-slow: 350ms ease;
+}
+
+/* CSS Reset */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: var(--motif-font-family);
+  font-size: var(--motif-font-size-md);
+  line-height: 1.5;
+  color: var(--motif-text-primary);
+  background-color: var(--motif-bg-primary);
+}
+
+/* Typography */
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--motif-text-primary);
+}
+
+h1 { font-size: 2rem; }
+h2 { font-size: 1.5rem; }
+h3 { font-size: 1.25rem; }
+h4 { font-size: 1.125rem; }
+h5 { font-size: 1rem; }
+h6 { font-size: 0.875rem; }
+
+p {
+  margin-bottom: var(--motif-spacing-md);
+}
+
+a {
+  color: var(--motif-primary);
+  text-decoration: none;
+  transition: color var(--motif-transition-fast);
+}
+
+a:hover {
+  color: var(--motif-primary-dark);
+}
+
+/* Focus styles for accessibility */
+:focus-visible {
+  outline: 2px solid var(--motif-primary);
+  outline-offset: 2px;
+}
+
+/* Buttons */
+button {
+  font-family: inherit;
+  font-size: inherit;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* Forms */
+input,
+textarea,
+select {
+  font-family: inherit;
+  font-size: inherit;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--motif-bg-tertiary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--motif-border-color);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #bdbdbd;
+}
+
+/* Utility classes */
+.text-center { text-align: center; }
+.text-left { text-align: left; }
+.text-right { text-align: right; }
+
+.flex { display: flex; }
+.flex-col { flex-direction: column; }
+.items-center { align-items: center; }
+.justify-center { justify-content: center; }
+.justify-between { justify-content: space-between; }
+.gap-1 { gap: var(--motif-spacing-xs); }
+.gap-2 { gap: var(--motif-spacing-sm); }
+.gap-3 { gap: var(--motif-spacing-md); }
+.gap-4 { gap: var(--motif-spacing-lg); }
+
+.p-1 { padding: var(--motif-spacing-xs); }
+.p-2 { padding: var(--motif-spacing-sm); }
+.p-3 { padding: var(--motif-spacing-md); }
+.p-4 { padding: var(--motif-spacing-lg); }
+
+.m-1 { margin: var(--motif-spacing-xs); }
+.m-2 { margin: var(--motif-spacing-sm); }
+.m-3 { margin: var(--motif-spacing-md); }
+.m-4 { margin: var(--motif-spacing-lg); }
+
+.rounded { border-radius: var(--motif-border-radius); }
+.shadow-sm { box-shadow: var(--motif-shadow-sm); }
+.shadow-md { box-shadow: var(--motif-shadow-md); }
+.shadow-lg { box-shadow: var(--motif-shadow-lg); }
+
+/* Card component */
+.card {
+  background: var(--motif-bg-secondary);
+  border-radius: var(--motif-border-radius);
+  box-shadow: var(--motif-shadow-sm);
+  padding: var(--motif-spacing-lg);
+}
+
+/* Button variants */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--motif-spacing-sm) var(--motif-spacing-md);
+  border-radius: var(--motif-border-radius);
+  font-weight: 500;
+  transition: all var(--motif-transition-fast);
+  border: none;
+}
+
+.btn-primary {
+  background: var(--motif-primary);
+  color: white;
+}
+
+.btn-primary:hover {
+  background: var(--motif-primary-dark);
+}
+
+.btn-secondary {
+  background: transparent;
+  color: var(--motif-text-primary);
+  border: 1px solid var(--motif-border-color);
+}
+
+.btn-secondary:hover {
+  background: var(--motif-bg-tertiary);
+}
+
+/* Badge component */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  font-size: var(--motif-font-size-xs);
+  font-weight: 600;
+  border-radius: 4px;
+}
+
+.badge-success {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.badge-warning {
+  background: #fff3e0;
+  color: #ef6c00;
+}
+
+.badge-error {
+  background: #ffebee;
+  color: #c62828;
+}
+
+.badge-info {
+  background: #e3f2fd;
+  color: #1565c0;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-in {
+  animation: fadeIn var(--motif-transition-normal);
+}
+
+.slide-in-up {
+  animation: slideInUp var(--motif-transition-normal);
+}

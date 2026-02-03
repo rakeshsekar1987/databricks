@@ -1,0 +1,97 @@
+# Angular Module Federation POC - Docker Compose
+# Usage: run.bat (Windows) or ./run.sh (Linux/Mac)
+
+version: '3.8'
+
+services:
+  shell:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: shell
+    container_name: mf-shell
+    ports:
+      - "4200:80"
+    networks:
+      - mf-network
+    depends_on:
+      - reg-reporting
+      - financial-reporting
+      - expense-reporting
+      - tax-reporting
+      - control-tower
+    restart: unless-stopped
+
+  reg-reporting:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: module
+      args:
+        MODULE_NAME: reg-reporting
+    container_name: mf-reg-reporting
+    ports:
+      - "4201:80"
+    networks:
+      - mf-network
+    restart: unless-stopped
+
+  financial-reporting:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: module
+      args:
+        MODULE_NAME: financial-reporting
+    container_name: mf-financial-reporting
+    ports:
+      - "4202:80"
+    networks:
+      - mf-network
+    restart: unless-stopped
+
+  expense-reporting:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: module
+      args:
+        MODULE_NAME: expense-reporting
+    container_name: mf-expense-reporting
+    ports:
+      - "4203:80"
+    networks:
+      - mf-network
+    restart: unless-stopped
+
+  tax-reporting:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: module
+      args:
+        MODULE_NAME: tax-reporting
+    container_name: mf-tax-reporting
+    ports:
+      - "4204:80"
+    networks:
+      - mf-network
+    restart: unless-stopped
+
+  control-tower:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: module
+      args:
+        MODULE_NAME: control-tower
+    container_name: mf-control-tower
+    ports:
+      - "4205:80"
+    networks:
+      - mf-network
+    restart: unless-stopped
+
+networks:
+  mf-network:
+    driver: bridge

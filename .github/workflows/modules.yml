@@ -1,0 +1,150 @@
+name: Remote Modules CI/CD
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'projects/reg-reporting/**'
+      - 'projects/financial-reporting/**'
+      - 'projects/expense-reporting/**'
+      - 'projects/tax-reporting/**'
+      - 'projects/control-tower/**'
+      - 'projects/shared-lib/**'
+  pull_request:
+    branches: [main]
+
+env:
+  NODE_VERSION: '18'
+  REGISTRY: ghcr.io
+
+jobs:
+  detect-changes:
+    name: Detect Changed Modules
+    runs-on: ubuntu-latest
+    outputs:
+      modules: ${{ steps.changes.outputs.modules }}
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Detect Changes
+        id: changes
+        run: |
+          MODULES=()
+          
+          # Check each module for changes
+          if git diff --name-only HEAD~1 | grep -q "projects/reg-reporting/"; then
+            MODULES+=("reg-reporting")
+          fi
+          if git diff --name-only HEAD~1 | grep -q "projects/financial-reporting/"; then
+            MODULES+=("financial-reporting")
+          fi
+          if git diff --name-only HEAD~1 | grep -q "projects/expense-reporting/"; then
+            MODULES+=("expense-reporting")
+          fi
+          if git diff --name-only HEAD~1 | grep -q "projects/tax-reporting/"; then
+            MODULES+=("tax-reporting")
+          fi
+          if git diff --name-only HEAD~1 | grep -q "projects/control-tower/"; then
+            MODULES+=("control-tower")
+          fi
+          
+          # If shared-lib changed, build all modules
+          if git diff --name-only HEAD~1 | grep -q "projects/shared-lib/"; then
+            MODULES=("reg-reporting" "financial-reporting" "expense-reporting" "tax-reporting" "control-tower")
+          fi
+          
+          echo "modules=$(printf '%s\n' "${MODULES[@]}" | jq -R . | jq -s .)" >> $GITHUB_OUTPUT
+
+  build:
+    name: Build ${{ matrix.module }}
+    needs: detect-changes
+    if: needs.detect-changes.outputs.modules != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        module: ${{ fromJson(needs.detect-changes.outputs.modules) }}
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+      
+      - name: Install Dependencies
+        run: npm ci --legacy-peer-deps
+      
+      - name: Build Shared Library
+        run: npm run build:shared
+      
+      - name: Build Module
+        run: npm run build:${{ matrix.module }}
+      
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.module }}-dist
+          path: dist/${{ matrix.module }}
+          retention-days: 7
+
+  docker:
+    name: Docker ${{ matrix.module }}
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        module: ${{ fromJson(needs.detect-changes.outputs.modules) }}
+        include:
+          - module: reg-reporting
+            ag_grid: "31.0.0"
+          - module: financial-reporting
+            ag_grid: "30.2.0"
+          - module: expense-reporting
+            ag_grid: "31.0.0"
+          - module: tax-reporting
+            ag_grid: "29.3.0"
+          - module: control-tower
+            ag_grid: "31.0.0"
+    
+    permissions:
+      contents: read
+      packages: write
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Download Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.module }}-dist
+          path: dist/${{ matrix.module }}
+      
+      - name: Login to Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Build and Push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: infrastructure/docker/Dockerfile.module
+          build-args: |
+            MODULE_NAME=${{ matrix.module }}
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ github.repository }}/${{ matrix.module }}:latest
+            ${{ env.REGISTRY }}/${{ github.repository }}/${{ matrix.module }}:${{ github.sha }}
+          labels: |
+            ag-grid-version=${{ matrix.ag_grid }}

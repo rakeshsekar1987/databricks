@@ -1,0 +1,48 @@
+# Remote Module Dockerfile
+# Production-ready multi-stage build for Angular federated modules
+
+ARG MODULE_NAME=reg-reporting
+
+# Stage 1: Build
+FROM node:18-alpine AS builder
+
+ARG MODULE_NAME
+
+WORKDIR /app
+
+# Install dependencies
+COPY package*.json ./
+COPY angular.json tsconfig.json ./
+RUN npm ci --legacy-peer-deps
+
+# Copy module-specific package.json for AG Grid version
+COPY projects/${MODULE_NAME}/package.json ./projects/${MODULE_NAME}/
+
+# Copy source files
+COPY projects/${MODULE_NAME} ./projects/${MODULE_NAME}
+COPY projects/shared-lib ./projects/shared-lib
+
+# Build shared library
+RUN npm run build:shared
+
+# Build the module
+RUN npm run build:${MODULE_NAME}
+
+# Stage 2: Production
+FROM nginx:alpine
+
+ARG MODULE_NAME
+
+# Copy nginx configuration
+COPY infrastructure/docker/nginx/module.conf /etc/nginx/conf.d/default.conf
+
+# Copy built assets
+COPY --from=builder /app/dist/${MODULE_NAME} /usr/share/nginx/html
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD wget -q --spider http://localhost/remoteEntry.js || exit 1
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]

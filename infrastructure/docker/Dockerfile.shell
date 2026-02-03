@@ -1,0 +1,41 @@
+# Shell Application Dockerfile
+# Production-ready multi-stage build for Angular Module Federation host
+
+# Stage 1: Build
+FROM node:18-alpine AS builder
+
+WORKDIR /app
+
+# Install dependencies first for better caching
+COPY package*.json ./
+COPY angular.json tsconfig.json ./
+RUN npm ci --legacy-peer-deps
+
+# Copy source and build
+COPY projects/shell ./projects/shell
+COPY projects/shared-lib ./projects/shared-lib
+
+# Build shared library first
+RUN npm run build:shared
+
+# Build shell application
+RUN npm run build:shell
+
+# Stage 2: Production
+FROM nginx:alpine
+
+# Copy nginx configuration
+COPY infrastructure/docker/nginx/shell.conf /etc/nginx/conf.d/default.conf
+
+# Copy built assets
+COPY --from=builder /app/dist/shell /usr/share/nginx/html
+
+# Add health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD wget -q --spider http://localhost/health || exit 1
+
+# Expose port
+EXPOSE 80
+
+# Start nginx
+CMD ["nginx", "-g", "daemon off;"]

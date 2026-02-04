@@ -447,6 +447,15 @@ class DataLookupService:
         if fund:
             return fund
         
+        # Try removing all spaces (handles "CEF 5" -> "CEF5")
+        code_no_spaces = fund_code.replace(" ", "")
+        fund = self._fund_index.get(code_no_spaces)
+        if fund:
+            return fund
+        fund = self._fund_index.get(code_no_spaces.upper())
+        if fund:
+            return fund
+        
         return None
     
     def get_card(self, card_name: str) -> Optional[Card]:

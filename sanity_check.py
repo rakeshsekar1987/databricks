@@ -359,8 +359,20 @@ def run_sanity_check():
     
     runner.assert_true(len(canada_fund_counts) > 0, "Canada fundKriStatusCount is NOT empty")
     runner.assert_true(len(america_fund_counts) > 0, "America fundKriStatusCount is NOT empty")
-    runner.assert_equal(len(canada_fund_counts), 3, "Canada has 3 funds")
-    runner.assert_equal(len(america_fund_counts), 3, "America has 3 funds")
+    runner.assert_equal(len(canada_fund_counts), 3, "Canada has exactly 3 funds (CAN1, CAN2, CAN3)")
+    runner.assert_equal(len(america_fund_counts), 3, "America has exactly 3 funds (AM1, AM2, AM3)")
+    
+    # Verify funds are correctly filtered per card (no cross-card funds)
+    canada_fund_codes = [f['fundCode'] for f in canada_fund_counts]
+    america_fund_codes = [f['fundCode'] for f in america_fund_counts]
+    
+    runner.assert_true(all(fc.startswith('CAN') for fc in canada_fund_codes), 
+                       "Canada only has CAN funds (no AM or IND)")
+    runner.assert_true(all(fc.startswith('AM') for fc in america_fund_codes), 
+                       "America only has AM funds (no CAN or IND)")
+    runner.assert_true('AM1' not in canada_fund_codes, "Canada does NOT contain AM1")
+    runner.assert_true('IND1' not in canada_fund_codes, "Canada does NOT contain IND1")
+    runner.assert_true('CAN1' not in america_fund_codes, "America does NOT contain CAN1")
     
     # =========================================================================
     # ISSUE 3: Trust, Group, Book fields empty

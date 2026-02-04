@@ -458,9 +458,9 @@ class DataLookupService:
         return self.funds
     
     def get_funds_by_trust(self, trust: str) -> List[Fund]:
-        """Get all funds for a specific Trust."""
+        """Get all funds for a specific Trust. Returns empty list if no match."""
         if not trust:
-            return self.funds  # Return all funds if no trust specified
+            return []  # Return empty if no trust specified
         
         # Try exact match first
         funds = self._funds_by_trust.get(trust, [])
@@ -473,8 +473,8 @@ class DataLookupService:
             if key.lower().strip() == trust_lower:
                 return fund_list
         
-        # If no match, return all funds
-        return self.funds
+        # If no match, return empty list (let caller decide fallback)
+        return []
     
     def get_funds_by_card(self, card_name: str) -> List[Fund]:
         """Get all funds mapped to a specific card."""

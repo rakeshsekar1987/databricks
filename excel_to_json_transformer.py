@@ -1126,33 +1126,24 @@ class ExcelToJSONTransformer:
             print(f"    Available card mappings: {list(self.lookup_service._funds_by_card.keys())}")
             print(f"    Available trusts: {list(self.lookup_service._funds_by_trust.keys())}")
         
-        # Strategy 1: Try to get funds by Trust (most reliable - Trust_New matches card region)
-        card_funds = self.lookup_service.get_funds_by_trust(card_trust)
+        # Strategy 1: Try to get funds mapped to this card (via "X" in card column)
+        card_funds = self.lookup_service.get_funds_by_card(card_name)
         if card_funds:
-            fund_source = "trust_match"
+            fund_source = "card_mapping"
             if debug:
-                print(f"    Strategy 1 (trust_match '{card_trust}'): Found {len(card_funds)} funds")
+                print(f"    Strategy 1 (card_mapping): Found {len(card_funds)} funds")
         
-        # Strategy 2: If no trust match, try card mapping filtered by trust
+        # Strategy 2: If no card mapping, try to get funds by Trust
         if not card_funds:
             if debug:
-                print(f"    Strategy 1 (trust_match '{card_trust}'): No funds found")
-            mapped_funds = self.lookup_service.get_funds_by_card(card_name)
-            if mapped_funds and card_trust:
-                # Filter by trust to avoid getting all funds
-                card_funds = [f for f in mapped_funds 
-                              if f.trust_new.lower().strip() == card_trust.lower().strip()]
-                if card_funds:
-                    fund_source = "card_mapping_filtered"
-                    if debug:
-                        print(f"    Strategy 2 (card_mapping filtered by trust): Found {len(card_funds)} funds")
-            elif mapped_funds:
-                card_funds = mapped_funds
-                fund_source = "card_mapping"
+                print(f"    Strategy 1 (card_mapping): No funds found")
+            card_funds = self.lookup_service.get_funds_by_trust(card_trust)
+            if card_funds:
+                fund_source = "trust_match"
                 if debug:
-                    print(f"    Strategy 2 (card_mapping): Found {len(card_funds)} funds")
+                    print(f"    Strategy 2 (trust_match '{card_trust}'): Found {len(card_funds)} funds")
             elif debug:
-                print(f"    Strategy 2 (card_mapping): No funds found")
+                print(f"    Strategy 2 (trust_match '{card_trust}'): No funds found")
         
         # Strategy 3: If still empty, try to extract region from validations
         if not card_funds:

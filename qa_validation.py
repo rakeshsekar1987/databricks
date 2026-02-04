@@ -25,29 +25,38 @@ def get_test_data() -> Dict[str, List[Dict[str, Any]]]:
     
     cards_data = [
         {"Card Name": "12/31/2024 Canada Annual", "open_end_close_end": "Canada"},
-        {"Card Name": "12/31/2025 America Annual", "open_end_close_end": "America"},
+        {"Card Name": "12/31/2024 America Annual", "open_end_close_end": "America"},
         {"Card Name": "12/31/2025 India Annual", "open_end_close_end": "India"}
     ]
     
     funds_data = [
-        {"Trust_New": "Canada", "Fund ID_New": "CAN1", "Fund Name_New": "Income Strategy Fund", 
-         "Group_New": "A", "Book_New": "Income Strategy Fund"},
-        {"Trust_New": "Canada", "Fund ID_New": "CAN2", "Fund Name_New": "Credit Income Fund", 
-         "Group_New": "A", "Book_New": "Credit Income Fund"},
-        {"Trust_New": "Canada", "Fund ID_New": "CAN3", "Fund Name_New": "International Bond Trust", 
-         "Group_New": "A", "Book_New": "International Bond Trust"},
-        {"Trust_New": "America", "Fund ID_New": "AM1", "Fund Name_New": "Income Strategy Fund", 
-         "Group_New": "A", "Book_New": "Income Strategy Fund"},
-        {"Trust_New": "America", "Fund ID_New": "AM2", "Fund Name_New": "Credit Income Fund", 
-         "Group_New": "B", "Book_New": "Credit Income Fund"},
-        {"Trust_New": "America", "Fund ID_New": "AM3", "Fund Name_New": "International Bond Trust", 
-         "Group_New": "C", "Book_New": "International Bond Trust"},
-        {"Trust_New": "India", "Fund ID_New": "IND1", "Fund Name_New": "Income Strategy Fund", 
-         "Group_New": "D", "Book_New": "Income Strategy Fund"},
-        {"Trust_New": "India", "Fund ID_New": "IND2", "Fund Name_New": "Credit Income Fund", 
-         "Group_New": "E", "Book_New": "Credit Income Fund"},
-        {"Trust_New": "India", "Fund ID_New": "IND3", "Fund Name_New": "International Bond Trust", 
-         "Group_New": "F", "Book_New": "International Bond Trust"}
+        {"Trust": "Canada", "Trust_New": "Canada", "Fund ID_New": "CAN1", "Fund Name_New": "Income Strategy Fund", 
+         "Group": "H", "Group_New": "A", "Book": "Test Book", "Book_New": "Income Strategy Fund",
+         "12/31/2024 Canada Annual": "X"},
+        {"Trust": "Canada", "Trust_New": "Canada", "Fund ID_New": "CAN2", "Fund Name_New": "Credit Income Fund", 
+         "Group": "H", "Group_New": "A", "Book": "Test Book", "Book_New": "Credit Income Fund",
+         "12/31/2024 Canada Annual": "X"},
+        {"Trust": "Canada", "Trust_New": "Canada", "Fund ID_New": "CAN3", "Fund Name_New": "International Bond Trust", 
+         "Group": "G", "Group_New": "A", "Book": "Test Book", "Book_New": "International Bond Trust",
+         "12/31/2024 Canada Annual": "X"},
+        {"Trust": "America", "Trust_New": "America", "Fund ID_New": "AM1", "Fund Name_New": "Income Strategy Fund", 
+         "Group": "H", "Group_New": "A", "Book": "Test Book", "Book_New": "Income Strategy Fund",
+         "12/31/2024 America Annual": "X"},
+        {"Trust": "America", "Trust_New": "America", "Fund ID_New": "AM2", "Fund Name_New": "Credit Income Fund", 
+         "Group": "H", "Group_New": "B", "Book": "Test Book", "Book_New": "Credit Income Fund",
+         "12/31/2024 America Annual": "X"},
+        {"Trust": "America", "Trust_New": "America", "Fund ID_New": "AM3", "Fund Name_New": "International Bond Trust", 
+         "Group": "G", "Group_New": "C", "Book": "Test Book", "Book_New": "International Bond Trust",
+         "12/31/2024 America Annual": "X"},
+        {"Trust": "India", "Trust_New": "India", "Fund ID_New": "IND1", "Fund Name_New": "Income Strategy Fund", 
+         "Group": "H", "Group_New": "D", "Book": "Test Book", "Book_New": "Income Strategy Fund",
+         "12/31/2025 India Annual": "X"},
+        {"Trust": "India", "Trust_New": "India", "Fund ID_New": "IND2", "Fund Name_New": "Credit Income Fund", 
+         "Group": "H", "Group_New": "E", "Book": "Test Book", "Book_New": "Credit Income Fund",
+         "12/31/2025 India Annual": "X"},
+        {"Trust": "India", "Trust_New": "India", "Fund ID_New": "IND3", "Fund Name_New": "International Bond Trust", 
+         "Group": "G", "Group_New": "F", "Book": "Test Book", "Book_New": "International Bond Trust",
+         "12/31/2025 India Annual": "X"}
     ]
     
     validations_trimmed_data = [
@@ -61,7 +70,7 @@ def get_test_data() -> Dict[str, List[Dict[str, Any]]]:
          "BPS Impact": -0.078014184, "Auto / Manual": "Automated",
          "Validation Source": "Recon_Engine", "Validation Type": "AFS - Indicative FS",
          "Control Draft Number": "2.1"},
-        {"Card": "12/31/2025 America Annual", "Fund": "AM3", "Priority": "Standard",
+        {"Card": "12/31/2024 America Annual", "Fund": "AM3", "Priority": "Standard",
          "Workflow Status": "EY L1 Review", "Validation Status": "Failed",
          "Validation": "SCF_admin vs generalledger_adjusted_entries_ey_AMERICA",
          "Statement Type": "SCF", "Section": "Net Realized (Gain) Loss",
@@ -84,10 +93,10 @@ def get_test_data() -> Dict[str, List[Dict[str, Any]]]:
     ]
     
     validations_kri_data = [
-        # Canada KRI validations (KRI_1, KRI_2, KRI_3)
+        # Canada KRI validations - 3 unique names: Interest Expense, Defaulted Securities, Effective Leverage
         {"Card": "12/31/2024 Canada Annual", "Fund": "CAN2", "Priority": "Standard",
          "Workflow Status": "EY L1 Review", "Validation Status": "Passed",
-         "Validation": "Interest Expense versus Average Borrowings",
+         "Validation": "Interest Expense versus Average Borrowings",  # Name #1 -> KRI_1
          "Statement Type": "KRI", "Risk Level": "High",
          "Threshold Chart": "Green: <5%\nYellow: 5% - 7%\nRed: >7%",
          "Control Procedures": "Test control procedure",
@@ -96,7 +105,7 @@ def get_test_data() -> Dict[str, List[Dict[str, Any]]]:
          "Validation Source": "KRI Validations", "Validation Type": "KRI Validations"},
         {"Card": "12/31/2024 Canada Annual", "Fund": "CAN2", "Priority": "Standard",
          "Workflow Status": "EY L1 Review", "Validation Status": "Passed",
-         "Validation": "Defaulted Securities Review",
+         "Validation": "Defaulted Securities Review",  # Name #2 -> KRI_2
          "Statement Type": "KRI", "Risk Level": "Medium",
          "Threshold Chart": "Green: <3%\nYellow: 3% - 5%\nRed: >5%",
          "Control Procedures": "Test control procedure",
@@ -105,26 +114,26 @@ def get_test_data() -> Dict[str, List[Dict[str, Any]]]:
          "Validation Source": "KRI Validations", "Validation Type": "KRI Validations"},
         {"Card": "12/31/2024 Canada Annual", "Fund": "CAN3", "Priority": "Standard",
          "Workflow Status": "EY L1 Review", "Validation Status": "Passed",
-         "Validation": "Effective Leverage: Year Over Year Change",
+         "Validation": "Effective Leverage: Year Over Year Change",  # Name #3 -> KRI_3
          "Statement Type": "KRI", "Risk Level": "Low",
          "Threshold Chart": "Green: <5%\nYellow: 5% - 10%\nRed: >10%",
          "Control Procedures": "Test control procedure",
          "Control Value": 0.02, "FS Value": 0.02, "Variance": 0,
          "BPS Impact": 116.87, "Auto / Manual": "Automated",
          "Validation Source": "KRI Validations", "Validation Type": "KRI Validations"},
-        # America KRI validations (KRI_4, KRI_5 - unique across cards)
-        {"Card": "12/31/2025 America Annual", "Fund": "AM2", "Priority": "Standard",
+        # America KRI validations - SAME names get SAME IDs (per Issue 1 clarification)
+        {"Card": "12/31/2024 America Annual", "Fund": "AM2", "Priority": "Standard",
          "Workflow Status": "EY L1 Review", "Validation Status": "Failed",
-         "Validation": "Interest Expense versus Average Borrowings",
+         "Validation": "Interest Expense versus Average Borrowings",  # SAME as Name #1 -> KRI_1
          "Statement Type": "KRI", "Risk Level": "High",
          "Threshold Chart": "Green: <5%\nYellow: 5% - 7%\nRed: >7%",
          "Control Procedures": "Test control procedure",
          "Control Value": -25.06, "FS Value": -1633, "Variance": -25.06,
          "BPS Impact": 1.53, "Auto / Manual": "Automated",
          "Validation Source": "KRI Validations", "Validation Type": "KRI Validations"},
-        {"Card": "12/31/2025 America Annual", "Fund": "AM3", "Priority": "Standard",
+        {"Card": "12/31/2024 America Annual", "Fund": "AM3", "Priority": "Standard",
          "Workflow Status": "EY L1 Review", "Validation Status": "Failed",
-         "Validation": "Effective Leverage: Year Over Year Change",
+         "Validation": "Effective Leverage: Year Over Year Change",  # SAME as Name #3 -> KRI_3
          "Statement Type": "KRI", "Risk Level": "Low",
          "Threshold Chart": "Green: <5%\nYellow: 5% - 10%\nRed: >10%",
          "Control Procedures": "Test control procedure",
@@ -213,40 +222,35 @@ def run_qa_tests():
     print("=" * 80)
     
     # =========================================================================
-    # TEST 1: Unique KRI IDs Across All Cards
+    # TEST 1: KRI IDs Based on Validation NAME (Same name = Same ID)
     # =========================================================================
     print("\n" + "=" * 80)
-    print("TEST 1: UNIQUE KRI IDs ACROSS ALL CARDS")
+    print("TEST 1: KRI IDs BASED ON VALIDATION NAME")
+    print("        (Same validation name = Same KRI ID, regardless of card)")
     print("=" * 80)
     
     # Collect all KRI IDs and Validation IDs from all cards
-    all_kri_ids = []
-    all_val_ids = []
-    
     canada2 = json.loads(all_outputs["12/31/2024 Canada Annual"]["json2"])
-    america2 = json.loads(all_outputs["12/31/2025 America Annual"]["json2"])
+    america2 = json.loads(all_outputs["12/31/2024 America Annual"]["json2"])
     
-    for kri in canada2["data"]["kriDetails"]:
-        all_kri_ids.append(kri["kriId"])
-        all_val_ids.append(kri["fundDetails"][0]["validationId"])
+    canada_kri_ids = [kri["kriId"] for kri in canada2["data"]["kriDetails"]]
+    canada_val_ids = [kri["fundDetails"][0]["validationId"] for kri in canada2["data"]["kriDetails"]]
+    america_kri_ids = [kri["kriId"] for kri in america2["data"]["kriDetails"]]
+    america_val_ids = [kri["fundDetails"][0]["validationId"] for kri in america2["data"]["kriDetails"]]
     
-    for kri in america2["data"]["kriDetails"]:
-        all_kri_ids.append(kri["kriId"])
-        all_val_ids.append(kri["fundDetails"][0]["validationId"])
+    # Canada has 3 unique KRI names
+    runner.assert_equal(canada_kri_ids, ["KRI_1", "KRI_2", "KRI_3"], "Canada KRI IDs: 1, 2, 3")
+    runner.assert_equal(canada_val_ids, ["999991", "999992", "999993"], "Canada Validation IDs: 999991-93")
     
-    # Test uniqueness
-    runner.assert_equal(len(all_kri_ids), len(set(all_kri_ids)), "All KRI IDs are unique across cards")
-    runner.assert_equal(len(all_val_ids), len(set(all_val_ids)), "All Validation IDs are unique across cards")
-    
-    # Test expected IDs
-    runner.assert_equal(all_kri_ids, ["KRI_1", "KRI_2", "KRI_3", "KRI_4", "KRI_5"], "KRI IDs are sequential: 1-5")
-    runner.assert_equal(all_val_ids, ["999991", "999992", "999993", "999994", "999995"], "Validation IDs are sequential")
+    # America has 2 KRIs, but SAME names as Canada, so SAME IDs
+    runner.assert_equal(america_kri_ids, ["KRI_1", "KRI_3"], "America KRI IDs: 1, 3 (same names as Canada)")
+    runner.assert_equal(america_val_ids, ["999991", "999993"], "America Validation IDs match Canada's")
     
     # =========================================================================
     # TEST 2: Canada Card - Correct KRI IDs
     # =========================================================================
     print("\n" + "=" * 80)
-    print("TEST 2: CANADA CARD - KRI IDs 1-3")
+    print("TEST 2: CANADA CARD - KRI IDs 1, 2, 3")
     print("=" * 80)
     
     canada_kris = canada2["data"]["kriDetails"]
@@ -260,29 +264,29 @@ def run_qa_tests():
     runner.assert_equal(canada_kris[2]["fundDetails"][0]["validationId"], "999993", "Canada KRI 3 validationId = 999993")
     
     # =========================================================================
-    # TEST 3: America Card - Correct KRI IDs (continuing from Canada)
+    # TEST 3: America Card - SAME Names = SAME IDs
     # =========================================================================
     print("\n" + "=" * 80)
-    print("TEST 3: AMERICA CARD - KRI IDs 4-5 (unique, not repeated)")
+    print("TEST 3: AMERICA CARD - KRI IDs 1, 3 (SAME as Canada for same names)")
     print("=" * 80)
     
     america_kris = america2["data"]["kriDetails"]
     runner.assert_equal(len(america_kris), 2, "America has 2 KRI validations")
-    runner.assert_equal(america_kris[0]["kriId"], "KRI_4", "America KRI 1: Interest Expense = KRI_4 (not KRI_1)")
-    runner.assert_equal(america_kris[1]["kriId"], "KRI_5", "America KRI 2: Effective Leverage = KRI_5 (not KRI_3)")
+    runner.assert_equal(america_kris[0]["kriId"], "KRI_1", "America 'Interest Expense' = KRI_1 (SAME as Canada)")
+    runner.assert_equal(america_kris[1]["kriId"], "KRI_3", "America 'Effective Leverage' = KRI_3 (SAME as Canada)")
     
-    runner.assert_equal(america_kris[0]["fundDetails"][0]["validationId"], "999994", "America KRI 1 validationId = 999994")
-    runner.assert_equal(america_kris[1]["fundDetails"][0]["validationId"], "999995", "America KRI 2 validationId = 999995")
+    runner.assert_equal(america_kris[0]["fundDetails"][0]["validationId"], "999991", "America KRI validationId = 999991 (SAME)")
+    runner.assert_equal(america_kris[1]["fundDetails"][0]["validationId"], "999993", "America KRI validationId = 999993 (SAME)")
     
     # =========================================================================
     # TEST 4: JSON1 - Validation IDs in Combined Output
     # =========================================================================
     print("\n" + "=" * 80)
-    print("TEST 4: JSON1 - VALIDATION IDs")
+    print("TEST 4: JSON1 - VALIDATION IDs (same name = same ID)")
     print("=" * 80)
     
     canada1 = json.loads(all_outputs["12/31/2024 Canada Annual"]["json1"])
-    america1 = json.loads(all_outputs["12/31/2025 America Annual"]["json1"])
+    america1 = json.loads(all_outputs["12/31/2024 America Annual"]["json1"])
     
     canada_vals = canada1["data"]["getValidations"]["validations"]
     america_vals = america1["data"]["getValidations"]["validations"]
@@ -291,22 +295,22 @@ def run_qa_tests():
     canada_kri_vals = [v for v in canada_vals if v["statementType"] == "KRI"]
     america_kri_vals = [v for v in america_vals if v["statementType"] == "KRI"]
     
-    runner.assert_equal(canada_kri_vals[0]["validationId"], "999991", "Canada JSON1: KRI 1 validationId = 999991")
-    runner.assert_equal(canada_kri_vals[1]["validationId"], "999992", "Canada JSON1: KRI 2 validationId = 999992")
-    runner.assert_equal(canada_kri_vals[2]["validationId"], "999993", "Canada JSON1: KRI 3 validationId = 999993")
+    runner.assert_equal(canada_kri_vals[0]["validationId"], "999991", "Canada JSON1: Interest Expense validationId = 999991")
+    runner.assert_equal(canada_kri_vals[1]["validationId"], "999992", "Canada JSON1: Defaulted Securities validationId = 999992")
+    runner.assert_equal(canada_kri_vals[2]["validationId"], "999993", "Canada JSON1: Effective Leverage validationId = 999993")
     
-    runner.assert_equal(america_kri_vals[0]["validationId"], "999994", "America JSON1: KRI 1 validationId = 999994")
-    runner.assert_equal(america_kri_vals[1]["validationId"], "999995", "America JSON1: KRI 2 validationId = 999995")
+    runner.assert_equal(america_kri_vals[0]["validationId"], "999991", "America JSON1: Interest Expense validationId = 999991 (SAME)")
+    runner.assert_equal(america_kri_vals[1]["validationId"], "999993", "America JSON1: Effective Leverage validationId = 999993 (SAME)")
     
     # =========================================================================
-    # TEST 5: JSON3 - kriFilter with unique IDs
+    # TEST 5: JSON3 - kriFilter with IDs based on name
     # =========================================================================
     print("\n" + "=" * 80)
-    print("TEST 5: JSON3 - KRIFILTER WITH UNIQUE IDs")
+    print("TEST 5: JSON3 - KRIFILTER (same name = same ID)")
     print("=" * 80)
     
     canada3 = json.loads(all_outputs["12/31/2024 Canada Annual"]["json3"])
-    america3 = json.loads(all_outputs["12/31/2025 America Annual"]["json3"])
+    america3 = json.loads(all_outputs["12/31/2024 America Annual"]["json3"])
     
     canada_filter = canada3["data"]["kriFilter"]
     america_filter = america3["data"]["kriFilter"]
@@ -317,26 +321,26 @@ def run_qa_tests():
     runner.assert_equal(canada_filter[2]["kriId"], "KRI_3", "Canada kriFilter[2] = KRI_3")
     
     runner.assert_equal(len(america_filter), 2, "America kriFilter has 2 entries")
-    runner.assert_equal(america_filter[0]["kriId"], "KRI_4", "America kriFilter[0] = KRI_4")
-    runner.assert_equal(america_filter[1]["kriId"], "KRI_5", "America kriFilter[1] = KRI_5")
+    runner.assert_equal(america_filter[0]["kriId"], "KRI_1", "America kriFilter[0] = KRI_1 (SAME as Canada)")
+    runner.assert_equal(america_filter[1]["kriId"], "KRI_3", "America kriFilter[1] = KRI_3 (SAME as Canada)")
     
     # =========================================================================
-    # TEST 6: JSON5 - Simple KRI Details with unique IDs
+    # TEST 6: JSON5 - Simple KRI Details (same name = same ID)
     # =========================================================================
     print("\n" + "=" * 80)
-    print("TEST 6: JSON5 - SIMPLE KRI DETAILS WITH UNIQUE IDs")
+    print("TEST 6: JSON5 - SIMPLE KRI DETAILS (same name = same ID)")
     print("=" * 80)
     
     canada5 = json.loads(all_outputs["12/31/2024 Canada Annual"]["json5"])
-    america5 = json.loads(all_outputs["12/31/2025 America Annual"]["json5"])
+    america5 = json.loads(all_outputs["12/31/2024 America Annual"]["json5"])
     
     runner.assert_equal(len(canada5["kriDetails"]), 3, "Canada JSON5 has 3 entries")
     runner.assert_equal(canada5["kriDetails"][0]["kriId"], "KRI_1", "Canada JSON5[0] = KRI_1")
     runner.assert_equal(canada5["kriDetails"][2]["kriId"], "KRI_3", "Canada JSON5[2] = KRI_3")
     
     runner.assert_equal(len(america5["kriDetails"]), 2, "America JSON5 has 2 entries")
-    runner.assert_equal(america5["kriDetails"][0]["kriId"], "KRI_4", "America JSON5[0] = KRI_4")
-    runner.assert_equal(america5["kriDetails"][1]["kriId"], "KRI_5", "America JSON5[1] = KRI_5")
+    runner.assert_equal(america5["kriDetails"][0]["kriId"], "KRI_1", "America JSON5[0] = KRI_1 (SAME)")
+    runner.assert_equal(america5["kriDetails"][1]["kriId"], "KRI_3", "America JSON5[1] = KRI_3 (SAME)")
     
     # =========================================================================
     # TEST 7: India - No KRIs

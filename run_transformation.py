@@ -266,18 +266,7 @@ def run_transformation(input_file: str, output_folder: str, verbose: bool = True
     if kri_master_sheet:
         kri_master_data = normalize_column_names(reader.read_sheet(kri_master_sheet))
     
-    if verbose:
-        print(f"    Cards: {len(cards_data)} records")
-        print(f"    Funds: {len(funds_data)} records")
-        print(f"    Validations-TRIMMED: {len(trimmed_data)} records")
-        print(f"    Validations-KRI: {len(kri_data)} records")
-        if kri_master_data:
-            print(f"    KRI Master: {len(kri_master_data)} records")
-    
     # Create transformer and load data
-    if verbose:
-        print("\nStep 3: Transforming data...")
-    
     transformer = ExcelToJSONTransformer()
     transformer.load_cards(cards_data)
     transformer.load_funds(funds_data)
@@ -291,7 +280,17 @@ def run_transformation(input_file: str, output_folder: str, verbose: bool = True
     card_names = [cn for cn in transformer.get_card_names() if cn and cn.strip()]
     
     if verbose:
-        print(f"  Found {len(card_names)} card(s)")
+        # Show actual loaded counts (after filtering empty rows)
+        print(f"    Cards: {len(card_names)} valid records (from {len(cards_data)} rows)")
+        print(f"    Funds: {len(transformer.funds)} records")
+        print(f"    Validations-TRIMMED: {len(transformer.validations_trimmed)} records")
+        print(f"    Validations-KRI: {len(transformer.validations_kri)} records")
+        if kri_master_data:
+            print(f"    KRI Master: {len(transformer.kri_master)} records")
+    
+    if verbose:
+        print("\nStep 3: Transforming data...")
+        print(f"  Processing {len(card_names)} card(s):")
         for cn in card_names:
             print(f"    - {cn}")
     
@@ -382,19 +381,29 @@ def run_transformation(input_file: str, output_folder: str, verbose: bool = True
                     if key in card_files:
                         print(f"    - {file_names[key]}")
         
-        # Print statistics for first card
-        if card_names and card_names[0] in all_outputs:
-            first_outputs = all_outputs[card_names[0]]
-            if 'json1' in first_outputs:
-                json1 = json.loads(first_outputs['json1'])
-                print(f"\nStatistics (first card):")
-                print(f"  Total Validations: {json1['data']['getValidations']['rowCount']}")
-            if 'json2' in first_outputs:
-                json2 = json.loads(first_outputs['json2'])
-                print(f"  Unique KRI Types: {len(json2['data']['kriDetails'])}")
-            if 'json3' in first_outputs:
-                json3 = json.loads(first_outputs['json3'])
-                print(f"  Funds Processed: {len(json3['data']['fundKriStatusCount'])}")
+        # Print statistics for each card
+        print(f"\nStatistics per card:")
+        for card_name in card_names:
+            if card_name not in all_outputs:
+                continue
+            outputs = all_outputs[card_name]
+            
+            validations_count = 0
+            kri_count = 0
+            funds_count = 0
+            
+            if 'json1' in outputs:
+                json1 = json.loads(outputs['json1'])
+                validations_count = json1['data']['getValidations']['rowCount']
+            if 'json2' in outputs:
+                json2 = json.loads(outputs['json2'])
+                kri_count = len(json2['data']['kriDetails'])
+            if 'json3' in outputs:
+                json3 = json.loads(outputs['json3'])
+                funds_count = len(json3['data']['fundKriStatusCount'])
+            
+            print(f"  {card_name}:")
+            print(f"    Validations: {validations_count}, KRI Types: {kri_count}, Funds: {funds_count}")
     
     return all_output_paths
 

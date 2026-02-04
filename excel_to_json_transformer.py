@@ -144,6 +144,19 @@ def clean_text(text: str) -> str:
         return ""
     # Remove Excel carriage return markers
     cleaned = str(text).replace('_x000D_', ' ')
+    # Replace common Unicode characters with ASCII equivalents
+    # \u2019 = right single quotation mark (')
+    # \u2018 = left single quotation mark (')
+    # \u201c = left double quotation mark (")
+    # \u201d = right double quotation mark (")
+    # \u2013 = en dash (-)
+    # \u2014 = em dash (-)
+    cleaned = cleaned.replace('\u2019', "'")
+    cleaned = cleaned.replace('\u2018', "'")
+    cleaned = cleaned.replace('\u201c', '"')
+    cleaned = cleaned.replace('\u201d', '"')
+    cleaned = cleaned.replace('\u2013', '-')
+    cleaned = cleaned.replace('\u2014', '-')
     # Remove extra whitespace and newlines
     cleaned = re.sub(r'\s+', ' ', cleaned).strip()
     return cleaned
@@ -154,6 +167,18 @@ def clean_threshold_value(value: str) -> str:
     if not value or value == "--":
         return ""
     return str(value).strip()
+
+
+def parse_boolean(value: Any) -> bool:
+    """Parse a boolean value from Excel - handles various formats."""
+    if value is None:
+        return False
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    str_val = str(value).strip().lower()
+    return str_val in ('true', 'yes', '1', 'y', 't')
 
 
 def get_current_timestamp() -> str:
@@ -351,28 +376,78 @@ class DataLookupService:
         self._card_index: Dict[str, Card] = {}
         self._fund_order: Dict[str, int] = {}
         self._funds_by_trust: Dict[str, List[Fund]] = {}  # Trust -> List of Funds
+        self._funds_by_card: Dict[str, List[Fund]] = {}  # Card Name -> List of Funds
         self._build_indexes()
     
     def _build_indexes(self):
         """Build lookup indexes dynamically from loaded data."""
-        # Index funds
+        # Index funds by multiple keys for flexible lookup
         for idx, fund in enumerate(self.funds):
-            self._fund_index[fund.fund_id_new] = fund
-            self._fund_index[fund.fund_id] = fund
+            # Index by Fund ID_New (primary key)
+            if fund.fund_id_new:
+                self._fund_index[fund.fund_id_new] = fund
+                self._fund_index[fund.fund_id_new.upper()] = fund
+                self._fund_index[fund.fund_id_new.lower()] = fund
+            
+            # Index by Fund ID
+            if fund.fund_id:
+                self._fund_index[fund.fund_id] = fund
+                self._fund_index[fund.fund_id.upper()] = fund
+                self._fund_index[fund.fund_id.lower()] = fund
+            
             self._fund_order[fund.fund_id_new] = idx
             
             # Group funds by Trust_New
             trust = fund.trust_new
-            if trust not in self._funds_by_trust:
-                self._funds_by_trust[trust] = []
-            self._funds_by_trust[trust].append(fund)
+            if trust:
+                trust_key = trust.strip()
+                if trust_key not in self._funds_by_trust:
+                    self._funds_by_trust[trust_key] = []
+                self._funds_by_trust[trust_key].append(fund)
+            
+            # Also group by Trust (non-new) for fallback
+            if fund.trust and fund.trust.strip() not in self._funds_by_trust:
+                trust_key = fund.trust.strip()
+                if trust_key not in self._funds_by_trust:
+                    self._funds_by_trust[trust_key] = []
+                if fund not in self._funds_by_trust[trust_key]:
+                    self._funds_by_trust[trust_key].append(fund)
+            
+            # Index funds by card mappings (columns like "12/31/2024 Canada Annual" = "X")
+            for card_name, is_mapped in fund.card_mappings.items():
+                if is_mapped and card_name:
+                    if card_name not in self._funds_by_card:
+                        self._funds_by_card[card_name] = []
+                    self._funds_by_card[card_name].append(fund)
         
         for card in self.cards:
             self._card_index[card.card_name] = card
     
     def get_fund(self, fund_code: str) -> Optional[Fund]:
-        """Get fund details by fund code."""
-        return self._fund_index.get(fund_code)
+        """Get fund details by fund code - tries multiple lookup strategies."""
+        if not fund_code:
+            return None
+        
+        # Direct lookup
+        fund = self._fund_index.get(fund_code)
+        if fund:
+            return fund
+        
+        # Try case-insensitive
+        fund = self._fund_index.get(fund_code.upper())
+        if fund:
+            return fund
+        
+        fund = self._fund_index.get(fund_code.lower())
+        if fund:
+            return fund
+        
+        # Try stripping whitespace
+        fund = self._fund_index.get(fund_code.strip())
+        if fund:
+            return fund
+        
+        return None
     
     def get_card(self, card_name: str) -> Optional[Card]:
         """Get card details by card name."""
@@ -384,105 +459,109 @@ class DataLookupService:
     
     def get_funds_by_trust(self, trust: str) -> List[Fund]:
         """Get all funds for a specific Trust."""
-        return self._funds_by_trust.get(trust, [])
+        if not trust:
+            return self.funds  # Return all funds if no trust specified
+        
+        # Try exact match first
+        funds = self._funds_by_trust.get(trust, [])
+        if funds:
+            return funds
+        
+        # Try case-insensitive match
+        trust_lower = trust.lower().strip()
+        for key, fund_list in self._funds_by_trust.items():
+            if key.lower().strip() == trust_lower:
+                return fund_list
+        
+        # If no match, return all funds
+        return self.funds
+    
+    def get_funds_by_card(self, card_name: str) -> List[Fund]:
+        """Get all funds mapped to a specific card."""
+        return self._funds_by_card.get(card_name, [])
     
     def get_fund_group(self, fund_code: str) -> str:
         """Get the group for a fund - DIRECTLY from Group_New column."""
         fund = self.get_fund(fund_code)
         if fund:
-            return fund.group_new if fund.group_new else ""
+            return fund.group_new if fund.group_new else fund.group
         return ""
     
     def get_trust(self, fund_code: str) -> str:
         """Get trust name for a fund - from Trust_New column."""
         fund = self.get_fund(fund_code)
-        return fund.trust_new if fund else ""
+        if fund:
+            return fund.trust_new if fund.trust_new else fund.trust
+        return ""
     
     def get_book(self, fund_code: str) -> str:
         """Get book name for a fund - from Book_New column."""
         fund = self.get_fund(fund_code)
-        return fund.book_new if fund else ""
+        if fund:
+            return fund.book_new if fund.book_new else fund.book
+        return ""
     
     def get_fund_name(self, fund_code: str) -> str:
         """Get fund display name - from Fund Name_New column."""
         fund = self.get_fund(fund_code)
-        return fund.fund_name_new if fund else fund_code
+        if fund:
+            return fund.fund_name_new if fund.fund_name_new else fund.fund
+        return fund_code
 
 
 # =============================================================================
-# Global KRI Mapping Service - Unique IDs Across All Cards
+# Global KRI Mapping Service - Unique IDs Based on Validation Name
 # =============================================================================
 
 class GlobalKRIMappingService:
     """
-    Service for mapping KRI validations to unique IDs globally.
-    Each KRI validation instance gets a unique ID across all cards.
+    Service for mapping KRI validation names to unique IDs globally.
     
-    Example with 5 KRI validations across 2 cards:
-    - Canada: Interest Expense (KRI_1), Defaulted Securities (KRI_2), Effective Leverage (KRI_3)
-    - America: Interest Expense (KRI_4), Effective Leverage (KRI_5)
+    IMPORTANT: Uniqueness is based on VALIDATION NAME only, NOT card or fund.
+    Two different validation names cannot have the same kri_id or validation_id.
+    Same validation name across different cards/funds gets the SAME ID.
     
-    Each gets a unique KRI ID and validation ID.
+    Example with 3 unique KRI validation names:
+    - "Interest Expense versus Average Borrowings" -> KRI_1, 999991
+    - "Defaulted Securities Review" -> KRI_2, 999992
+    - "Effective Leverage: Year Over Year Change" -> KRI_3, 999993
+    
+    If "Interest Expense" appears in both Canada and America, both get KRI_1.
     """
     
     def __init__(self, all_kri_validations: List[Validation]):
-        # Map: (card, fund, validation_name) -> (kri_id, validation_id)
-        self._kri_instance_map: Dict[Tuple[str, str, str], Tuple[str, str]] = {}
-        self._kri_order: List[Tuple[str, str, str]] = []  # Track order of all KRI instances
-        self._unique_kri_names: List[str] = []  # Track unique KRI names in order
+        self._kri_name_map: Dict[str, Tuple[str, str]] = {}  # name -> (kri_id, validation_id)
+        self._kri_order: List[str] = []  # Track order of unique KRI names
         
-        # Register all KRI validations to establish global order
+        # Register unique KRI validation names
         kri_counter = 0
         for v in all_kri_validations:
-            key = (v.card, v.fund, v.validation)
-            if key not in self._kri_instance_map:
+            if v.validation not in self._kri_name_map:
                 kri_counter += 1
                 kri_id = f"KRI_{kri_counter}"
                 val_id = str(999990 + kri_counter)
-                self._kri_instance_map[key] = (kri_id, val_id)
-                self._kri_order.append(key)
-            
-            # Track unique KRI names
-            if v.validation not in self._unique_kri_names:
-                self._unique_kri_names.append(v.validation)
+                self._kri_name_map[v.validation] = (kri_id, val_id)
+                self._kri_order.append(v.validation)
     
-    def get_kri_id(self, card: str, fund: str, validation_name: str) -> str:
-        """Get unique KRI ID for a specific validation instance."""
-        key = (card, fund, validation_name)
-        if key in self._kri_instance_map:
-            return self._kri_instance_map[key][0]
+    def get_kri_id(self, validation_name: str) -> str:
+        """Get KRI ID for a validation name."""
+        if validation_name in self._kri_name_map:
+            return self._kri_name_map[validation_name][0]
         return ""
     
-    def get_validation_id(self, card: str, fund: str, validation_name: str) -> str:
-        """Get unique validation ID for a specific KRI instance."""
-        key = (card, fund, validation_name)
-        if key in self._kri_instance_map:
-            return self._kri_instance_map[key][1]
-        return ""
-    
-    def get_kri_id_by_name(self, validation_name: str) -> str:
-        """Get the first KRI ID for a validation name (for backward compatibility)."""
-        for key, (kri_id, _) in self._kri_instance_map.items():
-            if key[2] == validation_name:
-                return kri_id
+    def get_validation_id(self, validation_name: str) -> str:
+        """Get validation ID for a KRI validation name."""
+        if validation_name in self._kri_name_map:
+            return self._kri_name_map[validation_name][1]
         return ""
     
     def get_all_kri_names(self) -> List[str]:
         """Get all unique KRI names in order."""
-        return self._unique_kri_names.copy()
+        return self._kri_order.copy()
     
     def get_total_kri_count(self) -> int:
-        """Get total number of unique KRI instances globally."""
-        return len(self._kri_instance_map)
-    
-    def get_kri_instances_for_card(self, card: str) -> List[Tuple[str, str, str, str]]:
-        """Get all KRI instances for a specific card: (fund, name, kri_id, val_id)."""
-        results = []
-        for key in self._kri_order:
-            if key[0] == card:
-                kri_id, val_id = self._kri_instance_map[key]
-                results.append((key[1], key[2], kri_id, val_id))
-        return results
+        """Get total number of unique KRI validation names."""
+        return len(self._kri_name_map)
 
 
 # =============================================================================
@@ -559,19 +638,18 @@ class JSON1Builder(BaseJSONBuilder):
         
         # Get validation ID
         if validation.is_kri:
-            validation_id = self.global_kri_mapping.get_validation_id(
-                validation.card, validation.fund, validation.validation)
+            validation_id = self.global_kri_mapping.get_validation_id(validation.validation)
         else:
             validation_id = self.val_id_service.get_validation_id(validation)
         
         # Extract draft number
         control_draft = extract_draft_number(validation.control_draft_number)
         
-        # Build validation description
-        if validation.is_kri and validation.control_procedures:
+        # Build validation description - ALWAYS from Control Procedures if available
+        if validation.control_procedures:
             validation_desc = clean_text(validation.control_procedures)
         else:
-            validation_desc = validation.validation
+            validation_desc = clean_text(validation.validation)
         
         # Build valuesUsedInFormula
         values_in_formula = ""
@@ -601,7 +679,7 @@ class JSON1Builder(BaseJSONBuilder):
             "autoManual": validation.auto_manual,
             "priority": validation.priority,
             "validationStatus": validation.validation_status,
-            "isFinalDraft": False,  # Boolean, not empty string
+            "isFinalDraft": bool(validation.is_final),  # From Is Final column in Excel
             "lineItemDescription": validation.line_item_description or "",
             "statementType": validation.statement_type,
             "testDraftNumber": validation.test_draft_number or "",
@@ -649,7 +727,7 @@ class JSON1Builder(BaseJSONBuilder):
 class JSON2Builder(BaseJSONBuilder):
     """
     Builder for JSON 2: KRI Details grouped by KRI type for a specific card.
-    Each KRI instance gets a unique KRI ID across all cards.
+    Same validation name gets same KRI ID across all cards.
     """
     
     def __init__(self, kri_validations: List[Validation],
@@ -660,43 +738,53 @@ class JSON2Builder(BaseJSONBuilder):
         self.global_kri_mapping = global_kri_mapping
     
     def build(self) -> Dict[str, Any]:
-        # Build KRI details - each validation is a separate KRI entry with unique ID
+        # Group validations by KRI name (same name = same KRI ID)
+        kri_groups: OrderedDict[str, List[Validation]] = OrderedDict()
+        for v in self.kri_validations:
+            if v.validation not in kri_groups:
+                kri_groups[v.validation] = []
+            kri_groups[v.validation].append(v)
+        
         kri_details = []
         
-        for v in self.kri_validations:
-            # Get unique KRI ID and validation ID for this specific instance
-            kri_id = self.global_kri_mapping.get_kri_id(v.card, v.fund, v.validation)
-            val_id = self.global_kri_mapping.get_validation_id(v.card, v.fund, v.validation)
+        for kri_name, validations in kri_groups.items():
+            first_val = validations[0]
+            
+            # Get KRI ID and validation ID based on validation NAME only
+            kri_id = self.global_kri_mapping.get_kri_id(kri_name)
+            val_id = self.global_kri_mapping.get_validation_id(kri_name)
             
             # Get description from Control Procedures
-            kri_desc = clean_text(v.control_procedures)
+            kri_desc = clean_text(first_val.control_procedures)
             
             # Transform threshold chart to JSON
-            threshold_chart = v.threshold_chart if v.threshold_chart else ""
+            threshold_chart = first_val.threshold_chart if first_val.threshold_chart else ""
             threshold = transform_threshold_chart_to_json(threshold_chart)
             
-            fund_name = self.lookup.get_book(v.fund)
-            bps = parse_number(v.bps_impact) or 0
-            
-            # Risk from Excel column
-            risk = v.risk_level if v.risk_level else ""
-            
-            values_formula = build_values_used_in_formula(v.kri_variables)
-            
-            fund_details = [{
-                "risk": risk,
-                "threshold": None,
-                "fundName": fund_name,
-                "fundCode": v.fund,
-                "result": str(bps),
-                "strategy": "Credit - Diversified Income",
-                "validationStatus": v.validation_status,
-                "validationId": val_id,
-                "valuesUsedInFormula": values_formula
-            }]
+            fund_details = []
+            for v in validations:
+                fund_name = self.lookup.get_book(v.fund)
+                bps = parse_number(v.bps_impact) or 0
+                
+                # Risk from Excel column
+                risk = v.risk_level if v.risk_level else ""
+                
+                values_formula = build_values_used_in_formula(v.kri_variables)
+                
+                fund_details.append({
+                    "risk": risk,
+                    "threshold": None,
+                    "fundName": fund_name,
+                    "fundCode": v.fund,
+                    "result": str(bps),
+                    "strategy": "Credit - Diversified Income",
+                    "validationStatus": v.validation_status,
+                    "validationId": val_id,
+                    "valuesUsedInFormula": values_formula
+                })
             
             kri_details.append({
-                "kriName": v.validation,
+                "kriName": kri_name,
                 "kriId": kri_id,
                 "kriDesc": kri_desc,
                 "threshold": threshold,
@@ -717,7 +805,7 @@ class JSON3Builder(BaseJSONBuilder):
     """
     Builder for JSON 3: Fund KRI Status Count for a specific card.
     Only includes funds belonging to the same Trust as the card.
-    Each KRI instance has a unique ID.
+    Same validation name gets same KRI ID.
     """
     
     def __init__(self, kri_validations: List[Validation],
@@ -728,8 +816,9 @@ class JSON3Builder(BaseJSONBuilder):
         self.global_kri_mapping = global_kri_mapping
     
     def build(self) -> Dict[str, Any]:
-        # Count total KRI validations for this card
-        kri_total_count = str(len(self.kri_validations))
+        # Get unique KRI names for this card
+        unique_kri_names = list(OrderedDict.fromkeys(v.validation for v in self.kri_validations))
+        kri_total_count = str(len(unique_kri_names))
         
         # Count KRIs per fund
         fund_kri_counts: Dict[str, int] = {}
@@ -751,15 +840,15 @@ class JSON3Builder(BaseJSONBuilder):
                 "fundName": fund_name
             })
         
-        # Build KRI filter list - each KRI validation has unique ID
+        # Build KRI filter list - unique KRI names with their IDs
         kri_filter = []
-        for v in self.kri_validations:
-            kri_id = self.global_kri_mapping.get_kri_id(v.card, v.fund, v.validation)
-            val_id = self.global_kri_mapping.get_validation_id(v.card, v.fund, v.validation)
+        for kri_name in unique_kri_names:
+            kri_id = self.global_kri_mapping.get_kri_id(kri_name)
+            val_id = self.global_kri_mapping.get_validation_id(kri_name)
             
             kri_filter.append({
                 "kriId": kri_id,
-                "kriName": v.validation,
+                "kriName": kri_name,
                 "validationId": val_id
             })
         
@@ -808,7 +897,7 @@ class JSON4Builder(BaseJSONBuilder):
 class JSON5Builder(BaseJSONBuilder):
     """
     Builder for JSON 5: Simple KRI Details list for a specific card.
-    Each KRI instance has a unique ID.
+    Same validation name gets same KRI ID.
     """
     
     def __init__(self, kri_validations: List[Validation],
@@ -817,15 +906,17 @@ class JSON5Builder(BaseJSONBuilder):
         self.global_kri_mapping = global_kri_mapping
     
     def build(self) -> Dict[str, Any]:
-        # Each KRI validation gets a unique entry
+        # Get unique KRI names in order
+        unique_kri_names = list(OrderedDict.fromkeys(v.validation for v in self.kri_validations))
+        
         kri_details = []
-        for v in self.kri_validations:
-            kri_id = self.global_kri_mapping.get_kri_id(v.card, v.fund, v.validation)
-            val_id = self.global_kri_mapping.get_validation_id(v.card, v.fund, v.validation)
+        for kri_name in unique_kri_names:
+            kri_id = self.global_kri_mapping.get_kri_id(kri_name)
+            val_id = self.global_kri_mapping.get_validation_id(kri_name)
             
             kri_details.append({
                 "kriId": kri_id,
-                "kriName": v.validation,
+                "kriName": kri_name,
                 "validationId": val_id
             })
         
@@ -874,21 +965,36 @@ class ExcelToJSONTransformer:
     
     def load_funds(self, funds_data: List[Dict[str, Any]]):
         """Load funds from parsed Excel data."""
+        # Known fund columns to exclude from card mapping detection
+        known_columns = {
+            '#', 'Trust', 'Trust_New', 'Fund', 'Fund ID', 'Fund Name_New', 
+            'Fund ID_New', 'Group', 'Group_New', 'Book', 'Book_New', 'Fund Type',
+            'Data In spreadsheet'
+        }
+        
         for row in funds_data:
+            # Extract card mappings - columns that look like dates/card names
+            card_mappings = {}
+            for key, value in row.items():
+                if key not in known_columns:
+                    # Check if this column has a value indicating the fund belongs to this card
+                    if value and str(value).strip().upper() in ('X', 'YES', 'TRUE', '1'):
+                        card_mappings[key] = True
+            
             self.funds.append(Fund(
                 row_num=row.get('#', 0),
-                trust=row.get('Trust', ''),
-                trust_new=row.get('Trust_New', ''),
-                fund=row.get('Fund', ''),
-                fund_id=row.get('Fund ID', ''),
-                fund_name_new=row.get('Fund Name_New', ''),
-                fund_id_new=row.get('Fund ID_New', ''),
-                group=row.get('Group', ''),
-                group_new=row.get('Group_New', ''),
-                book=row.get('Book', ''),
-                book_new=row.get('Book_New', ''),
-                fund_type=row.get('Fund Type', ''),
-                card_mappings={}
+                trust=str(row.get('Trust', '')).strip(),
+                trust_new=str(row.get('Trust_New', '')).strip(),
+                fund=str(row.get('Fund', '')).strip(),
+                fund_id=str(row.get('Fund ID', '')).strip(),
+                fund_name_new=str(row.get('Fund Name_New', '')).strip(),
+                fund_id_new=str(row.get('Fund ID_New', '')).strip(),
+                group=str(row.get('Group', '')).strip(),
+                group_new=str(row.get('Group_New', '')).strip(),
+                book=str(row.get('Book', '')).strip(),
+                book_new=str(row.get('Book_New', '')).strip(),
+                fund_type=str(row.get('Fund Type', '')).strip(),
+                card_mappings=card_mappings
             ))
     
     def load_kri_master(self, kri_master_data: List[Dict[str, Any]]):
@@ -937,7 +1043,7 @@ class ExcelToJSONTransformer:
             validation_type=row.get('Validation Type', ''),
             control_draft_number=row.get('Control Draft Number', ''),
             test_draft_number=row.get('Test Draft Number', ''),
-            is_final=row.get('Is Final', False),
+            is_final=parse_boolean(row.get('Is Final', False)),
             threshold_amount=row.get('Threshold Amount', ''),
             threshold_desc=row.get('Threshold Desc', ''),
             threshold_percent=row.get('Threshold Percent (%)', ''),
@@ -997,8 +1103,17 @@ class ExcelToJSONTransformer:
         card_validations_trimmed = [v for v in self.validations_trimmed if v.card == card_name]
         card_validations_kri = [v for v in self.validations_kri if v.card == card_name]
         
-        # Get funds for this card's Trust
-        card_funds = self.lookup_service.get_funds_by_trust(card_trust)
+        # Get funds for this card
+        # Strategy 1: Try to get funds mapped to this card (via "X" in card column)
+        card_funds = self.lookup_service.get_funds_by_card(card_name)
+        
+        # Strategy 2: If no card mapping, try to get funds by Trust
+        if not card_funds:
+            card_funds = self.lookup_service.get_funds_by_trust(card_trust)
+        
+        # Strategy 3: If still empty, use all funds
+        if not card_funds:
+            card_funds = self.lookup_service.get_all_funds()
         
         # Combine validations
         all_validations = card_validations_trimmed + card_validations_kri

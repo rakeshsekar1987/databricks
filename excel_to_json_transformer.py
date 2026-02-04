@@ -1120,16 +1120,30 @@ class ExcelToJSONTransformer:
         # Get funds for this card using multiple strategies
         fund_source = ""
         
+        if debug:
+            print(f"\n  DEBUG [{card_name}]:")
+            print(f"    Card Trust (open_end_close_end): '{card_trust}'")
+            print(f"    Available card mappings: {list(self.lookup_service._funds_by_card.keys())}")
+            print(f"    Available trusts: {list(self.lookup_service._funds_by_trust.keys())}")
+        
         # Strategy 1: Try to get funds mapped to this card (via "X" in card column)
         card_funds = self.lookup_service.get_funds_by_card(card_name)
         if card_funds:
             fund_source = "card_mapping"
+            if debug:
+                print(f"    Strategy 1 (card_mapping): Found {len(card_funds)} funds")
         
         # Strategy 2: If no card mapping, try to get funds by Trust
         if not card_funds:
+            if debug:
+                print(f"    Strategy 1 (card_mapping): No funds found")
             card_funds = self.lookup_service.get_funds_by_trust(card_trust)
             if card_funds:
                 fund_source = "trust_match"
+                if debug:
+                    print(f"    Strategy 2 (trust_match '{card_trust}'): Found {len(card_funds)} funds")
+            elif debug:
+                print(f"    Strategy 2 (trust_match '{card_trust}'): No funds found")
         
         # Strategy 3: If still empty, try to extract region from validations
         if not card_funds:
@@ -1139,19 +1153,27 @@ class ExcelToJSONTransformer:
                 if v.fund:
                     validation_fund_codes.add(v.fund)
             
+            if debug:
+                print(f"    Strategy 3 (validation_funds): Fund codes in validations: {validation_fund_codes}")
+            
             # Find funds matching these codes
             if validation_fund_codes:
                 card_funds = [f for f in self.funds if f.fund_id_new in validation_fund_codes]
                 if card_funds:
                     fund_source = "validation_funds"
+                    if debug:
+                        print(f"    Strategy 3 (validation_funds): Found {len(card_funds)} funds")
         
         # Strategy 4: If still empty, use all funds as last resort
         if not card_funds:
             card_funds = self.lookup_service.get_all_funds()
             fund_source = "all_funds_fallback"
+            if debug:
+                print(f"    Strategy 4 (all_funds_fallback): Using all {len(card_funds)} funds")
         
         if debug:
-            print(f"  DEBUG [{card_name}]: trust='{card_trust}', fund_source={fund_source}, funds={len(card_funds)}")
+            fund_codes = [f.fund_id_new for f in card_funds]
+            print(f"    RESULT: {fund_source} -> {fund_codes}")
         
         # Combine validations
         all_validations = card_validations_trimmed + card_validations_kri

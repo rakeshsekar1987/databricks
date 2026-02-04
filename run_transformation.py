@@ -196,6 +196,7 @@ def run_transformation(input_file: str, output_folder: str, verbose: bool = True
         input_file: Path to the input Excel file
         output_folder: Path to the output folder
         verbose: Whether to print progress messages
+        debug: Whether to print debug information for fund filtering
     """
     start_time = datetime.now()
     
@@ -237,7 +238,6 @@ def run_transformation(input_file: str, output_folder: str, verbose: bool = True
         print(f"    Funds: {funds_sheet or 'NOT FOUND'}")
         print(f"    Validations-TRIMMED: {trimmed_sheet or 'NOT FOUND'}")
         print(f"    Validations-KRI: {kri_sheet or 'NOT FOUND'}")
-        print(f"    KRI Master: {kri_master_sheet or '(Optional - not found)'}")
     
     # Validate required sheets exist
     missing_sheets = []
@@ -254,9 +254,6 @@ def run_transformation(input_file: str, output_folder: str, verbose: bool = True
         raise ValueError(f"Missing required sheets: {missing_sheets}")
     
     # Read data from sheets
-    if verbose:
-        print("\nStep 2: Loading data from sheets...")
-    
     cards_data = normalize_column_names(reader.read_sheet(cards_sheet))
     funds_data = normalize_column_names(reader.read_sheet(funds_sheet))
     trimmed_data = normalize_column_names(reader.read_sheet(trimmed_sheet))
@@ -279,34 +276,10 @@ def run_transformation(input_file: str, output_folder: str, verbose: bool = True
     # Get all card names - filter out empty names
     card_names = [cn for cn in transformer.get_card_names() if cn and cn.strip()]
     
-    if verbose:
-        # Show actual loaded counts (after filtering empty rows)
-        print(f"    Cards: {len(card_names)} valid records (from {len(cards_data)} rows)")
-        print(f"    Funds: {len(transformer.funds)} records")
-        print(f"    Validations-TRIMMED: {len(transformer.validations_trimmed)} records")
-        print(f"    Validations-KRI: {len(transformer.validations_kri)} records")
-        if kri_master_data:
-            print(f"    KRI Master: {len(transformer.kri_master)} records")
-    
-    if verbose:
-        print("\nStep 3: Transforming data...")
-        print(f"  Processing {len(card_names)} card(s):")
-        for cn in card_names:
-            print(f"    - {cn}")
-    
     # Transform all cards
     all_outputs = transformer.transform_all_cards(debug=debug)
     
-    if verbose:
-        print("  Transformation complete!")
-    
     # Write output files for each card
-    if verbose:
-        print("\nStep 4: Writing output files...")
-        print(f"  Cards to process: {len(card_names)}")
-        print(f"  Files per card: 5")
-        print(f"  Total files to create: {len(card_names) * 5}")
-    
     all_output_paths = {}
     total_files = 0
     
@@ -321,9 +294,6 @@ def run_transformation(input_file: str, output_folder: str, verbose: bool = True
         
         # Generate dynamic file names based on Card Name
         file_names = get_output_file_names(card_name)
-        
-        if verbose:
-            print(f"\n  Card: {card_name}")
         
         # Check if this card has KRI validations
         has_kri = False
@@ -341,8 +311,6 @@ def run_transformation(input_file: str, output_folder: str, verbose: bool = True
                 f.write(outputs['json1'])
             card_outputs['json1'] = output_path
             total_files += 1
-            if verbose:
-                print(f"    - {filename}")
         
         # Only create KRI-related files (json2-json5) if card has KRI validations
         if has_kri:
@@ -355,8 +323,6 @@ def run_transformation(input_file: str, output_folder: str, verbose: bool = True
                     f.write(outputs[key])
                 card_outputs[key] = output_path
                 total_files += 1
-                if verbose:
-                    print(f"    - {filename}")
         
         all_output_paths[card_name] = card_outputs
     
@@ -368,42 +334,9 @@ def run_transformation(input_file: str, output_folder: str, verbose: bool = True
         print("\n" + "=" * 80)
         print("TRANSFORMATION COMPLETE")
         print("=" * 80)
-        print(f"\nDuration: {duration:.2f} seconds")
+        print(f"\nTotal Job Execution Duration : {duration:.2f} seconds")
         print(f"Total files created: {total_files}")
         print(f"\nOutput files created in: {output_folder}")
-        
-        for card_name in card_names:
-            if card_name in all_output_paths:
-                card_files = all_output_paths[card_name]
-                file_names = get_output_file_names(card_name)
-                print(f"\n  {card_name}:")
-                for key in ['json1', 'json2', 'json3', 'json4', 'json5']:
-                    if key in card_files:
-                        print(f"    - {file_names[key]}")
-        
-        # Print statistics for each card
-        print(f"\nStatistics per card:")
-        for card_name in card_names:
-            if card_name not in all_outputs:
-                continue
-            outputs = all_outputs[card_name]
-            
-            validations_count = 0
-            kri_count = 0
-            funds_count = 0
-            
-            if 'json1' in outputs:
-                json1 = json.loads(outputs['json1'])
-                validations_count = json1['data']['getValidations']['rowCount']
-            if 'json2' in outputs:
-                json2 = json.loads(outputs['json2'])
-                kri_count = len(json2['data']['kriDetails'])
-            if 'json3' in outputs:
-                json3 = json.loads(outputs['json3'])
-                funds_count = len(json3['data']['fundKriStatusCount'])
-            
-            print(f"  {card_name}:")
-            print(f"    Validations: {validations_count}, KRI Types: {kri_count}, Funds: {funds_count}")
     
     return all_output_paths
 

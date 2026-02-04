@@ -184,7 +184,7 @@ def normalize_column_names(records: List[Dict[str, Any]]) -> List[Dict[str, Any]
 # Main Transformation Function
 # =============================================================================
 
-def run_transformation(input_file: str, output_folder: str, verbose: bool = True):
+def run_transformation(input_file: str, output_folder: str, verbose: bool = True, debug: bool = False):
     """
     Run the complete transformation from Excel to JSON.
     
@@ -295,7 +295,7 @@ def run_transformation(input_file: str, output_folder: str, verbose: bool = True
             print(f"    - {cn}")
     
     # Transform all cards
-    all_outputs = transformer.transform_all_cards()
+    all_outputs = transformer.transform_all_cards(debug=debug)
     
     if verbose:
         print("  Transformation complete!")
@@ -457,13 +457,20 @@ Output File Naming:
         help='Suppress progress messages'
     )
     
+    parser.add_argument(
+        '-d', '--debug',
+        action='store_true',
+        help='Enable debug output for fund filtering'
+    )
+    
     args = parser.parse_args()
     
     try:
         run_transformation(
             input_file=args.input,
             output_folder=args.output,
-            verbose=not args.quiet
+            verbose=not args.quiet,
+            debug=args.debug
         )
         return 0
     except FileNotFoundError as e:

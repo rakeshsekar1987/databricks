@@ -478,7 +478,21 @@ class DataLookupService:
     
     def get_funds_by_card(self, card_name: str) -> List[Fund]:
         """Get all funds mapped to a specific card."""
-        return self._funds_by_card.get(card_name, [])
+        if not card_name:
+            return []
+        
+        # Try exact match first
+        funds = self._funds_by_card.get(card_name, [])
+        if funds:
+            return funds
+        
+        # Try case-insensitive and whitespace-normalized match
+        card_name_normalized = card_name.strip().lower()
+        for key, fund_list in self._funds_by_card.items():
+            if key.strip().lower() == card_name_normalized:
+                return fund_list
+        
+        return []
     
     def get_fund_group(self, fund_code: str) -> str:
         """Get the group for a fund - DIRECTLY from Group_New column."""
@@ -1082,7 +1096,7 @@ class ExcelToJSONTransformer:
         """Get all card names."""
         return [card.card_name for card in self.cards]
     
-    def transform_for_card(self, card_name: str) -> Dict[str, str]:
+    def transform_for_card(self, card_name: str, debug: bool = False) -> Dict[str, str]:
         """
         Transform data for a specific card.
         Filters validations and funds to only include data for this card.
@@ -1103,17 +1117,41 @@ class ExcelToJSONTransformer:
         card_validations_trimmed = [v for v in self.validations_trimmed if v.card == card_name]
         card_validations_kri = [v for v in self.validations_kri if v.card == card_name]
         
-        # Get funds for this card
+        # Get funds for this card using multiple strategies
+        fund_source = ""
+        
         # Strategy 1: Try to get funds mapped to this card (via "X" in card column)
         card_funds = self.lookup_service.get_funds_by_card(card_name)
+        if card_funds:
+            fund_source = "card_mapping"
         
         # Strategy 2: If no card mapping, try to get funds by Trust
         if not card_funds:
             card_funds = self.lookup_service.get_funds_by_trust(card_trust)
+            if card_funds:
+                fund_source = "trust_match"
         
-        # Strategy 3: If still empty, use all funds
+        # Strategy 3: If still empty, try to extract region from validations
+        if not card_funds:
+            # Get unique fund codes from validations for this card
+            validation_fund_codes = set()
+            for v in card_validations_trimmed + card_validations_kri:
+                if v.fund:
+                    validation_fund_codes.add(v.fund)
+            
+            # Find funds matching these codes
+            if validation_fund_codes:
+                card_funds = [f for f in self.funds if f.fund_id_new in validation_fund_codes]
+                if card_funds:
+                    fund_source = "validation_funds"
+        
+        # Strategy 4: If still empty, use all funds as last resort
         if not card_funds:
             card_funds = self.lookup_service.get_all_funds()
+            fund_source = "all_funds_fallback"
+        
+        if debug:
+            print(f"  DEBUG [{card_name}]: trust='{card_trust}', fund_source={fund_source}, funds={len(card_funds)}")
         
         # Combine validations
         all_validations = card_validations_trimmed + card_validations_kri
@@ -1149,17 +1187,21 @@ class ExcelToJSONTransformer:
             "json5": json5_builder.to_json()
         }
     
-    def transform_all_cards(self) -> Dict[str, Dict[str, str]]:
+    def transform_all_cards(self, debug: bool = False) -> Dict[str, Dict[str, str]]:
         """
         Transform data for all cards.
         Returns a dictionary with card names as keys and output dictionaries as values.
         """
         self._initialize_services()
         
+        if debug:
+            print(f"\n  DEBUG: Available card mappings in funds: {list(self.lookup_service._funds_by_card.keys())}")
+            print(f"  DEBUG: Available trusts in funds: {list(self.lookup_service._funds_by_trust.keys())}")
+        
         results = {}
         for card in self.cards:
             card_name = card.card_name
-            results[card_name] = self.transform_for_card(card_name)
+            results[card_name] = self.transform_for_card(card_name, debug=debug)
         
         return results
     

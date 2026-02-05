@@ -221,9 +221,8 @@ def extract_draft_number(value: str) -> Optional[str]:
 def build_values_used_in_formula(kri_variables: Dict[str, Any]) -> str:
     """Build the valuesUsedInFormula JSON string from KRI variables.
     
-    Preserves the original values - numbers as numbers, strings as strings.
-    If key exists but value is empty/dash, include key with empty string.
-    Python/numpy booleans (from Excel) are converted to "TRUE"/"FALSE" strings.
+    ALL values are kept as strings exactly as they appear in Excel.
+    No conversion of numbers or booleans - everything is a string.
     """
     if not kri_variables:
         return ""
@@ -235,42 +234,30 @@ def build_values_used_in_formula(kri_variables: Dict[str, Any]) -> str:
     except ImportError:
         has_numpy = False
     
-    # Values that represent "empty" or "not applicable" in Excel
-    empty_values = {'', '--', '-'}
-    
     result = OrderedDict()
     for key, value in kri_variables.items():
-        if key and key != "" and key != "--" and key != "-":
-            # Handle Python booleans first (Excel reads FALSE/TRUE as bool)
-            if isinstance(value, bool):
-                result[key] = "TRUE" if value else "FALSE"
-                continue
-            
-            # Handle numpy booleans (pandas reads Excel booleans as numpy.bool_)
-            if has_numpy and isinstance(value, np.bool_):
-                result[key] = "TRUE" if value else "FALSE"
-                continue
-            
-            # Clean value
-            str_value = str(value).strip() if value is not None else ""
-            
-            # Check if string value is TRUE/FALSE (case insensitive)
-            if str_value.upper() in ('TRUE', 'FALSE'):
-                result[key] = str_value.upper()
-                continue
-            
-            # If value is empty/placeholder, include key with empty string
-            if str_value in empty_values or value is None:
-                result[key] = ""
-                continue
-            
-            # Try to parse as number first
-            parsed = parse_number(value)
-            if parsed is not None:
-                result[key] = parsed
-            else:
-                # Keep as string
-                result[key] = str_value
+        # Skip empty or placeholder keys
+        if not key or key == "" or key == "--" or key == "-":
+            continue
+        
+        # Handle Python booleans (Excel reads FALSE/TRUE as bool)
+        if isinstance(value, bool):
+            result[key] = "TRUE" if value else "FALSE"
+            continue
+        
+        # Handle numpy booleans (pandas reads Excel booleans as numpy.bool_)
+        if has_numpy and isinstance(value, np.bool_):
+            result[key] = "TRUE" if value else "FALSE"
+            continue
+        
+        # Handle None
+        if value is None:
+            result[key] = ""
+            continue
+        
+        # Convert everything else to string exactly as-is
+        str_value = str(value).strip()
+        result[key] = str_value
     
     if not result:
         return ""

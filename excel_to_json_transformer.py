@@ -223,10 +223,17 @@ def build_values_used_in_formula(kri_variables: Dict[str, Any]) -> str:
     
     Preserves the original values - numbers as numbers, strings as strings.
     If key exists but value is empty/dash, include key with empty string.
-    Python booleans (from Excel) are converted to "TRUE"/"FALSE" strings.
+    Python/numpy booleans (from Excel) are converted to "TRUE"/"FALSE" strings.
     """
     if not kri_variables:
         return ""
+    
+    # Import numpy for boolean check
+    try:
+        import numpy as np
+        has_numpy = True
+    except ImportError:
+        has_numpy = False
     
     # Values that represent "empty" or "not applicable" in Excel
     empty_values = {'', '--', '-'}
@@ -239,20 +246,30 @@ def build_values_used_in_formula(kri_variables: Dict[str, Any]) -> str:
                 result[key] = "TRUE" if value else "FALSE"
                 continue
             
+            # Handle numpy booleans (pandas reads Excel booleans as numpy.bool_)
+            if has_numpy and isinstance(value, np.bool_):
+                result[key] = "TRUE" if value else "FALSE"
+                continue
+            
             # Clean value
             str_value = str(value).strip() if value is not None else ""
+            
+            # Check if string value is TRUE/FALSE (case insensitive)
+            if str_value.upper() in ('TRUE', 'FALSE'):
+                result[key] = str_value.upper()
+                continue
             
             # If value is empty/placeholder, include key with empty string
             if str_value in empty_values or value is None:
                 result[key] = ""
                 continue
             
-            # Try to parse as number first (but not booleans - already handled above)
+            # Try to parse as number first
             parsed = parse_number(value)
             if parsed is not None:
                 result[key] = parsed
             else:
-                # Keep as string (handles TRUE, FALSE, and other text values)
+                # Keep as string
                 result[key] = str_value
     
     if not result:

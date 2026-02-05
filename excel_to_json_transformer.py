@@ -1060,6 +1060,30 @@ class ExcelToJSONTransformer:
                 risk_thresholds=row.get('Risk Thresholds', '')
             ))
     
+    def _preserve_excel_value(self, value: Any) -> str:
+        """Preserve Excel value as string, handling booleans correctly.
+        
+        Pandas converts Excel FALSE/TRUE to Python bool or numpy.bool_.
+        This function converts them back to 'FALSE'/'TRUE' strings.
+        """
+        if value is None:
+            return ""
+        
+        # Handle Python boolean
+        if isinstance(value, bool):
+            return "TRUE" if value else "FALSE"
+        
+        # Handle numpy boolean
+        try:
+            import numpy as np
+            if isinstance(value, np.bool_):
+                return "TRUE" if value else "FALSE"
+        except ImportError:
+            pass
+        
+        # Return string representation
+        return str(value).strip()
+    
     def _parse_validation(self, row: Dict[str, Any], is_kri: bool, row_index: int) -> Validation:
         """Parse a validation row from Excel data."""
         kri_variables = OrderedDict()
@@ -1068,7 +1092,8 @@ class ExcelToJSONTransformer:
                 key = row.get(f'KRI Variable Key{i}', '')
                 value = row.get(f'KRI Variable Value{i}', '')
                 if key and key != '' and key != '--':
-                    kri_variables[key] = value
+                    # Preserve Excel value (handle FALSE/TRUE correctly)
+                    kri_variables[key] = self._preserve_excel_value(value)
         
         # Get fund code and remove any spaces (e.g., "OEF 14" -> "OEF14")
         fund_code = str(row.get('Fund', '')).replace(' ', '')

@@ -219,17 +219,25 @@ def extract_draft_number(value: str) -> Optional[str]:
 
 
 def build_values_used_in_formula(kri_variables: Dict[str, Any]) -> str:
-    """Build the valuesUsedInFormula JSON string from KRI variables."""
+    """Build the valuesUsedInFormula JSON string from KRI variables.
+    
+    Preserves the original values - numbers as numbers, strings as strings.
+    """
     if not kri_variables:
         return ""
     
-    # Convert values to numbers, maintaining order
     result = OrderedDict()
     for key, value in kri_variables.items():
         if key and key != "" and key != "--":
+            if value is None or value == "" or value == "--":
+                continue
+            # Try to parse as number first
             parsed = parse_number(value)
             if parsed is not None:
                 result[key] = parsed
+            else:
+                # Keep as string (handles TRUE, FALSE, and other text values)
+                result[key] = str(value).strip()
     
     if not result:
         return ""
@@ -749,7 +757,8 @@ class JSON1Builder(BaseJSONBuilder):
 
 class JSON2Builder(BaseJSONBuilder):
     """
-    Builder for JSON 2: KRI Details grouped by KRI type for a specific card.
+    Builder for JSON 2: KRI Details for a specific card.
+    Each validation becomes a separate KRI object with one fundDetails entry.
     Same validation name gets same KRI ID across all cards.
     """
     
@@ -761,50 +770,44 @@ class JSON2Builder(BaseJSONBuilder):
         self.global_kri_mapping = global_kri_mapping
     
     def build(self) -> Dict[str, Any]:
-        # Group validations by KRI name (same name = same KRI ID)
-        kri_groups: OrderedDict[str, List[Validation]] = OrderedDict()
-        for v in self.kri_validations:
-            if v.validation not in kri_groups:
-                kri_groups[v.validation] = []
-            kri_groups[v.validation].append(v)
-        
         kri_details = []
         
-        for kri_name, validations in kri_groups.items():
-            first_val = validations[0]
+        # Each validation becomes its own KRI object (no grouping)
+        for v in self.kri_validations:
+            kri_name = v.validation
             
             # Get KRI ID and validation ID based on validation NAME only
             kri_id = self.global_kri_mapping.get_kri_id(kri_name)
             val_id = self.global_kri_mapping.get_validation_id(kri_name)
             
             # Get description from Control Procedures
-            kri_desc = clean_text(first_val.control_procedures)
+            kri_desc = clean_text(v.control_procedures)
             
             # Transform threshold chart to JSON
-            threshold_chart = first_val.threshold_chart if first_val.threshold_chart else ""
+            threshold_chart = v.threshold_chart if v.threshold_chart else ""
             threshold = transform_threshold_chart_to_json(threshold_chart)
             
-            fund_details = []
-            for v in validations:
-                fund_name = self.lookup.get_book(v.fund)
-                bps = parse_number(v.bps_impact) or 0
-                
-                # Risk from Excel column
-                risk = v.risk_level if v.risk_level else ""
-                
-                values_formula = build_values_used_in_formula(v.kri_variables)
-                
-                fund_details.append({
-                    "risk": risk,
-                    "threshold": None,
-                    "fundName": fund_name,
-                    "fundCode": v.fund,
-                    "result": str(bps),
-                    "strategy": "Credit - Diversified Income",
-                    "validationStatus": v.validation_status,
-                    "validationId": val_id,
-                    "valuesUsedInFormula": values_formula
-                })
+            # Get fund details for this specific validation
+            fund_name = self.lookup.get_book(v.fund)
+            bps = parse_number(v.bps_impact) or 0
+            
+            # Risk from Excel column
+            risk = v.risk_level if v.risk_level else ""
+            
+            values_formula = build_values_used_in_formula(v.kri_variables)
+            
+            # Single fundDetails entry for this validation
+            fund_details = [{
+                "risk": risk,
+                "threshold": None,
+                "fundName": fund_name,
+                "fundCode": v.fund,
+                "result": str(bps),
+                "strategy": "Credit - Diversified Income",
+                "validationStatus": v.validation_status,
+                "validationId": val_id,
+                "valuesUsedInFormula": values_formula
+            }]
             
             kri_details.append({
                 "kriName": kri_name,

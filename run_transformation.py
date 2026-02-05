@@ -283,23 +283,7 @@ def run_transformation(input_file: str, output_folder: str, verbose: bool = True
     card_names = [cn for cn in transformer.get_card_names() if cn and cn.strip()]
     
     # Transform all cards
-    # Enable debug mode to help diagnose fund filtering issues
     all_outputs = transformer.transform_all_cards(debug=debug)
-    
-    # Check for potential issues and warn the user
-    if verbose and not debug:
-        for card_name in card_names:
-            if card_name not in all_outputs:
-                continue
-            outputs = all_outputs[card_name]
-            if 'json3' in outputs:
-                json3 = json.loads(outputs['json3'])
-                funds_count = len(json3['data']['fundKriStatusCount'])
-                # Warn if a card has too many funds (possible filtering issue)
-                if funds_count > 5:
-                    print(f"\n  WARNING: {card_name} has {funds_count} funds.")
-                    print(f"           This may indicate a fund filtering issue.")
-                    print(f"           Run with --debug flag for more details.")
     
     # Write output files for each card
     all_output_paths = {}

@@ -222,20 +222,23 @@ def build_values_used_in_formula(kri_variables: Dict[str, Any]) -> str:
     """Build the valuesUsedInFormula JSON string from KRI variables.
     
     Preserves the original values - numbers as numbers, strings as strings.
-    Skips empty values and dash placeholders (-, --, etc.).
+    If key exists but value is empty/dash, include key with empty string.
     """
     if not kri_variables:
         return ""
     
     # Values that represent "empty" or "not applicable" in Excel
-    empty_values = {'', '--', '-', None}
+    empty_values = {'', '--', '-'}
     
     result = OrderedDict()
     for key, value in kri_variables.items():
-        if key and key != "" and key != "--":
-            # Clean and check if value is empty/placeholder
+        if key and key != "" and key != "--" and key != "-":
+            # Clean value
             str_value = str(value).strip() if value is not None else ""
-            if str_value in empty_values:
+            
+            # If value is empty/placeholder, include key with empty string
+            if str_value in empty_values or value is None:
+                result[key] = ""
                 continue
             
             # Try to parse as number first

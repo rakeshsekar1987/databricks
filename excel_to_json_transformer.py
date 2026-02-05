@@ -223,6 +223,7 @@ def build_values_used_in_formula(kri_variables: Dict[str, Any]) -> str:
     
     Preserves the original values - numbers as numbers, strings as strings.
     If key exists but value is empty/dash, include key with empty string.
+    Python booleans (from Excel) are converted to "TRUE"/"FALSE" strings.
     """
     if not kri_variables:
         return ""
@@ -233,6 +234,11 @@ def build_values_used_in_formula(kri_variables: Dict[str, Any]) -> str:
     result = OrderedDict()
     for key, value in kri_variables.items():
         if key and key != "" and key != "--" and key != "-":
+            # Handle Python booleans first (Excel reads FALSE/TRUE as bool)
+            if isinstance(value, bool):
+                result[key] = "TRUE" if value else "FALSE"
+                continue
+            
             # Clean value
             str_value = str(value).strip() if value is not None else ""
             
@@ -241,7 +247,7 @@ def build_values_used_in_formula(kri_variables: Dict[str, Any]) -> str:
                 result[key] = ""
                 continue
             
-            # Try to parse as number first
+            # Try to parse as number first (but not booleans - already handled above)
             parsed = parse_number(value)
             if parsed is not None:
                 result[key] = parsed

@@ -844,12 +844,16 @@ class JSON3Builder(BaseJSONBuilder):
     def build(self) -> Dict[str, Any]:
         # Get unique KRI names for this card
         unique_kri_names = list(OrderedDict.fromkeys(v.validation for v in self.kri_validations))
-        kri_total_count = str(len(unique_kri_names))
         
-        # Count KRIs per fund
+        # Count KRIs per fund (remove spaces from fund codes for matching)
         fund_kri_counts: Dict[str, int] = {}
         for v in self.kri_validations:
-            fund_kri_counts[v.fund] = fund_kri_counts.get(v.fund, 0) + 1
+            # Normalize fund code by removing spaces
+            fund_code = v.fund.replace(' ', '')
+            fund_kri_counts[fund_code] = fund_kri_counts.get(fund_code, 0) + 1
+        
+        # kriTotalCount = sum of all kriStatusCount (total KRI validations)
+        kri_total_count = str(len(self.kri_validations))
         
         # Build fund status count only for funds belonging to this card's Trust
         fund_status_counts = []
@@ -1046,9 +1050,12 @@ class ExcelToJSONTransformer:
                 if key and key != '' and key != '--':
                     kri_variables[key] = value
         
+        # Get fund code and remove any spaces (e.g., "OEF 14" -> "OEF14")
+        fund_code = str(row.get('Fund', '')).replace(' ', '')
+        
         return Validation(
             card=row.get('Card', ''),
-            fund=row.get('Fund', ''),
+            fund=fund_code,
             priority=row.get('Priority', ''),
             workflow_status=row.get('Workflow Status', ''),
             validation_status=row.get('Validation Status', ''),
